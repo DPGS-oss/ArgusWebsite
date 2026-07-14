@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Argus - GST Billing App | B&L Softwares and Logistics</title>
+    <meta name="description" content="Argus - The best GST billing and invoicing app for Indian businesses. Offline-first, secure, and accountant-ready.">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="container">
+            <div class="nav-brand">
+                <img src="logo.svg" alt="Argus Logo" class="logo">
+                <span class="brand-name">Argus</span>
+            </div>
+            <div class="nav-links">
+                <a href="#features">Features</a>
+                <a href="#pricing">Pricing</a>
+                <a href="#about">About</a>
+                <a href="#contact">Contact</a>
+                <button id="loginBtn" class="btn-secondary">Sign In</button>
+                <button id="profileBtn" class="btn-primary">JD</button>
+                <a href="#download" class="btn-primary">Download App</a>
+            </div>
+            <div class="mobile-menu-btn">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="hero-gradient"></div>
+        <div class="container">
+            <div class="hero-content">
+                <div class="hero-text">
+                    <h1 class="hero-title">GST Billing Made <span class="gradient-text">Simple</span></h1>
+                    <p class="hero-subtitle">Create professional GST invoices in seconds. Works offline, syncs securely. The only billing app your business needs.</p>
+                    <div class="hero-cta">
+                        <a href="#download" class="btn-primary btn-large">Download Now</a>
+                        <a href="#features" class="btn-secondary btn-large">Learn More</a>
+                    </div>
+                    <div class="hero-stats">
+                        <div class="stat">
+                            <span class="stat-number" data-count="10000">0</span>
+                            <span class="stat-label">Businesses</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-number" data-count="1000000">0</span>
+                            <span class="stat-label">Invoices</span>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-number">4.8★</span>
+                            <span class="stat-label">Rating</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="hero-image">
+                    <div class="phone-mockup">
+                        <div class="screen">
+                            <div class="app-preview">
+                                <div class="invoice-card">
+                                    <div class="invoice-header">
+                                        <span class="invoice-number">#INV-001</span>
+                                        <span class="invoice-status">Paid</span>
+                                    </div>
+                                    <div class="invoice-amount">₹5,990.00</div>
+                                    <div class="invoice-customer">Acme Corporation</div>
+                                </div>
+                                <div class="metric-card">
+                                    <span class="metric-label">Total Sales</span>
+                                    <span class="metric-value">₹1,24,500</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section id="features" class="features">
+        <div class="container">
+            <div class="section-header">
+                <h2>Powerful Features</h2>
+                <p>Everything you need to manage your billing efficiently</p>
+            </div>
+            <div class="features-grid">
+                <div class="feature-card" data-tooltip="Works without internet connection">
+                    <div class="feature-icon"><i data-lucide="smartphone"></i></div>
+                    <h3>100% Offline-First</h3>
+                    <p>Works without internet. Create invoices anywhere, anytime. Sync when you're online.</p>
+                </div>
+                <div class="feature-card" data-tooltip="Military-grade encryption for your data">
+                    <div class="feature-icon"><i data-lucide="lock"></i></div>
+                    <h3>End-to-End Encryption</h3>
+                    <p>Share data securely with your accountant using military-grade encryption.</p>
+                </div>
+                <div class="feature-card" data-tooltip="Generate all GST compliance reports">
+                    <div class="feature-icon"><i data-lucide="file-text"></i></div>
+                    <h3>GSTR Reports</h3>
+                    <p>Generate GSTR-1, GSTR-2B, GSTR-3B, and GSTR-4 reports instantly.</p>
+                </div>
+                <div class="feature-card" data-tooltip="AI-powered HSN code suggestions">
+                    <div class="feature-icon"><i data-lucide="bot"></i></div>
+                    <h3>AI HSN Suggestions</h3>
+                    <p>Auto-suggest HSN codes using AI. Save time and ensure compliance.</p>
+                </div>
+                <div class="feature-card" data-tooltip="Send invoices via WhatsApp">
+                    <div class="feature-icon"><i data-lucide="message-circle"></i></div>
+                    <h3>WhatsApp Integration</h3>
+                    <p>Send invoices and payment reminders directly via WhatsApp.</p>
+                </div>
+                <div class="feature-card" data-tooltip="Create invoices using voice commands">
+                    <div class="feature-icon"><i data-lucide="mic"></i></div>
+                    <h3>Voice Input</h3>
+                    <p>Create invoices using voice. Faster than typing, hands-free operation.</p>
+                </div>
+                <div class="feature-card" data-tooltip="Manage up to 5 GSTINs per account">
+                    <div class="feature-icon"><i data-lucide="bar-chart-3"></i></div>
+                    <h3>Multi-GST Support</h3>
+                    <p>Manage multiple GSTINs for your businesses. Up to 5 per account.</p>
+                </div>
+                <div class="feature-card" data-tooltip="Affordable pricing plans">
+                    <div class="feature-icon"><i data-lucide="indian-rupee"></i></div>
+                    <h3>Affordable Pricing</h3>
+                    <p>One-time purchase or subscription. No hidden fees, no ads.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Pricing Section -->
+    <section id="pricing" class="pricing">
+        <div class="container">
+            <div class="section-header">
+                <h2>Simple Pricing</h2>
+                <p>Choose the plan that fits your business</p>
+            </div>
+            <div class="pricing-grid">
+                <div class="pricing-card">
+                    <div class="pricing-header">
+                        <h3>Free</h3>
+                        <div class="price">₹0<span>/month</span></div>
+                    </div>
+                    <ul class="pricing-features">
+                        <li>✓ 1 GSTIN</li>
+                        <li>✓ 50 invoices/month</li>
+                        <li>✓ Basic GSTR reports</li>
+                        <li>✓ Offline mode</li>
+                        <li>✗ WhatsApp integration</li>
+                        <li>✗ Accountant collaboration</li>
+                    </ul>
+                    <button class="btn-outline" data-plan="free">Get Started</button>
+                </div>
+                <div class="pricing-card featured">
+                    <div class="popular-badge">Most Popular</div>
+                    <div class="pricing-header">
+                        <h3>Business</h3>
+                        <div class="price">₹499<span>/month</span></div>
+                    </div>
+                    <ul class="pricing-features">
+                        <li>✓ 3 GSTINs included</li>
+                        <li>✓ Unlimited invoices</li>
+                        <li>✓ All GSTR reports</li>
+                        <li>✓ WhatsApp integration</li>
+                        <li>✓ Accountant collaboration</li>
+                        <li>✓ Priority support</li>
+                    </ul>
+                    <button class="btn-primary" data-plan="business">Subscribe Now</button>
+                </div>
+                <div class="pricing-card">
+                    <div class="pricing-header">
+                        <h3>Accountant</h3>
+                        <div class="price">₹199<span>/month</span></div>
+                    </div>
+                    <ul class="pricing-features">
+                        <li>✓ Manage unlimited clients</li>
+                        <li>✓ Access client data securely</li>
+                        <li>✓ Collaborative tools</li>
+                        <li>✓ Bulk operations</li>
+                        <li>✓ Custom reports</li>
+                        <li>✓ Dedicated support</li>
+                    </ul>
+                    <button class="btn-outline" data-plan="accountant">Subscribe Now</button>
+                </div>
+            </div>
+            <div class="pricing-note">
+                <p>Add extra GSTINs for ₹199/month each (max 5 total) | Yearly plans save 17%</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- About Section -->
+    <section id="about" class="about">
+        <div class="container">
+            <div class="about-content">
+                <div class="about-text">
+                    <h2>About B&L Softwares and Logistics</h2>
+                    <p>We're a technology company focused on building simple, powerful tools for Indian businesses. Our mission is to make GST compliance easy and affordable for everyone.</p>
+                    <p>Founded with the belief that business software should be accessible to all, we've built Argus to address the real pain points of Indian shopkeepers, retailers, and small business owners.</p>
+                    <div class="about-values">
+                        <div class="value">
+                            <span class="value-icon"><i data-lucide="target"></i></span>
+                            <h4>Simplicity First</h4>
+                            <p>No accounting knowledge needed</p>
+                        </div>
+                        <div class="value">
+                            <span class="value-icon"><i data-lucide="shield-check"></i></span>
+                            <h4>Privacy Focused</h4>
+                            <p>Your data stays yours</p>
+                        </div>
+                        <div class="value">
+                            <span class="value-icon"><i data-lucide="zap"></i></span>
+                            <h4>Reliable</h4>
+                            <p>Works when you need it</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="about-image">
+                    <div class="team-placeholder">
+                        <span>👥</span>
+                        <p>Our Team</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Download Section -->
+    <section id="download" class="download">
+        <div class="container">
+            <div class="download-content">
+                <h2>Download Argus Today</h2>
+                <p>Available on Android. Coming soon to iOS and Web.</p>
+                <div class="download-buttons">
+                    <a href="https://play.google.com/store/apps/details?id=com.getargus.billing" class="download-btn" target="_blank" rel="noopener noreferrer">
+                        <img src="play-store.svg" alt="Google Play">
+                        <div>
+                            <span>Get it on</span>
+                            <strong>Google Play</strong>
+                        </div>
+                    </a>
+                    <a href="#" class="download-btn disabled">
+                        <img src="app-store.svg" alt="App Store">
+                        <div>
+                            <span>Coming soon to</span>
+                            <strong>App Store</strong>
+                        </div>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Contact Section -->
+    <section id="contact" class="contact">
+        <div class="container">
+            <div class="section-header">
+                <h2>Get in Touch</h2>
+                <p>Have questions? We're here to help</p>
+            </div>
+            <div class="contact-content">
+                <div class="contact-info">
+                    <div class="contact-item">
+                        <span class="contact-icon"><i data-lucide="mail"></i></span>
+                        <div>
+                            <h4>Email</h4>
+                            <p>support@Argusinvoicing.com</p>
+                        </div>
+                    </div>
+                    <div class="contact-item">
+                        <span class="contact-icon"><i data-lucide="globe"></i></span>
+                        <div>
+                            <h4>Website</h4>
+                            <p>https://argusinvoicing.com</p>
+                        </div>
+                    </div>
+                    <div class="contact-item">
+                        <span class="contact-icon"><i data-lucide="building-2"></i></span>
+                        <div>
+                            <h4>Company</h4>
+                            <p>B&L Softwares and Logistics</p>
+                        </div>
+                    </div>
+                </div>
+                <form class="contact-form">
+                    <input type="text" placeholder="Your Name" required>
+                    <input type="email" placeholder="Your Email" required>
+                    <input type="text" placeholder="Subject" required>
+                    <textarea placeholder="Your Message" rows="5" required></textarea>
+                    <button type="submit" class="btn-primary">Send Message</button>
+                </form>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-brand">
+                    <img src="logo.svg" alt="Argus Logo" class="footer-logo">
+                    <p>GST billing made simple for Indian businesses.</p>
+                </div>
+                <div class="footer-links">
+                    <div class="footer-section">
+                        <h4>Product</h4>
+                        <a href="#features">Features</a>
+                        <a href="#pricing">Pricing</a>
+                        <a href="#download">Download</a>
+                    </div>
+                    <div class="footer-section">
+                        <h4>Company</h4>
+                        <a href="#about">About Us</a>
+                        <a href="#contact">Contact</a>
+                        <a href="privacy.html">Privacy Policy</a>
+                        <a href="terms.html">Terms of Service</a>
+                    </div>
+                    <div class="footer-section">
+                        <h4>Legal</h4>
+                        <a href="privacy.html">Privacy Policy</a>
+                        <a href="terms.html">Terms of Service</a>
+                        <a href="refund.html">Refund Policy</a>
+                    </div>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2026 B&L Softwares and Logistics. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Auth Modal -->
+    <div id="authModal" class="modal">
+        <div class="modal-content">
+            <button class="modal-close" id="closeModal">&times;</button>
+            <div class="auth-container">
+                <div class="auth-tabs">
+                    <button class="auth-tab active" data-tab="login">Sign In</button>
+                    <button class="auth-tab" data-tab="register">Create Account</button>
+                </div>
+                
+                <!-- Login Form -->
+                <form id="loginForm" class="auth-form active">
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input type="email" id="loginEmail" placeholder="your@email.com" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Password</label>
+                        <input type="password" id="loginPassword" placeholder="••••••••" required>
+                    </div>
+                    <button type="submit" class="btn-primary btn-full">Sign In</button>
+                    <p class="auth-switch">Don't have an account? <a href="#" class="switch-tab" data-tab="register">Sign up</a></p>
+                </form>
+                
+                <!-- Register Form -->
+                <form id="registerForm" class="auth-form">
+                    <div class="form-group">
+                        <label>Full Name</label>
+                        <input type="text" id="registerName" placeholder="John Doe" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input type="email" id="registerEmail" placeholder="your@email.com" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Password</label>
+                        <input type="password" id="registerPassword" placeholder="••••••••" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Confirm Password</label>
+                        <input type="password" id="registerConfirmPassword" placeholder="••••••••" required>
+                    </div>
+                    <button type="submit" class="btn-primary btn-full">Create Account</button>
+                    <p class="auth-switch">Already have an account? <a href="#" class="switch-tab" data-tab="login">Sign in</a></p>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Profile Modal -->
+    <div id="profileModal" class="modal">
+        <div class="modal-content profile-content">
+            <button class="modal-close" id="closeProfileModal">&times;</button>
+            <div class="profile-header">
+                <div class="profile-avatar">
+                    <span id="profileInitials">JD</span>
+                </div>
+                <div class="profile-info">
+                    <h2 id="profileName">John Doe</h2>
+                    <p id="profileEmail">john@example.com</p>
+                </div>
+            </div>
+            <div class="profile-sections">
+                <div class="profile-section">
+                    <h3>Subscription</h3>
+                    <div class="subscription-card">
+                        <div class="sub-badge" id="subBadge">Free Plan</div>
+                        <p class="sub-details" id="subDetails">50 invoices/month</p>
+                        <button class="btn-primary" id="upgradeBtn">Upgrade Plan</button>
+                    </div>
+                </div>
+                <div class="profile-section">
+                    <h3>Account Settings</h3>
+                    <div class="settings-list">
+                        <div class="setting-item">
+                            <span>Business Name</span>
+                            <input type="text" id="businessName" placeholder="Your Business">
+                        </div>
+                        <div class="setting-item">
+                            <span>GSTIN</span>
+                            <input type="text" id="gstin" placeholder="29ABCDE1234F1Z5">
+                        </div>
+                        <div class="setting-item">
+                            <span>Phone</span>
+                            <input type="tel" id="phone" placeholder="+91 98765 43210">
+                        </div>
+                    </div>
+                    <button class="btn-secondary" id="saveSettings">Save Changes</button>
+                </div>
+                <div class="profile-section">
+                    <h3>Danger Zone</h3>
+                    <button class="btn-danger" id="logoutBtn">Sign Out</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

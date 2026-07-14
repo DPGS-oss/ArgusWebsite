@@ -1,0 +1,1434 @@
+/* Reset and Base Styles */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+:root {
+    /* Mercury Design Colors */
+    --color-mercury-blue: #5266eb;
+    --color-ghost-blue: #cdddff;
+    --color-deep-space: #171721;
+    --color-midnight-slate: #1e1e2a;
+    --color-graphite: #272735;
+    --color-lead: #70707d;
+    --color-starlight: #ededf3;
+    --color-silver: #c3c3cc;
+    --color-pure-white: #ffffff;
+
+    /* Legacy aliases for compatibility */
+    --primary: var(--color-mercury-blue);
+    --primary-dark: #4455c9;
+    --primary-light: var(--color-ghost-blue);
+    --text-dark: var(--color-starlight);
+    --text-light: var(--color-silver);
+    --text-lighter: #9a9aa3;
+    --bg-light: var(--color-midnight-slate);
+    --bg-white: var(--color-deep-space);
+    --border: var(--color-lead);
+    --shadow: rgba(0, 0, 0, 0.08);
+    --shadow-lg: rgba(0, 0, 0, 0.16);
+    --gradient-start: var(--color-mercury-blue);
+    --gradient-end: var(--color-ghost-blue);
+    --glass-bg: rgba(30, 30, 42, 0.8);
+    --glass-border: rgba(112, 112, 125, 0.3);
+
+    /* Typography Scale */
+    --text-caption: 12px;
+    --leading-caption: 1.5;
+    --tracking-caption: 0.24px;
+    --text-body-sm: 14px;
+    --leading-body-sm: 1.5;
+    --tracking-body-sm: 0.28px;
+    --text-body: 16px;
+    --leading-body: 1.5;
+    --tracking-body: 0.16px;
+    --text-subheading: 18px;
+    --leading-subheading: 1.4;
+    --text-heading-sm: 21px;
+    --leading-heading-sm: 1.35;
+    --text-heading: 32px;
+    --leading-heading: 1.2;
+    --text-heading-lg: 49px;
+    --leading-heading-lg: 1.15;
+    --text-display: 65px;
+    --leading-display: 1.1;
+    --tracking-display: 0.65px;
+
+    /* Spacing */
+    --spacing-4: 4px;
+    --spacing-8: 8px;
+    --spacing-12: 12px;
+    --spacing-16: 16px;
+    --spacing-20: 20px;
+    --spacing-24: 24px;
+    --spacing-32: 32px;
+    --spacing-40: 40px;
+    --spacing-56: 56px;
+    --spacing-72: 72px;
+    --spacing-80: 80px;
+    --spacing-112: 112px;
+    --spacing-128: 128px;
+
+    /* Border Radius */
+    --radius-cards: 0px;
+    --radius-inputs: 32px;
+    --radius-buttons: 32px;
+    --radius-buttons-lg: 40px;
+    --radius-containers: 4px;
+
+    /* Surfaces */
+    --surface-abyss: var(--color-deep-space);
+    --surface-surface: var(--color-midnight-slate);
+    --surface-interactive: var(--color-graphite);
+}
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+    background: var(--surface-abyss);
+    color: var(--color-starlight);
+    line-height: 1.5;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* Font Hierarchy - Mercury Design */
+h1, .hero-title {
+    font-size: var(--text-display);
+    font-weight: 300;
+    line-height: var(--leading-display);
+    letter-spacing: var(--tracking-display);
+}
+
+h2, .section-header h2 {
+    font-size: var(--text-heading-lg);
+    font-weight: 400;
+    line-height: var(--leading-heading-lg);
+    letter-spacing: 0.02em;
+}
+
+h3, .feature-card h3, .pricing-header h3 {
+    font-size: var(--text-heading);
+    font-weight: 400;
+    line-height: var(--leading-heading);
+}
+
+h4, .value h4, .contact-item h4, .footer-section h4 {
+    font-size: var(--text-subheading);
+    font-weight: 400;
+    line-height: var(--leading-subheading);
+}
+
+p, .hero-subtitle, .feature-card p, .section-header p {
+    font-size: var(--text-body);
+    font-weight: 400;
+    line-height: var(--leading-body);
+    letter-spacing: var(--tracking-body);
+}
+
+.small-text {
+    font-size: var(--text-body-sm);
+    font-weight: 400;
+    line-height: var(--leading-body-sm);
+}
+
+.caption {
+    font-size: var(--text-caption);
+    font-weight: 400;
+    line-height: var(--leading-caption);
+    letter-spacing: var(--tracking-caption);
+}
+
+/* Tooltips */
+[data-tooltip] {
+    position: relative;
+    cursor: pointer;
+}
+
+[data-tooltip]:hover::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--color-starlight);
+    color: var(--color-deep-space);
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+    z-index: 1000;
+    opacity: 0;
+    animation: fadeIn 0.2s ease forwards;
+    margin-bottom: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+[data-tooltip]:hover::before {
+    content: '';
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top-color: var(--color-starlight);
+    z-index: 1000;
+    opacity: 0;
+    animation: fadeIn 0.2s ease forwards;
+    margin-bottom: -4px;
+}
+
+@keyframes fadeIn {
+    to {
+        opacity: 1;
+    }
+}
+
+/* Skeleton Loaders */
+.skeleton {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: 8px;
+}
+
+@keyframes shimmer {
+    0% {
+        background-position: 200% 0;
+    }
+    100% {
+        background-position: -200% 0;
+    }
+}
+
+.skeleton-text {
+    height: 16px;
+    margin-bottom: 8px;
+}
+
+.skeleton-text.large {
+    height: 24px;
+}
+
+.skeleton-text.small {
+    height: 12px;
+}
+
+.skeleton-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+}
+
+.skeleton-card {
+    height: 120px;
+    border-radius: 12px;
+}
+
+.skeleton-button {
+    height: 44px;
+    width: 120px;
+    border-radius: 8px;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 20px;
+}
+
+/* Navigation - Mercury Design */
+.navbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    background: var(--glass-bg);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    border-bottom: 1px solid var(--color-lead);
+    z-index: 1000;
+    padding: var(--spacing-16) 0;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.navbar .container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.nav-brand {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-12);
+}
+
+.logo {
+    width: 40px;
+    height: 40px;
+}
+
+.brand-name {
+    font-size: 22px;
+    font-weight: 400;
+    color: var(--color-starlight);
+    letter-spacing: 0.01em;
+}
+
+.nav-links {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-32);
+}
+
+.nav-links a {
+    text-decoration: none;
+    color: var(--color-starlight);
+    font-weight: 400;
+    transition: color 0.3s;
+}
+
+.nav-links a:hover {
+    color: var(--color-mercury-blue);
+}
+
+.mobile-menu-btn {
+    display: none;
+    flex-direction: column;
+    gap: 5px;
+    cursor: pointer;
+}
+
+.mobile-menu-btn span {
+    width: 25px;
+    height: 3px;
+    background: var(--text-dark);
+    border-radius: 2px;
+}
+
+/* Buttons */
+.btn-primary {
+    background: var(--color-mercury-blue);
+    color: var(--color-pure-white);
+    padding: 16px 24px;
+    border: none;
+    border-radius: var(--radius-buttons);
+    font-weight: 400;
+    font-size: var(--text-body);
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    display: inline-block;
+    letter-spacing: 0.01em;
+}
+
+.btn-primary:hover {
+    background: var(--primary-dark);
+    transform: scale(1.02);
+}
+
+.btn-secondary {
+    background: transparent;
+    color: var(--color-starlight);
+    padding: 12px 28px;
+    border: 1.5px solid var(--color-lead);
+    border-radius: var(--radius-buttons);
+    font-weight: 400;
+    font-size: var(--text-body);
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    display: inline-block;
+    letter-spacing: 0.01em;
+}
+
+.btn-secondary:hover {
+    background: var(--color-mercury-blue);
+    color: var(--color-pure-white);
+    border-color: var(--color-mercury-blue);
+}
+
+.btn-outline {
+    background: transparent;
+    color: var(--color-starlight);
+    padding: 12px 28px;
+    border: 1.5px solid var(--color-lead);
+    border-radius: var(--radius-buttons);
+    font-weight: 400;
+    font-size: var(--text-body);
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    display: inline-block;
+    width: 100%;
+    letter-spacing: 0.01em;
+}
+
+.btn-outline:hover {
+    border-color: var(--color-ghost-blue);
+    color: var(--color-ghost-blue);
+    background: rgba(205, 221, 255, 0.05);
+}
+
+.btn-large {
+    padding: 16px 32px;
+    font-size: 18px;
+}
+
+/* Hero Section - Mercury Design */
+.hero {
+    padding: var(--spacing-128) 0 var(--spacing-112);
+    background: var(--surface-abyss);
+    position: relative;
+    overflow: hidden;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+}
+
+.hero-gradient {
+    position: absolute;
+    top: -50%;
+    right: -20%;
+    width: 80%;
+    height: 200%;
+    background: radial-gradient(ellipse at center, rgba(82, 102, 235, 0.08) 0%, transparent 70%);
+    pointer-events: none;
+    animation: gradientFloat 20s ease-in-out infinite;
+}
+
+@keyframes gradientFloat {
+    0%, 100% { transform: translate(0, 0) rotate(0deg); }
+    50% { transform: translate(-30px, 30px) rotate(5deg); }
+}
+
+.hero-content {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-80);
+    align-items: center;
+}
+
+.hero-text h1 {
+    font-size: var(--text-display);
+    font-weight: 300;
+    line-height: var(--leading-display);
+    margin-bottom: var(--spacing-24);
+    color: var(--color-starlight);
+    letter-spacing: var(--tracking-display);
+}
+
+.hero-title {
+    animation: fadeInUp 1s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.gradient-text {
+    background: linear-gradient(135deg, var(--gradient-start) 0%, var(--gradient-end) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.hero-subtitle {
+    font-size: 21px;
+    color: var(--text-light);
+    margin-bottom: 32px;
+    line-height: 1.5;
+    font-weight: 400;
+    max-width: 540px;
+    animation: fadeInUp 1s cubic-bezier(0.4, 0, 0.2, 1) 0.1s backwards;
+}
+
+.hero-cta {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 48px;
+    animation: fadeInUp 1s cubic-bezier(0.4, 0, 0.2, 1) 0.2s backwards;
+}
+
+.hero-stats {
+    display: flex;
+    gap: 40px;
+}
+
+.stat {
+    text-align: left;
+}
+
+.stat-number {
+    display: block;
+    font-size: 40px;
+    font-weight: 700;
+    color: var(--primary);
+    letter-spacing: -1px;
+}
+
+.stat-label {
+    font-size: 14px;
+    color: var(--text-light);
+}
+
+.hero-image {
+    display: flex;
+    justify-content: center;
+}
+
+.phone-mockup {
+    width: 320px;
+    height: 640px;
+    background: var(--text-dark);
+    border-radius: 44px;
+    padding: 12px;
+    box-shadow: 0 40px 100px var(--shadow-lg), 0 0 0 1px rgba(0, 0, 0, 0.05);
+    animation: float 6s ease-in-out infinite;
+}
+
+@keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-20px); }
+}
+
+.screen {
+    width: 100%;
+    height: 100%;
+    background: var(--bg-light);
+    border-radius: 36px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
+.app-preview {
+    width: 90%;
+    padding: 20px;
+}
+
+.invoice-card {
+    background: var(--bg-white);
+    padding: 24px;
+    border-radius: 20px;
+    margin-bottom: 16px;
+    box-shadow: 0 4px 20px var(--shadow);
+    border: 1px solid var(--border);
+}
+
+.invoice-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+
+.invoice-number {
+    font-weight: 600;
+    color: var(--text-dark);
+}
+
+.invoice-status {
+    background: var(--secondary);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.invoice-amount {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--primary);
+    margin-bottom: 5px;
+}
+
+.invoice-customer {
+    color: var(--text-light);
+    font-size: 14px;
+}
+
+.metric-card {
+    background: linear-gradient(135deg, var(--gradient-start) 0%, var(--gradient-end) 100%);
+    color: white;
+    padding: 24px;
+    border-radius: 20px;
+    box-shadow: 0 8px 30px rgba(0, 122, 255, 0.3);
+}
+
+.metric-label {
+    font-size: 12px;
+    opacity: 0.9;
+}
+
+.metric-value {
+    font-size: 24px;
+    font-weight: 700;
+    margin-top: 5px;
+}
+
+/* Features Section - Mercury Design */
+.features {
+    padding: var(--spacing-112) 0;
+    background: var(--surface-surface);
+}
+
+.section-header {
+    text-align: center;
+    margin-bottom: var(--spacing-72);
+}
+
+.section-header h2 {
+    font-size: var(--text-heading-lg);
+    font-weight: 400;
+    margin-bottom: var(--spacing-16);
+    color: var(--color-starlight);
+    letter-spacing: 0.02em;
+}
+
+.section-header p {
+    font-size: var(--text-body);
+    color: var(--color-silver);
+    font-weight: 400;
+}
+
+.features-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: var(--spacing-32);
+}
+
+.feature-card {
+    background: var(--surface-surface);
+    padding: var(--spacing-40);
+    border-radius: var(--radius-cards);
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 1px solid var(--color-lead);
+}
+
+.feature-card:hover {
+    transform: translateY(-8px);
+    border-color: var(--color-mercury-blue);
+}
+
+.feature-icon {
+    width: 48px;
+    height: 48px;
+    margin-bottom: var(--spacing-20);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-mercury-blue);
+}
+
+.feature-icon svg {
+    width: 100%;
+    height: 100%;
+}
+
+.feature-card h3 {
+    font-size: 22px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    color: var(--text-dark);
+    letter-spacing: -0.5px;
+}
+
+.feature-card p {
+    color: var(--text-light);
+    line-height: 1.6;
+}
+
+/* Pricing Section - Mercury Design */
+.pricing {
+    padding: var(--spacing-112) 0;
+    background: var(--surface-abyss);
+}
+
+.pricing-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: var(--spacing-32);
+    margin-bottom: var(--spacing-32);
+}
+
+.pricing-card {
+    background: var(--surface-surface);
+    padding: var(--spacing-56);
+    border-radius: var(--radius-cards);
+    position: relative;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 1px solid var(--color-lead);
+}
+
+.pricing-card.featured {
+    border: 2px solid var(--color-mercury-blue);
+    transform: scale(1.05);
+}
+
+.pricing-card:hover {
+    transform: translateY(-8px);
+}
+
+.pricing-card.featured:hover {
+    transform: scale(1.05) translateY(-5px);
+}
+
+.popular-badge {
+    position: absolute;
+    top: -12px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--color-mercury-blue);
+    color: var(--color-pure-white);
+    padding: 6px 16px;
+    border-radius: var(--radius-buttons);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.pricing-header h3 {
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 10px;
+    color: var(--text-dark);
+}
+
+.price {
+    font-size: 52px;
+    font-weight: 700;
+    color: var(--primary);
+    margin-bottom: 24px;
+    letter-spacing: -2px;
+}
+
+.price span {
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--text-light);
+}
+
+.pricing-features {
+    list-style: none;
+    margin-bottom: 30px;
+}
+
+.pricing-features li {
+    padding: 10px 0;
+    color: var(--text-light);
+    border-bottom: 1px solid var(--border);
+}
+
+.pricing-features li:last-child {
+    border-bottom: none;
+}
+
+.pricing-note {
+    text-align: center;
+    color: var(--text-light);
+    font-size: 14px;
+}
+
+/* About Section - Mercury Design */
+.about {
+    padding: var(--spacing-112) 0;
+    background: var(--surface-surface);
+}
+
+.about-content {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-72);
+    align-items: center;
+}
+
+.about-text h2 {
+    font-size: var(--text-heading-lg);
+    font-weight: 400;
+    margin-bottom: var(--spacing-20);
+    color: var(--color-starlight);
+    letter-spacing: 0.02em;
+}
+
+.about-text p {
+    color: var(--color-silver);
+    margin-bottom: var(--spacing-20);
+    line-height: 1.8;
+}
+
+.about-values {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--spacing-20);
+    margin-top: var(--spacing-32);
+}
+
+.value {
+    text-align: center;
+}
+
+.value-icon {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto var(--spacing-12);
+    color: var(--color-mercury-blue);
+}
+
+.value-icon svg {
+    width: 100%;
+    height: 100%;
+}
+
+.value h4 {
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 5px;
+    color: var(--text-dark);
+}
+
+.value p {
+    font-size: 14px;
+    color: var(--text-light);
+    margin: 0;
+}
+
+.about-image {
+    display: flex;
+    justify-content: center;
+}
+
+.team-placeholder {
+    width: 400px;
+    height: 300px;
+    background: var(--bg-light);
+    border-radius: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-size: 64px;
+}
+
+.team-placeholder p {
+    font-size: 18px;
+    color: var(--text-light);
+    margin-top: 10px;
+}
+
+/* Download Section */
+.download {
+    padding: 100px 0;
+    background: var(--primary);
+    color: white;
+    text-align: center;
+}
+
+.download-content h2 {
+    font-size: 42px;
+    font-weight: 700;
+    margin-bottom: 15px;
+}
+
+.download-content p {
+    font-size: 18px;
+    opacity: 0.9;
+    margin-bottom: 30px;
+}
+
+.download-buttons {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.download-btn {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    background: white;
+    color: var(--text-dark);
+    padding: 15px 30px;
+    border-radius: 12px;
+    text-decoration: none;
+    transition: all 0.3s;
+}
+
+.download-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+}
+
+.download-btn.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.download-btn img {
+    width: 40px;
+    height: 40px;
+}
+
+.download-btn div {
+    text-align: left;
+}
+
+.download-btn span {
+    display: block;
+    font-size: 12px;
+    color: var(--text-light);
+}
+
+.download-btn strong {
+    display: block;
+    font-size: 16px;
+    font-weight: 700;
+}
+
+/* Contact Section - Mercury Design */
+.contact {
+    padding: var(--spacing-112) 0;
+    background: var(--surface-surface);
+}
+
+.contact-content {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-72);
+}
+
+.contact-info {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-32);
+}
+
+.contact-item {
+    display: flex;
+    gap: var(--spacing-20);
+    align-items: flex-start;
+}
+
+.contact-icon {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-mercury-blue);
+    flex-shrink: 0;
+}
+
+.contact-icon svg {
+    width: 100%;
+    height: 100%;
+}
+
+.contact-item h4 {
+    font-size: var(--text-subheading);
+    font-weight: 400;
+    margin-bottom: var(--spacing-8);
+    color: var(--color-starlight);
+}
+
+.contact-item p {
+    color: var(--text-light);
+}
+
+.contact-form {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.contact-form input,
+.contact-form textarea {
+    padding: 15px;
+    border: 2px solid var(--border);
+    border-radius: 12px;
+    font-size: 16px;
+    font-family: inherit;
+    transition: border-color 0.3s;
+}
+
+.contact-form input:focus,
+.contact-form textarea:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+
+.contact-form textarea {
+    resize: vertical;
+}
+
+/* Footer - Mercury Design */
+.footer {
+    background: var(--surface-abyss);
+    color: var(--color-starlight);
+    padding: var(--spacing-72) 0 var(--spacing-24);
+    border-top: 1px solid var(--color-lead);
+}
+
+.footer-content {
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    gap: var(--spacing-72);
+    margin-bottom: var(--spacing-40);
+}
+
+.footer-brand {
+    max-width: 300px;
+}
+
+.footer-logo {
+    width: 50px;
+    height: 50px;
+    margin-bottom: var(--spacing-16);
+}
+
+.footer-brand p {
+    color: var(--color-silver);
+    line-height: 1.6;
+}
+
+.footer-links {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--spacing-32);
+}
+
+.footer-section h4 {
+    font-size: var(--text-subheading);
+    font-weight: 400;
+    margin-bottom: var(--spacing-20);
+    color: var(--color-starlight);
+}
+
+.footer-section a {
+    display: block;
+    color: var(--color-silver);
+    text-decoration: none;
+    margin-bottom: var(--spacing-12);
+    transition: color 0.3s;
+}
+
+.footer-section a:hover {
+    color: white;
+}
+
+.footer-bottom {
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    padding-top: 20px;
+    text-align: center;
+    color: var(--text-lighter);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .nav-links {
+        display: none;
+    }
+    
+    .mobile-menu-btn {
+        display: flex;
+    }
+    
+    .hero-content {
+        grid-template-columns: 1fr;
+        text-align: center;
+    }
+    
+    .hero-text h1 {
+        font-size: 36px;
+    }
+    
+    .hero-cta {
+        justify-content: center;
+    }
+    
+    .hero-stats {
+        justify-content: center;
+    }
+    
+    .hero-image {
+        order: -1;
+    }
+    
+    .about-content {
+        grid-template-columns: 1fr;
+    }
+    
+    .about-values {
+        grid-template-columns: 1fr;
+    }
+    
+    .contact-content {
+        grid-template-columns: 1fr;
+    }
+    
+    .footer-content {
+        grid-template-columns: 1fr;
+    }
+    
+    .footer-links {
+        grid-template-columns: 1fr;
+    }
+    
+    .pricing-card.featured {
+        transform: none;
+    }
+    
+    .pricing-card.featured:hover {
+        transform: translateY(-5px);
+    }
+}
+
+/* Smooth Scroll */
+html {
+    scroll-behavior: smooth;
+}
+
+/* Animations */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes modalFadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+@keyframes slideInRight {
+    from {
+        opacity: 0;
+        transform: translateX(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.feature-card,
+.pricing-card {
+    animation: fadeInUp 0.6s ease-out;
+}
+
+/* Modal Styles */
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    z-index: 2000;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.modal.active {
+    display: flex;
+}
+
+.modal-content {
+    background: var(--bg-white);
+    border-radius: 24px;
+    padding: 40px;
+    max-width: 480px;
+    width: 100%;
+    position: relative;
+    animation: modalFadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 40px 100px var(--shadow-lg);
+}
+
+.modal-close {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    width: 36px;
+    height: 36px;
+    border: none;
+    background: var(--bg-light);
+    border-radius: 50%;
+    font-size: 24px;
+    cursor: pointer;
+    color: var(--text-light);
+    transition: all 0.3s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-close:hover {
+    background: var(--border);
+    color: var(--text-dark);
+}
+
+/* Auth Styles */
+.auth-container {
+    max-width: 400px;
+}
+
+.auth-tabs {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 32px;
+    background: var(--bg-light);
+    padding: 6px;
+    border-radius: 12px;
+}
+
+.auth-tab {
+    flex: 1;
+    padding: 12px 20px;
+    border: none;
+    background: transparent;
+    color: var(--text-light);
+    font-weight: 500;
+    font-size: 15px;
+    cursor: pointer;
+    border-radius: 8px;
+    transition: all 0.3s;
+}
+
+.auth-tab.active {
+    background: var(--bg-white);
+    color: var(--text-dark);
+    box-shadow: 0 2px 8px var(--shadow);
+}
+
+.auth-form {
+    display: none;
+}
+
+.auth-form.active {
+    display: block;
+    animation: fadeInUp 0.3s ease-out;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 500;
+    font-size: 14px;
+    color: var(--text-dark);
+}
+
+.form-group input {
+    width: 100%;
+    padding: 14px 16px;
+    border: 1.5px solid var(--border);
+    border-radius: 12px;
+    font-size: 16px;
+    font-family: inherit;
+    transition: all 0.3s;
+    background: var(--bg-light);
+}
+
+.form-group input:focus {
+    outline: none;
+    border-color: var(--primary);
+    background: var(--bg-white);
+    box-shadow: 0 0 0 4px rgba(0, 122, 255, 0.1);
+}
+
+.btn-full {
+    width: 100%;
+}
+
+.auth-switch {
+    text-align: center;
+    margin-top: 20px;
+    font-size: 14px;
+    color: var(--text-light);
+}
+
+.auth-switch a {
+    color: var(--primary);
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.auth-switch a:hover {
+    text-decoration: underline;
+}
+
+/* Profile Modal */
+.profile-content {
+    max-width: 600px;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.profile-header {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    margin-bottom: 32px;
+    padding-bottom: 24px;
+    border-bottom: 1px solid var(--border);
+}
+
+.profile-avatar {
+    width: 80px;
+    height: 80px;
+    background: linear-gradient(135deg, var(--gradient-start) 0%, var(--gradient-end) 100%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 28px;
+    font-weight: 700;
+}
+
+.profile-info h2 {
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 4px;
+    color: var(--text-dark);
+    letter-spacing: -0.5px;
+}
+
+.profile-info p {
+    color: var(--text-light);
+    font-size: 15px;
+}
+
+.profile-sections {
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+}
+
+.profile-section h3 {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 16px;
+    color: var(--text-dark);
+    letter-spacing: -0.3px;
+}
+
+.subscription-card {
+    background: var(--bg-light);
+    padding: 24px;
+    border-radius: 16px;
+    border: 1px solid var(--border);
+}
+
+.sub-badge {
+    display: inline-block;
+    background: var(--primary);
+    color: white;
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.sub-details {
+    color: var(--text-light);
+    font-size: 14px;
+    margin-bottom: 16px;
+}
+
+.settings-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+.setting-item {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.setting-item span {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-dark);
+}
+
+.setting-item input {
+    padding: 12px 16px;
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    font-size: 15px;
+    font-family: inherit;
+    transition: all 0.3s;
+    background: var(--bg-light);
+}
+
+.setting-item input:focus {
+    outline: none;
+    border-color: var(--primary);
+    background: var(--bg-white);
+}
+
+.btn-danger {
+    background: #FF3B30;
+    color: white;
+    padding: 12px 24px;
+    border: none;
+    border-radius: 980px;
+    font-weight: 500;
+    font-size: 15px;
+    cursor: pointer;
+    transition: all 0.3s;
+    width: 100%;
+}
+
+.btn-danger:hover {
+    background: #D63027;
+    transform: scale(1.02);
+}
+
+/* Profile Button in Nav */
+#profileBtn {
+    display: none;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--gradient-start) 0%, var(--gradient-end) 100%);
+    color: white;
+    border: none;
+    font-weight: 600;
+    font-size: 16px;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+#profileBtn:hover {
+    transform: scale(1.1);
+    box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3);
+}
