@@ -64,9 +64,12 @@ export function Navbar() {
               {getInitials(user.name)}
             </button>
           )}
-          <a href="#download" className="btn-primary !py-2">
+          <a href="#download" className="btn-secondary !py-2">
             Download App
           </a>
+          <Link href="/app/" className="btn-primary !py-2">
+            Open Web App
+          </Link>
         </div>
 
         <button

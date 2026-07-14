@@ -9,7 +9,11 @@ declare global {
 
 const PLAN_LABELS: Record<string, string> = {
   business: "Business Plan",
+  business_yearly: "Business Plan (Yearly)",
+  business_plus: "Business+ Plan",
+  business_plus_yearly: "Business+ Plan (Yearly)",
   accountant: "Accountant Plan",
+  accountant_yearly: "Accountant Plan (Yearly)",
   extra_gstin: "Extra GSTIN",
 };
 
@@ -81,7 +85,7 @@ export async function startRazorpayCheckout(
               razorpay_payment_id: response.razorpay_payment_id,
               razorpay_signature: response.razorpay_signature,
               plan,
-              duration_months: 1,
+              duration_months: plan.endsWith("_yearly") ? 12 : 1,
             }),
           });
           const data = await verifyRes.json();
@@ -89,6 +93,7 @@ export async function startRazorpayCheckout(
             alert(
               `Payment successful! Your ${PLAN_LABELS[plan] || plan} subscription is now active.`
             );
+            window.location.reload();
             resolve();
           } else {
             reject(

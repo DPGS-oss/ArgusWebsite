@@ -1,0 +1,23 @@
+{
+  "hosting": {
+    "public": "out",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "rewrites": [
+      { "source": "/api/config", "function": "apiConfig" },
+      { "source": "/api/auth/sync", "function": "apiAuthSync" },
+      { "source": "/api/auth/plans", "function": "apiAuthPlans" },
+      { "source": "/api/user/profile", "function": "apiUserProfile" },
+      { "source": "/api/payment/create-order", "function": "apiPaymentCreateOrder" },
+      { "source": "/api/payment/verify", "function": "apiPaymentVerify" }
+    ],
+    "cleanUrls": true
+  },
+  "functions": {
+    "source": "functions",
+    "runtime": "nodejs20"
+  },
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  }
+}
