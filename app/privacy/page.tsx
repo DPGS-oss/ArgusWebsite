@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { LegalLayout } from "@/components/LegalLayout";
 
 export default function PrivacyPage() {
@@ -34,9 +35,13 @@ export default function PrivacyPage() {
 
       <h2 className="mt-6 text-xl text-starlight">Data retention &amp; deletion</h2>
       <p>
-        You may request export or deletion by emailing{" "}
-        <a href="mailto:support@argusinvoicing.com">support@argusinvoicing.com</a>. We may retain
-        records required for tax, fraud prevention, or legal compliance.
+        You may request export or deletion of your account and all associated data by visiting{" "}
+        <Link href="/delete-account" className="text-mercury-blue underline">our account deletion page</Link>{" "}
+        or using the &quot;Request Account &amp; Data Deletion&quot; link in your profile settings.
+        You can also email{" "}
+        <a href="mailto:support@argusinvoicing.com?subject=Request%20Account%20Deletion">support@argusinvoicing.com</a>.
+        We will process your request within 30 days. We may retain records required for tax,
+        fraud prevention, or legal compliance.
       </p>
 
       <h2 className="mt-6 text-xl text-starlight">Security</h2>

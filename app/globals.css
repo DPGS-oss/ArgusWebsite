@@ -5,28 +5,39 @@
 @layer base {
   html {
     scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
   }
 
   body {
-    @apply bg-abyss text-starlight antialiased;
+    @apply bg-white text-ink antialiased;
+    font-feature-settings: "calt" 0;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-jakarta), "Plus Jakarta Sans", Inter, ui-sans-serif, system-ui, sans-serif;
+    letter-spacing: -0.035em;
+  }
+
+  a, button {
+    transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, opacity 0.2s ease;
   }
 }
 
 @layer components {
   .container-page {
-    @apply mx-auto max-w-6xl px-4 sm:px-6 lg:px-8;
+    @apply mx-auto max-w-[1200px] px-4 sm:px-6 lg:px-8;
   }
 
   .btn-primary {
-    @apply inline-flex items-center justify-center rounded-btn bg-mercury-blue px-6 py-3 text-sm font-medium text-white transition hover:bg-[#4455c9];
+    @apply inline-flex items-center justify-center rounded-full bg-ink px-6 py-3 text-sm font-bold text-white transition hover:bg-onyx;
   }
 
   .btn-secondary {
-    @apply inline-flex items-center justify-center rounded-btn border border-lead/40 bg-graphite px-6 py-3 text-sm font-medium text-starlight transition hover:border-mercury-blue/50;
+    @apply inline-flex items-center justify-center rounded-full border border-bone bg-mist px-6 py-3 text-sm font-bold text-ink transition hover:border-cloud;
   }
 
   .btn-outline {
-    @apply inline-flex items-center justify-center rounded-btn border border-mercury-blue px-6 py-3 text-sm font-medium text-mercury-blue transition hover:bg-mercury-blue/10;
+    @apply inline-flex items-center justify-center rounded-full border border-signal-blue px-6 py-3 text-sm font-bold text-signal-blue transition hover:bg-signal-blue/5;
   }
 
   .section-header {
@@ -34,14 +45,14 @@
   }
 
   .section-header h2 {
-    @apply mb-4 text-4xl font-normal tracking-tight text-starlight md:text-5xl;
+    @apply mb-4 text-4xl font-bold tracking-tightest text-ink md:text-5xl;
   }
 
   .section-header p {
-    @apply text-lg text-silver;
+    @apply text-lg text-slate;
   }
 
   .gradient-text {
-    @apply bg-gradient-to-r from-mercury-blue to-mercury-ghost bg-clip-text text-transparent;
+    @apply bg-gradient-to-r from-brand-violet to-signal-blue bg-clip-text text-transparent;
   }
 }

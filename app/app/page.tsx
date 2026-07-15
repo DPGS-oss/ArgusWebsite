@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Menu, X } from "lucide-react";
 import type { AppData, BusinessProfile, Invoice, View } from "@/lib/types";
-import { loadData, saveInvoice, deleteInvoice, pickFolder } from "@/lib/storage";
+import { loadData, saveInvoice, deleteInvoice, pickFolder, deductStockForInvoice } from "@/lib/storage";
 import { Sidebar } from "@/components/webapp/Sidebar";
 import { Dashboard } from "@/components/webapp/Dashboard";
 import { InvoiceList } from "@/components/webapp/InvoiceList";
@@ -13,8 +13,13 @@ import { Reports } from "@/components/webapp/Reports";
 import { BusinessManager } from "@/components/webapp/BusinessManager";
 import { Parties } from "@/components/webapp/Parties";
 import { Settings } from "@/components/webapp/Settings";
+import { Inventory } from "@/components/webapp/Inventory";
+import { useAuth, hasValidSubscription } from "@/lib/auth-provider";
+import { AuthModal } from "@/components/AuthModal";
+import { SubscriptionGate } from "@/components/SubscriptionGate";
 
 export default function AppPage() {
+  const { user, authReady, authConfigured, setShowAuthModal } = useAuth();
   const [data, setData] = useState<AppData | null>(null);
   const [view, setView] = useState<View>("dashboard");
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
@@ -29,10 +34,61 @@ export default function AppPage() {
     setData(loadData());
   }, []);
 
+  // Auth not ready yet — show loading
+  if (!authReady) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-white">
+        <div className="text-slate">Loading Argus...</div>
+      </div>
+    );
+  }
+
+  // Auth not configured (Firebase not set up) — show error
+  if (!authConfigured) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-white">
+        <div className="text-center">
+          <div className="mb-2 text-slate">Authentication is not configured.</div>
+          <a href="/" className="text-signal-blue hover:underline">← Back to Home</a>
+        </div>
+      </div>
+    );
+  }
+
+  // Not logged in — show login prompt + AuthModal
+  if (!user) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-white px-4">
+        <div className="mb-8 text-center">
+          <h1 className="mb-2 text-3xl font-bold text-ink">Welcome to Argus Web</h1>
+          <p className="max-w-md text-slate">
+            Please sign in to access the dashboard. Use the same account as the Argus app.
+          </p>
+        </div>
+        <button
+          onClick={() => setShowAuthModal(true)}
+          className="btn-primary"
+        >
+          Sign In
+        </button>
+        <a href="/" className="mt-6 text-sm text-slate hover:text-ink">
+          ← Back to Home
+        </a>
+        <AuthModal />
+      </div>
+    );
+  }
+
+  // Logged in but no valid subscription — show paywall
+  if (!hasValidSubscription(user)) {
+    return <SubscriptionGate />;
+  }
+
+  // Auth ready + logged in + valid subscription — load app data
   if (!data) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-abyss">
-        <div className="text-silver">Loading Argus...</div>
+      <div className="flex min-h-screen items-center justify-center bg-white">
+        <div className="text-slate">Loading Argus...</div>
       </div>
     );
   }
@@ -68,6 +124,7 @@ export default function AppPage() {
 
   function handleSaveInvoice(invoice: Invoice) {
     saveInvoice(invoice);
+    deductStockForInvoice(invoice);
     refresh();
     setEditingInvoice(null);
     setPreviewInvoice(invoice);
@@ -129,7 +186,7 @@ export default function AppPage() {
             onEdit={handleEditInvoice}
           />
         ) : (
-          <div className="text-silver">No invoice selected.</div>
+          <div className="text-slate">No invoice selected.</div>
         );
 
       case "parties":
@@ -138,6 +195,9 @@ export default function AppPage() {
       case "reports":
         return <Reports data={d} />;
 
+      case "stock":
+        return <Inventory data={d} onSaved={refresh} />;
+
       case "business":
         return <BusinessManager data={d} onSaved={refresh} />;
 
@@ -145,12 +205,12 @@ export default function AppPage() {
         return <Settings data={d} onSaved={refresh} />;
 
       default:
-        return <div className="text-silver">Unknown view.</div>;
+        return <div className="text-slate">Unknown view.</div>;
     }
   }
 
   return (
-    <div className="flex min-h-screen bg-abyss">
+    <div className="flex min-h-screen bg-white">
       {/* Mobile sidebar overlay */}
       {sidebarOpen && (
         <div
@@ -175,14 +235,14 @@ export default function AppPage() {
       {/* Main content */}
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Mobile header */}
-        <div className="flex items-center justify-between border-b border-lead/20 bg-midnight px-4 py-3 lg:hidden">
+        <div className="flex items-center justify-between border-b border-bone bg-mist px-4 py-3 lg:hidden">
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="rounded-lg p-2 text-silver hover:bg-graphite"
+            className="rounded-full p-2 text-slate hover:bg-plaster"
           >
             {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
-          <span className="text-lg font-semibold text-starlight">Argus</span>
+          <span className="text-lg font-bold text-ink">Argus</span>
           <div className="w-9" />
         </div>
 
@@ -190,8 +250,8 @@ export default function AppPage() {
         <main className="flex-1 overflow-y-auto p-4 lg:p-8">
           {view === "dashboard" && !activeBusiness && data.businesses.length === 0 ? (
             <div className="flex min-h-[60vh] flex-col items-center justify-center text-center">
-              <h2 className="mb-2 text-2xl text-starlight">Welcome to Argus Web</h2>
-              <p className="mb-6 max-w-md text-silver">
+              <h2 className="mb-2 text-2xl font-bold text-ink">Welcome to Argus Web</h2>
+              <p className="mb-6 max-w-md text-slate">
                 You need to create a business profile before you can start creating invoices.
               </p>
               <button

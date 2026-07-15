@@ -3,6 +3,7 @@
 import Script from "next/script";
 import { useAuth } from "@/lib/auth-provider";
 import { startRazorpayCheckout } from "@/lib/razorpay";
+import { Reveal, Stagger, StaggerItem } from "./Reveal";
 
 const plans = [
   {
@@ -105,33 +106,35 @@ export function Pricing() {
       <Script src="https://checkout.razorpay.com/v1/checkout.js" strategy="lazyOnload" />
       <section id="pricing" className="py-20 md:py-28">
         <div className="container-page">
-          <div className="section-header">
-            <h2>Simple Pricing</h2>
-            <p>Choose the plan that fits your business</p>
-          </div>
-          <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
+          <Reveal>
+            <div className="section-header">
+              <h2>Simple Pricing</h2>
+              <p>Choose the plan that fits your business</p>
+            </div>
+          </Reveal>
+          <Stagger className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4" stagger={0.1}>
             {plans.map((plan) => (
-              <div
+              <StaggerItem
                 key={plan.key}
-                className={`relative rounded-lg border p-8 ${
+                className={`relative rounded-card border p-8 ${
                   plan.featured
-                    ? "border-mercury-blue bg-graphite shadow-xl shadow-mercury-blue/10"
-                    : "border-lead/20 bg-midnight"
+                    ? "border-brand-violet bg-mist shadow-subtle"
+                    : "border-bone bg-white"
                 }`}
               >
                 {plan.featured && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-mercury-blue px-4 py-1 text-xs font-medium text-white">
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-brand-violet px-4 py-1 text-xs font-bold text-white">
                     Most Popular
                   </div>
                 )}
                 <div className="mb-6">
-                  <h3 className="mb-2 text-2xl text-starlight">{plan.name}</h3>
-                  <div className="text-4xl font-light text-starlight">
+                  <h3 className="mb-2 text-2xl font-bold text-ink">{plan.name}</h3>
+                  <div className="text-4xl font-bold text-ink">
                     {plan.price}
-                    <span className="text-base text-silver">{plan.suffix}</span>
+                    <span className="text-base text-slate">{plan.suffix}</span>
                   </div>
                 </div>
-                <ul className="mb-8 space-y-3 text-sm text-silver">
+                <ul className="mb-8 space-y-3 text-sm text-slate">
                   {plan.features.map((feature) => (
                     <li key={feature}>{feature}</li>
                   ))}
@@ -142,12 +145,14 @@ export function Pricing() {
                 >
                   {plan.cta}
                 </button>
-              </div>
+              </StaggerItem>
             ))}
-          </div>
-          <p className="mt-8 text-center text-sm text-silver">
-            Add extra GSTINs for ₹199/month each (max 5 total) | Yearly plans save up to 17%
-          </p>
+          </Stagger>
+          <Reveal delay={0.2}>
+            <p className="mt-8 text-center text-sm text-slate">
+              Add extra GSTINs for ₹199/month each (max 5 total) | Yearly plans save up to 17%
+            </p>
+          </Reveal>
         </div>
       </section>
     </>

@@ -54,6 +54,7 @@ export interface InvoiceItem {
   sgst: number;
   igst: number;
   total: number;
+  stockItemId?: string;
 }
 
 export interface Invoice {
@@ -65,6 +66,7 @@ export interface Invoice {
   partyId: string;
   partyName: string;
   partyGstin: string;
+  partyPhone: string;
   date: string;
   dueDate: string;
   items: InvoiceItem[];
@@ -84,6 +86,7 @@ export interface Invoice {
   terms: string;
   placeOfSupply: string;
   isInterState: boolean;
+  isTotalMode: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -105,6 +108,7 @@ export interface StockItem {
   minStock: number;
   rate: number;
   gstRate: GSTRate;
+  barcode?: string;
 }
 
 export interface AppData {

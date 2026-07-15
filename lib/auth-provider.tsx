@@ -15,6 +15,8 @@ import {
   createUserWithEmailAndPassword,
   updateProfile,
   signOut,
+  GoogleAuthProvider,
+  signInWithPopup,
 } from "firebase/auth";
 import { getFirebaseAuth, initFirebase } from "./firebase";
 
@@ -38,11 +40,18 @@ type AuthContextValue = {
   setShowAuthModal: (open: boolean) => void;
   setShowProfileModal: (open: boolean) => void;
   login: (email: string, password: string) => Promise<void>;
+  loginWithGoogle: () => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshProfile: () => Promise<void>;
   updateLocalUser: (patch: Partial<AppUser>) => void;
 };
+
+const ALLOWED_PLANS = ["business", "business_plus"];
+
+export function hasValidSubscription(user: AppUser | null): boolean {
+  return !!user?.subscription?.plan && ALLOWED_PLANS.includes(user.subscription.plan);
+}
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
@@ -92,7 +101,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const idToken = await nextUser.getIdToken();
           setToken(idToken);
           const synced = await syncUserWithBackend(idToken);
-          setUser(synced);
+          if (synced) {
+            setUser(synced);
+          } else {
+            // Sync failed (e.g. rate limited) — fall back to Firebase user data
+            // so the user isn't incorrectly treated as logged out
+            setUser({
+              name: nextUser.displayName || nextUser.email?.split("@")[0] || "User",
+              email: nextUser.email || "",
+            });
+          }
         } else {
           setToken(null);
           setUser(null);
@@ -110,6 +128,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const credential = await signInWithEmailAndPassword(auth, email, password);
     const idToken = await credential.user.getIdToken();
     const synced = await syncUserWithBackend(idToken);
+    if (!synced) throw new Error("Failed to sync user data");
+    setToken(idToken);
+    setUser(synced);
+    setShowAuthModal(false);
+  }, []);
+
+  const loginWithGoogle = useCallback(async () => {
+    const auth = getFirebaseAuth();
+    if (!auth) throw new Error("Authentication is not configured yet.");
+    const provider = new GoogleAuthProvider();
+    const credential = await signInWithPopup(auth, provider);
+    const idToken = await credential.user.getIdToken();
+    const synced = await syncUserWithBackend(idToken, credential.user.displayName || undefined);
     if (!synced) throw new Error("Failed to sync user data");
     setToken(idToken);
     setUser(synced);
@@ -163,6 +194,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setShowAuthModal,
       setShowProfileModal,
       login,
+      loginWithGoogle,
       register,
       logout,
       refreshProfile,
@@ -177,6 +209,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       showAuthModal,
       showProfileModal,
       login,
+      loginWithGoogle,
       register,
       logout,
       refreshProfile,

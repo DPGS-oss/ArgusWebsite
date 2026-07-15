@@ -399,7 +399,7 @@ export function generateInvoiceHTML(invoice: Invoice, business: {
   <div class="parties">
     <div class="party-box">
       <h4>Bill To</h4>
-      <p><strong>${invoice.partyName}</strong><br>GSTIN: ${invoice.partyGstin || "Unregistered"}<br>Place of Supply: ${invoice.placeOfSupply}</p>
+      <p><strong>${invoice.partyName || "—"}</strong>${invoice.partyPhone ? `<br>Phone: ${invoice.partyPhone}` : ""}<br>GSTIN: ${invoice.partyGstin || "Unregistered"}<br>Place of Supply: ${invoice.placeOfSupply}</p>
     </div>
   </div>
   <table>

@@ -40,11 +40,11 @@ export function Sidebar({ view, onNavigate, onPickFolder }: SidebarProps) {
   const usingFS = isUsingFileSystem();
 
   return (
-    <aside className="flex h-screen w-64 flex-col border-r border-lead/20 bg-midnight">
-      <div className="flex items-center gap-3 border-b border-lead/20 px-5 py-4">
+    <aside className="flex h-screen w-64 flex-col border-r border-bone bg-mist">
+      <div className="flex items-center gap-3 border-b border-bone px-5 py-4">
         <Link href="/" className="flex items-center gap-3">
           <Image src="/logo.svg" alt="Argus" width={28} height={28} />
-          <span className="text-lg font-medium text-starlight">Argus</span>
+          <span className="text-lg font-bold text-ink">Argus</span>
         </Link>
       </div>
 
@@ -53,10 +53,10 @@ export function Sidebar({ view, onNavigate, onPickFolder }: SidebarProps) {
           <button
             key={v}
             onClick={() => onNavigate(v)}
-            className={`mb-1 flex w-full items-center gap-3 rounded-lg px-4 py-2.5 text-sm transition ${
+            className={`mb-1 flex w-full items-center gap-3 rounded-full px-4 py-2.5 text-sm transition ${
               view === v || (v === "invoices" && (view === "invoice-form" || view === "invoice-preview"))
-                ? "bg-mercury-blue text-white"
-                : "text-silver hover:bg-graphite hover:text-starlight"
+                ? "bg-brand-violet text-white"
+                : "text-slate hover:bg-plaster hover:text-ink"
             }`}
           >
             <Icon className="h-4 w-4" />
@@ -65,28 +65,28 @@ export function Sidebar({ view, onNavigate, onPickFolder }: SidebarProps) {
         ))}
       </nav>
 
-      <div className="border-t border-lead/20 p-3">
+      <div className="border-t border-bone p-3">
         <button
           onClick={onPickFolder}
-          className="mb-2 flex w-full items-center gap-3 rounded-lg px-4 py-2.5 text-sm text-silver transition hover:bg-graphite hover:text-starlight"
+          className="mb-2 flex w-full items-center gap-3 rounded-full px-4 py-2.5 text-sm text-slate transition hover:bg-plaster hover:text-ink"
         >
           <FolderOpen className="h-4 w-4" />
           <div className="flex flex-col text-left">
             <span>Invoice Folder</span>
-            <span className="text-xs text-lead">
+            <span className="text-xs text-ash">
               {usingFS ? `📁 ${folderName}` : "Click to select"}
             </span>
           </div>
         </button>
 
         {user && (
-          <div className="mb-2 flex items-center gap-3 rounded-lg bg-graphite px-3 py-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-mercury-blue text-xs font-medium text-white">
+          <div className="mb-2 flex items-center gap-3 rounded-full bg-plaster px-3 py-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-violet text-xs font-medium text-white">
               {getInitials(user.name)}
             </div>
             <div className="flex-1 overflow-hidden">
-              <p className="truncate text-sm text-starlight">{user.name}</p>
-              <p className="truncate text-xs text-silver">{user.email}</p>
+              <p className="truncate text-sm text-ink">{user.name}</p>
+              <p className="truncate text-xs text-slate">{user.email}</p>
             </div>
           </div>
         )}
@@ -94,14 +94,14 @@ export function Sidebar({ view, onNavigate, onPickFolder }: SidebarProps) {
         <div className="flex gap-2">
           <Link
             href="/"
-            className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-lead/30 px-3 py-2 text-xs text-silver transition hover:text-starlight"
+            className="flex flex-1 items-center justify-center gap-2 rounded-full border border-bone px-3 py-2 text-xs text-slate transition hover:text-ink"
           >
             <Home className="h-3.5 w-3.5" />
             Home
           </Link>
           <button
             onClick={() => logout()}
-            className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-lead/30 px-3 py-2 text-xs text-silver transition hover:text-red-400"
+            className="flex flex-1 items-center justify-center gap-2 rounded-full border border-bone px-3 py-2 text-xs text-slate transition hover:text-red-600"
           >
             <LogOut className="h-3.5 w-3.5" />
             Logout

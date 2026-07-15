@@ -13,11 +13,12 @@ async function loadConfig() {
             console.warn('Firebase config incomplete; website auth disabled.');
             return;
         }
+        const clean = (v) => (v || '').trim().replace(/[\r\n]/g, '');
         firebaseApp = firebase.initializeApp({
-            apiKey: config.firebase_api_key,
-            authDomain: config.firebase_auth_domain,
-            projectId: config.firebase_project_id,
-            appId: config.firebase_app_id,
+            apiKey: clean(config.firebase_api_key),
+            authDomain: clean(config.firebase_auth_domain),
+            projectId: clean(config.firebase_project_id),
+            appId: clean(config.firebase_app_id),
         });
         auth = firebase.auth();
         auth.onAuthStateChanged(async (user) => {

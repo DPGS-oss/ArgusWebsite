@@ -1,5 +1,5 @@
-import { Navbar } from "@/components/Navbar";
 import { Hero } from "@/components/Hero";
+import { ProductShowcase } from "@/components/ProductShowcase";
 import { Features } from "@/components/Features";
 import { Pricing } from "@/components/Pricing";
 import { About } from "@/components/About";
@@ -12,9 +12,9 @@ import { ProfileModal } from "@/components/ProfileModal";
 export default function HomePage() {
   return (
     <>
-      <Navbar />
       <main>
         <Hero />
+        <ProductShowcase />
         <Features />
         <Pricing />
         <About />

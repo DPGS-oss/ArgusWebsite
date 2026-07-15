@@ -8,6 +8,7 @@ import {
   Mic,
   Smartphone,
 } from "lucide-react";
+import { Reveal, Stagger, StaggerItem } from "./Reveal";
 
 const features = [
   {
@@ -58,24 +59,26 @@ export function Features() {
   return (
     <section id="features" className="py-20 md:py-28">
       <div className="container-page">
-        <div className="section-header">
-          <h2>Powerful Features</h2>
-          <p>Everything you need to manage your billing efficiently</p>
-        </div>
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        <Reveal>
+          <div className="section-header">
+            <h2>Powerful Features</h2>
+            <p>Everything you need to manage your billing efficiently</p>
+          </div>
+        </Reveal>
+        <Stagger className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4" stagger={0.08}>
           {features.map(({ icon: Icon, title, description }) => (
-            <div
+            <StaggerItem
               key={title}
-              className="group rounded-lg border border-lead/20 bg-midnight p-6 transition hover:border-mercury-blue/40 hover:bg-graphite"
+              className="group rounded-card border border-bone bg-mist p-6 transition hover:border-brand-violet/30 hover:bg-plaster"
             >
-              <div className="mb-4 inline-flex rounded-full bg-mercury-blue/15 p-3 text-mercury-blue">
+              <div className="mb-4 inline-flex rounded-full bg-brand-violet/10 p-3 text-brand-violet">
                 <Icon className="h-6 w-6" />
               </div>
-              <h3 className="mb-3 text-xl text-starlight">{title}</h3>
-              <p className="text-sm leading-relaxed text-silver">{description}</p>
-            </div>
+              <h3 className="mb-3 text-xl font-bold text-ink">{title}</h3>
+              <p className="text-sm leading-relaxed text-slate">{description}</p>
+            </StaggerItem>
           ))}
-        </div>
+        </Stagger>
       </div>
     </section>
   );

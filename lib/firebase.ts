@@ -20,13 +20,14 @@ export async function initFirebase(): Promise<boolean> {
     const config = (await response.json()) as FirebaseConfig;
     if (!config.firebase_api_key || !config.firebase_project_id) return false;
 
+    const clean = (v: string) => (v || '').trim().replace(/[\r\n]/g, '');
     app =
       getApps()[0] ??
       initializeApp({
-        apiKey: config.firebase_api_key,
-        authDomain: config.firebase_auth_domain,
-        projectId: config.firebase_project_id,
-        appId: config.firebase_app_id,
+        apiKey: clean(config.firebase_api_key),
+        authDomain: clean(config.firebase_auth_domain),
+        projectId: clean(config.firebase_project_id),
+        appId: clean(config.firebase_app_id),
       });
     auth = getAuth(app);
     return true;

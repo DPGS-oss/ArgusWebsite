@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import Link from "next/link";
 import { getInitials, useAuth } from "@/lib/auth-provider";
 
 export function ProfileModal() {
@@ -63,25 +64,25 @@ export function ProfileModal() {
       onClick={() => setShowProfileModal(false)}
     >
       <div
-        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-lg border border-lead/20 bg-midnight p-6 shadow-2xl"
+        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-card border border-bone bg-white p-6 shadow-subtle"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="mb-6 flex items-center gap-4">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-mercury-blue text-lg font-medium text-white">
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-brand-violet text-lg font-bold text-white">
             {getInitials(user.name)}
           </div>
           <div>
-            <h2 className="text-xl text-starlight">{user.name}</h2>
-            <p className="text-sm text-silver">{user.email}</p>
+            <h2 className="text-xl font-bold text-ink">{user.name}</h2>
+            <p className="text-sm text-slate">{user.email}</p>
           </div>
         </div>
 
-        <div className="mb-6 rounded-lg border border-lead/20 bg-graphite p-4">
-          <h3 className="mb-3 text-starlight">Subscription</h3>
-          <div className="mb-2 inline-block rounded-full bg-mercury-blue/20 px-3 py-1 text-sm text-mercury-ghost">
+        <div className="mb-6 rounded-card border border-bone bg-mist p-4">
+          <h3 className="mb-3 font-bold text-ink">Subscription</h3>
+          <div className="mb-2 inline-block rounded-full bg-brand-violet/10 px-3 py-1 text-sm font-bold text-brand-violet">
             {user.subscription?.plan || "Free Plan"}
           </div>
-          <p className="mb-4 text-sm text-silver">
+          <p className="mb-4 text-sm text-slate">
             {user.subscription?.details || "50 invoices/month"}
           </p>
           <button
@@ -96,18 +97,18 @@ export function ProfileModal() {
         </div>
 
         <form onSubmit={handleSave} className="mb-6 space-y-4">
-          <h3 className="text-starlight">Account Settings</h3>
+          <h3 className="font-bold text-ink">Account Settings</h3>
           {[
             { label: "Business Name", value: businessName, setter: setBusinessName },
             { label: "GSTIN", value: gstin, setter: setGstin },
             { label: "Phone", value: phone, setter: setPhone },
           ].map(({ label, value, setter }) => (
-            <label key={label} className="block text-sm text-silver">
+            <label key={label} className="block text-sm text-slate">
               {label}
               <input
                 value={value}
                 onChange={(event) => setter(event.target.value)}
-                className="mt-1 w-full rounded-btn border border-lead/30 bg-abyss px-4 py-3 text-starlight outline-none focus:border-mercury-blue"
+                className="mt-1 w-full rounded-input border border-bone bg-white px-4 py-3 text-ink outline-none focus:border-signal-blue"
               />
             </label>
           ))}
@@ -117,13 +118,24 @@ export function ProfileModal() {
         </form>
 
         <div>
-          <h3 className="mb-3 text-starlight">Danger Zone</h3>
-          <button
-            className="rounded-btn bg-red-600 px-6 py-3 text-sm text-white hover:bg-red-700"
-            onClick={() => logout()}
-          >
-            Sign Out
-          </button>
+          <h3 className="mb-3 font-bold text-ink">Danger Zone</h3>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <button
+              className="rounded-full bg-red-600 px-6 py-3 text-sm font-bold text-white hover:bg-red-700"
+              onClick={() => logout()}
+            >
+              Sign Out
+            </button>
+            <Link
+              href="/delete-account"
+              className="text-sm font-medium text-red-600 underline hover:text-red-700"
+            >
+              Request Account &amp; Data Deletion
+            </Link>
+          </div>
+          <p className="mt-2 text-xs text-slate">
+            This will open our account deletion page. We will process your request within 30 days.
+          </p>
         </div>
       </div>
     </div>

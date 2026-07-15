@@ -130,15 +130,32 @@ async function writeFileToDir(dir: DirHandle, filename: string, content: string)
   await writable.close();
 }
 
+async function getDateSubDir(parentDir: DirHandle, dateStr: string): Promise<DirHandle | null> {
+  const dateFolder = dateStr || new Date().toISOString().split("T")[0];
+  return getOrCreateSubDirIn(parentDir, dateFolder);
+}
+
+async function getOrCreateSubDirIn(parent: DirHandle, name: string): Promise<DirHandle | null> {
+  if (!parent) return null;
+  try {
+    const sub = await parent.getDirectoryHandle(name, { create: true }) as DirHandle;
+    return sub;
+  } catch {
+    return null;
+  }
+}
+
 export async function saveInvoiceToFile(invoice: Invoice, businessName: string): Promise<void> {
   if (!useFileSystem || !dirHandle) return;
 
   const safeName = businessName.replace(/[^a-zA-Z0-9]/g, "_") || "Business";
-  const subDir = await getOrCreateSubDir(safeName);
-  if (!subDir) return;
+  const bizDir = await getOrCreateSubDir(safeName);
+  if (!bizDir) return;
+  const dateDir = await getDateSubDir(bizDir, invoice.date);
+  if (!dateDir) return;
 
   const filename = `${invoice.invoiceNumber.replace(/[^a-zA-Z0-9]/g, "_")}.json`;
-  await writeFileToDir(subDir, filename, JSON.stringify(invoice, null, 2));
+  await writeFileToDir(dateDir, filename, JSON.stringify(invoice, null, 2));
 }
 
 export async function saveInvoiceAsHTML(
@@ -149,11 +166,35 @@ export async function saveInvoiceAsHTML(
   if (!useFileSystem || !dirHandle) return;
 
   const safeName = businessName.replace(/[^a-zA-Z0-9]/g, "_") || "Business";
-  const subDir = await getOrCreateSubDir(safeName);
-  if (!subDir) return;
+  const bizDir = await getOrCreateSubDir(safeName);
+  if (!bizDir) return;
+  const dateDir = await getDateSubDir(bizDir, invoice.date);
+  if (!dateDir) return;
 
   const filename = `${invoice.invoiceNumber.replace(/[^a-zA-Z0-9]/g, "_")}.html`;
-  await writeFileToDir(subDir, filename, htmlContent);
+  await writeFileToDir(dateDir, filename, htmlContent);
+}
+
+export async function saveInvoiceAsPDF(
+  invoice: Invoice,
+  businessName: string,
+  pdfBlob: Blob
+): Promise<void> {
+  if (!useFileSystem || !dirHandle) return;
+
+  const safeName = businessName.replace(/[^a-zA-Z0-9]/g, "_") || "Business";
+  const bizDir = await getOrCreateSubDir(safeName);
+  if (!bizDir) return;
+  const dateDir = await getDateSubDir(bizDir, invoice.date);
+  if (!dateDir) return;
+
+  const filename = `${invoice.invoiceNumber.replace(/[^a-zA-Z0-9]/g, "_")}.pdf`;
+  const fileHandle = await dateDir.getFileHandle(filename, { create: true });
+  const writable = await (fileHandle as unknown as {
+    createWritable: () => Promise<{ write: (data: Blob) => Promise<void>; close: () => Promise<void> }>;
+  }).createWritable();
+  await writable.write(pdfBlob);
+  await writable.close();
 }
 
 export function downloadInvoiceFile(invoice: Invoice, businessName: string): void {
@@ -168,6 +209,12 @@ export function downloadInvoiceHTML(invoice: Invoice, businessName: string, html
   const filename = `${safeName}_${invoice.invoiceNumber.replace(/[^a-zA-Z0-9]/g, "_")}.html`;
   const blob = new Blob([htmlContent], { type: "text/html" });
   triggerDownload(blob, filename);
+}
+
+export function downloadInvoicePDF(invoice: Invoice, businessName: string, pdfBlob: Blob): void {
+  const safeName = businessName.replace(/[^a-zA-Z0-9]/g, "_") || "Business";
+  const filename = `${safeName}_${invoice.invoiceNumber.replace(/[^a-zA-Z0-9]/g, "_")}.pdf`;
+  triggerDownload(pdfBlob, filename);
 }
 
 function triggerDownload(blob: Blob, filename: string): void {
@@ -286,6 +333,32 @@ export function saveStockItem(item: StockItem): void {
     data.stock[idx] = item;
   } else {
     data.stock.push(item);
+  }
+  saveData(data);
+}
+
+export function bulkSaveStockItems(items: StockItem[]): void {
+  const data = loadData();
+  for (const item of items) {
+    const idx = data.stock.findIndex((s) => s.id === item.id);
+    if (idx >= 0) {
+      data.stock[idx] = item;
+    } else {
+      data.stock.push(item);
+    }
+  }
+  saveData(data);
+}
+
+export function deductStockForInvoice(invoice: Invoice): void {
+  const data = loadData();
+  for (const item of invoice.items) {
+    if (item.stockItemId) {
+      const stockIdx = data.stock.findIndex((s) => s.id === item.stockItemId);
+      if (stockIdx >= 0) {
+        data.stock[stockIdx].currentStock = Math.max(0, data.stock[stockIdx].currentStock - item.quantity);
+      }
+    }
   }
   saveData(data);
 }

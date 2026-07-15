@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { Plus, Trash2, Search, Sparkles, ArrowLeft, Save } from "lucide-react";
-import type { AppData, BusinessProfile, Invoice, InvoiceItem, InvoiceType, InvoiceStatus, Party, GSTRate } from "@/lib/types";
-import { INDIAN_STATES, UNITS, PAYMENT_MODES } from "@/lib/types";
-import { calculateItem, calculateInvoiceTotals, formatCurrency, searchHSN, suggestHSN, isInterState } from "@/lib/gst";
+import { Plus, Trash2, Sparkles, ArrowLeft, Save, ScanLine, Package, X } from "lucide-react";
+import type { AppData, BusinessProfile, Invoice, InvoiceItem, InvoiceType, InvoiceStatus, Party, GSTRate, StockItem } from "@/lib/types";
+import { UNITS, PAYMENT_MODES } from "@/lib/types";
+import { calculateItem, calculateInvoiceTotals, formatCurrency, searchHSN, suggestHSN, isInterState, round2 } from "@/lib/gst";
 import { generateId, generateInvoiceNumber } from "@/lib/storage";
+import { BarcodeScannerModal } from "./BarcodeScannerModal";
 
 type InvoiceFormProps = {
   data: AppData;
@@ -69,13 +70,42 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
   const [hsnSearch, setHsnSearch] = useState<string | null>(null);
   const [hsnItemIdx, setHsnItemIdx] = useState<number | null>(null);
   const [aiSuggestions, setAiSuggestions] = useState<{ idx: number; suggestions: { code: string; description: string; gstRate: GSTRate }[] } | null>(null);
+  const [isTotalMode, setIsTotalMode] = useState(editingInvoice?.isTotalMode || false);
+  const [totalAmount, setTotalAmount] = useState(editingInvoice?.isTotalMode ? editingInvoice.grandTotal : 0);
+  const [totalGstRate, setTotalGstRate] = useState<GSTRate>(editingInvoice?.isTotalMode ? (editingInvoice.items[0]?.gstRate || data.settings.defaultGstRate) : data.settings.defaultGstRate);
+  const [totalDescription, setTotalDescription] = useState(editingInvoice?.isTotalMode ? (editingInvoice.items[0]?.description || "") : "");
+  const [inlinePartyName, setInlinePartyName] = useState(editingInvoice && !editingInvoice.partyId ? editingInvoice.partyName : "");
+  const [inlinePartyPhone, setInlinePartyPhone] = useState(editingInvoice?.partyPhone || "");
+  const [showStockPicker, setShowStockPicker] = useState(false);
+  const [showScanner, setShowScanner] = useState(false);
 
   const selectedParty = parties.find((p) => p.id === partyId);
   const businessStateCode = business?.stateCode || "";
   const partyStateCode = selectedParty?.stateCode || "";
   const interState = isInterState(businessStateCode, partyStateCode);
 
-  const totals = useMemo(() => calculateInvoiceTotals(items, data.settings.roundOff), [items, data.settings.roundOff]);
+  const totals = useMemo(() => {
+    if (isTotalMode) {
+      const taxable = round2(totalAmount / (1 + totalGstRate / 100));
+      const tax = round2(totalAmount - taxable);
+      let cgst = 0, sgst = 0, igst = 0;
+      if (interState) { igst = tax; } else { cgst = round2(tax / 2); sgst = round2(tax / 2); }
+      const grandTotal = data.settings.roundOff ? Math.round(totalAmount) : totalAmount;
+      const roundOff = round2(grandTotal - totalAmount);
+      return {
+        subtotal: round2(totalAmount),
+        totalDiscount: 0,
+        totalTaxable: taxable,
+        totalCgst: cgst,
+        totalSgst: sgst,
+        totalIgst: igst,
+        totalTax: tax,
+        roundOff,
+        grandTotal: round2(grandTotal),
+      };
+    }
+    return calculateInvoiceTotals(items, data.settings.roundOff);
+  }, [isTotalMode, totalAmount, totalGstRate, interState, data.settings.roundOff, items]);
 
   function updateItem(idx: number, patch: Partial<InvoiceItem>) {
     setItems((prev) => {
@@ -128,22 +158,60 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
     setAiSuggestions({ idx, suggestions });
   }
 
+  function addStockItemToInvoice(stock: StockItem) {
+    const calc = calculateItem({
+      quantity: 1,
+      rate: stock.rate,
+      discount: 0,
+      gstRate: stock.gstRate,
+      isInterState: interState,
+    });
+    const newItem: InvoiceItem = {
+      id: generateId(),
+      description: stock.name,
+      hsn: stock.hsn,
+      quantity: 1,
+      unit: stock.unit,
+      rate: stock.rate,
+      discount: 0,
+      gstRate: stock.gstRate,
+      taxableAmount: calc.taxableAmount,
+      cgst: calc.cgst,
+      sgst: calc.sgst,
+      igst: calc.igst,
+      total: calc.total,
+      stockItemId: stock.id,
+    };
+    setItems((prev) => [...prev, newItem]);
+  }
+
+  function handleScanBarcode() {
+    if (!("BarcodeDetector" in window)) {
+      alert("Barcode scanning is not supported on this device/browser. Try using Chrome on Android.");
+      return;
+    }
+    setShowScanner(true);
+  }
+
   function handleSave() {
     if (!business) {
       alert("Please set up your business profile first in Settings.");
       return;
     }
-    if (!partyId) {
-      alert("Please select a party (customer/supplier).");
-      return;
-    }
-    if (items.length === 0 || items.every((i) => !i.description)) {
-      alert("Please add at least one item.");
-      return;
-    }
 
-    const party = parties.find((p) => p.id === partyId);
-    if (!party) return;
+    const party = partyId ? parties.find((p) => p.id === partyId) : null;
+
+    if (isTotalMode) {
+      if (totalAmount <= 0) {
+        alert("Please enter a total amount.");
+        return;
+      }
+    } else {
+      if (items.length === 0 || items.every((i) => !i.description)) {
+        alert("Please add at least one item.");
+        return;
+      }
+    }
 
     const invoiceNumber = editingInvoice?.invoiceNumber || generateInvoiceNumber(
       data.invoiceCounter,
@@ -153,18 +221,44 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
 
     const balanceDue = totals.grandTotal - paidAmount;
 
+    let invoiceItems: InvoiceItem[];
+    if (isTotalMode) {
+      const taxable = round2(totalAmount / (1 + totalGstRate / 100));
+      const tax = round2(totalAmount - taxable);
+      let cgst = 0, sgst = 0, igst = 0;
+      if (interState) { igst = tax; } else { cgst = round2(tax / 2); sgst = round2(tax / 2); }
+      invoiceItems = [{
+        id: generateId(),
+        description: totalDescription || "Total Amount",
+        hsn: "",
+        quantity: 1,
+        unit: "NOS",
+        rate: taxable,
+        discount: 0,
+        gstRate: totalGstRate,
+        taxableAmount: taxable,
+        cgst,
+        sgst,
+        igst,
+        total: round2(totalAmount),
+      }];
+    } else {
+      invoiceItems = items.filter((i) => i.description);
+    }
+
     const invoice: Invoice = {
       id: editingInvoice?.id || generateId(),
       invoiceNumber,
       type: invoiceType,
       status,
       businessId: business.id,
-      partyId,
-      partyName: party.name,
-      partyGstin: party.gstin,
+      partyId: party?.id || "",
+      partyName: party?.name || inlinePartyName || "",
+      partyGstin: party?.gstin || "",
+      partyPhone: party?.phone || inlinePartyPhone || "",
       date,
       dueDate: dueDateVal,
-      items: items.filter((i) => i.description),
+      items: invoiceItems,
       subtotal: totals.subtotal,
       totalDiscount: totals.totalDiscount,
       totalTaxable: totals.totalTaxable,
@@ -179,8 +273,9 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
       paymentMode,
       notes,
       terms,
-      placeOfSupply: party.state || business.state || "",
+      placeOfSupply: party?.state || business.state || "",
       isInterState: interState,
+      isTotalMode,
       createdAt: editingInvoice?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -259,25 +354,19 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
 
           <div className="rounded-lg border border-lead/20 bg-midnight p-5">
             <h2 className="mb-4 text-lg text-starlight">Bill To</h2>
-            {parties.length === 0 ? (
-              <p className="text-sm text-silver">
-                No parties added yet. Go to Parties to add customers/suppliers.
-              </p>
-            ) : (
-              <select
-                value={partyId}
-                onChange={(e) => setPartyId(e.target.value)}
-                className="w-full rounded-btn border border-lead/30 bg-graphite px-4 py-2.5 text-starlight outline-none focus:border-mercury-blue"
-              >
-                <option value="">Select a party...</option>
-                {parties.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name} {p.gstin ? `(${p.gstin})` : ""}
-                  </option>
-                ))}
-              </select>
-            )}
-            {selectedParty && (
+            <select
+              value={partyId}
+              onChange={(e) => setPartyId(e.target.value)}
+              className="w-full rounded-btn border border-lead/30 bg-graphite px-4 py-2.5 text-starlight outline-none focus:border-mercury-blue"
+            >
+              <option value="">No Party (Walk-in customer)</option>
+              {parties.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name} {p.gstin ? `(${p.gstin})` : ""}
+                </option>
+              ))}
+            </select>
+            {selectedParty ? (
               <div className="mt-3 rounded-lg bg-graphite p-3 text-sm text-silver">
                 <p className="text-starlight">{selectedParty.name}</p>
                 <p>{selectedParty.address}</p>
@@ -287,18 +376,106 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
                   {interState ? "Inter-state (IGST applies)" : "Intra-state (CGST + SGST applies)"}
                 </p>
               </div>
+            ) : (
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <label className="block text-sm text-silver">
+                  Customer Name (optional)
+                  <input
+                    type="text"
+                    value={inlinePartyName}
+                    onChange={(e) => setInlinePartyName(e.target.value)}
+                    placeholder="Walk-in customer name"
+                    className="mt-1 w-full rounded-btn border border-lead/30 bg-graphite px-4 py-2.5 text-sm text-starlight outline-none focus:border-mercury-blue"
+                  />
+                </label>
+                <label className="block text-sm text-silver">
+                  Phone Number (optional)
+                  <input
+                    type="tel"
+                    value={inlinePartyPhone}
+                    onChange={(e) => setInlinePartyPhone(e.target.value)}
+                    placeholder="Phone number"
+                    className="mt-1 w-full rounded-btn border border-lead/30 bg-graphite px-4 py-2.5 text-sm text-starlight outline-none focus:border-mercury-blue"
+                  />
+                </label>
+              </div>
             )}
           </div>
 
           <div className="rounded-lg border border-lead/20 bg-midnight p-5">
-            <div className="mb-4 flex items-center justify-between">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-lg text-starlight">Items</h2>
-              <button onClick={addItem} className="btn-secondary !py-2">
-                <Plus className="mr-1 h-4 w-4" /> Add Item
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <label className="flex items-center gap-2 text-sm text-silver">
+                  <input
+                    type="checkbox"
+                    checked={isTotalMode}
+                    onChange={(e) => setIsTotalMode(e.target.checked)}
+                    className="h-4 w-4"
+                  />
+                  Total Amount Mode
+                </label>
+                {!isTotalMode && (
+                  <>
+                    <button onClick={() => setShowStockPicker(true)} className="btn-secondary !py-2" disabled={data.stock.length === 0}>
+                      <Package className="mr-1 h-4 w-4" /> Inventory
+                    </button>
+                    <button onClick={handleScanBarcode} className="btn-secondary !py-2">
+                      <ScanLine className="mr-1 h-4 w-4" /> Scan
+                    </button>
+                    <button onClick={addItem} className="btn-secondary !py-2">
+                      <Plus className="mr-1 h-4 w-4" /> Add Item
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
 
-            <div className="space-y-3">
+            {isTotalMode ? (
+              <div className="rounded-lg bg-graphite p-4">
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="sm:col-span-3">
+                    <label className="text-xs text-silver">Description (optional)</label>
+                    <input
+                      type="text"
+                      value={totalDescription}
+                      onChange={(e) => setTotalDescription(e.target.value)}
+                      placeholder="What is this invoice for?"
+                      className="mt-1 w-full rounded-btn border border-lead/30 bg-abyss px-3 py-2 text-sm text-starlight outline-none focus:border-mercury-blue"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="text-xs text-silver">Total Amount (₹)</label>
+                    <input
+                      type="number"
+                      value={totalAmount || ""}
+                      onChange={(e) => setTotalAmount(parseFloat(e.target.value) || 0)}
+                      placeholder="Enter total including GST"
+                      className="mt-1 w-full rounded-btn border border-lead/30 bg-abyss px-3 py-2 text-sm text-starlight outline-none focus:border-mercury-blue"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-silver">GST Rate</label>
+                    <select
+                      value={totalGstRate}
+                      onChange={(e) => setTotalGstRate(parseFloat(e.target.value) as GSTRate)}
+                      className="mt-1 w-full rounded-btn border border-lead/30 bg-abyss px-2 py-2 text-sm text-starlight outline-none focus:border-mercury-blue"
+                    >
+                      {GST_RATES.map((r) => <option key={r} value={r}>{r}%</option>)}
+                    </select>
+                  </div>
+                </div>
+                {totalAmount > 0 && (
+                  <div className="mt-3 rounded-lg bg-abyss p-3 text-sm text-silver">
+                    <div className="flex justify-between"><span>Taxable Amount:</span><span>{formatCurrency(round2(totalAmount / (1 + totalGstRate / 100)))}</span></div>
+                    <div className="flex justify-between"><span>GST ({totalGstRate}%):</span><span>{formatCurrency(round2(totalAmount - totalAmount / (1 + totalGstRate / 100)))}</span></div>
+                    <div className="flex justify-between font-medium text-starlight"><span>Total:</span><span>{formatCurrency(totalAmount)}</span></div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <>
+              <div className="space-y-3">
               {items.map((item, idx) => (
                 <div key={item.id} className="rounded-lg bg-graphite p-4">
                   <div className="grid gap-3 sm:grid-cols-12">
@@ -442,7 +619,9 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
                   </div>
                 </div>
               ))}
-            </div>
+              </div>
+              </>
+            )}
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
@@ -545,6 +724,49 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
           </div>
         </div>
       </div>
+
+      {showStockPicker && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setShowStockPicker(false)}>
+          <div className="max-h-[80vh] w-full max-w-lg overflow-y-auto rounded-lg bg-midnight p-5" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg text-starlight">Pick from Inventory</h3>
+              <button onClick={() => setShowStockPicker(false)} className="rounded p-1 text-silver hover:text-starlight">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="space-y-2">
+              {data.stock.map((stock) => (
+                <button
+                  key={stock.id}
+                  onClick={() => { addStockItemToInvoice(stock); setShowStockPicker(false); }}
+                  className="flex w-full items-center justify-between rounded-lg bg-graphite p-3 text-left hover:border-mercury-blue"
+                >
+                  <div>
+                    <p className="text-sm text-starlight">{stock.name}</p>
+                    <p className="text-xs text-silver">HSN: {stock.hsn} | Stock: {stock.currentStock} {stock.unit}</p>
+                  </div>
+                  <span className="text-sm text-mercury-blue">{formatCurrency(stock.rate)}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showScanner && (
+        <BarcodeScannerModal
+          onClose={() => setShowScanner(false)}
+          onDetected={(code) => {
+            const stockItem = data.stock.find((s) => s.barcode === code);
+            if (stockItem) {
+              addStockItemToInvoice(stockItem);
+              setShowScanner(false);
+            } else {
+              alert(`No inventory item found for barcode: ${code}`);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

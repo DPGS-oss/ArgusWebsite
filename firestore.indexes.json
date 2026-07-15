@@ -1,12 +1,4 @@
 {
-  "indexes": [
-    {
-      "collectionGroup": "rate_limits",
-      "queryScope": "COLLECTION_GROUP",
-      "fields": [
-        { "fieldPath": "timestamp", "order": "DESCENDING" }
-      ]
-    }
-  ],
+  "indexes": [],
   "fieldOverrides": []
 }

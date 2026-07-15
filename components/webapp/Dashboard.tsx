@@ -54,8 +54,8 @@ export function Dashboard({ data, business, onNavigate, onEditInvoice }: Dashboa
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl text-starlight">Dashboard</h1>
-          <p className="text-sm text-silver">
+          <h1 className="text-2xl font-bold text-ink">Dashboard</h1>
+          <p className="text-sm text-slate">
             {business ? business.name : "No business selected"}
           </p>
         </div>
@@ -71,23 +71,23 @@ export function Dashboard({ data, business, onNavigate, onEditInvoice }: Dashboa
         {stats.map(({ label, value, icon: Icon, color }) => (
           <div
             key={label}
-            className="rounded-lg border border-lead/20 bg-midnight p-5"
+            className="rounded-card border border-bone bg-mist p-5"
           >
             <div className="mb-3 flex items-center justify-between">
-              <span className="text-sm text-silver">{label}</span>
+              <span className="text-sm text-slate">{label}</span>
               <Icon className={`h-5 w-5 ${color}`} />
             </div>
-            <div className="text-2xl font-medium text-starlight">{value}</div>
+            <div className="text-2xl font-bold text-ink">{value}</div>
           </div>
         ))}
       </div>
 
-      <div className="rounded-lg border border-lead/20 bg-midnight p-6">
+      <div className="rounded-card border border-bone bg-mist p-6">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg text-starlight">Recent Invoices</h2>
+          <h2 className="text-lg font-bold text-ink">Recent Invoices</h2>
           <button
             onClick={() => onNavigate("invoices")}
-            className="text-sm text-mercury-blue hover:underline"
+            className="text-sm text-signal-blue hover:underline"
           >
             View All →
           </button>
@@ -95,8 +95,8 @@ export function Dashboard({ data, business, onNavigate, onEditInvoice }: Dashboa
 
         {recentInvoices.length === 0 ? (
           <div className="py-12 text-center">
-            <FileText className="mx-auto mb-3 h-12 w-12 text-lead" />
-            <p className="text-silver">No invoices yet. Create your first invoice!</p>
+            <FileText className="mx-auto mb-3 h-12 w-12 text-fog" />
+            <p className="text-slate">No invoices yet. Create your first invoice!</p>
             <button
               onClick={() => onNavigate("invoice-form")}
               className="btn-primary mt-4"
@@ -108,7 +108,7 @@ export function Dashboard({ data, business, onNavigate, onEditInvoice }: Dashboa
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-lead/20 text-left text-silver">
+                <tr className="border-b border-bone text-left text-slate">
                   <th className="pb-3 pr-4">Invoice #</th>
                   <th className="pb-3 pr-4">Party</th>
                   <th className="pb-3 pr-4">Date</th>
@@ -119,19 +119,19 @@ export function Dashboard({ data, business, onNavigate, onEditInvoice }: Dashboa
               </thead>
               <tbody>
                 {recentInvoices.map((inv) => (
-                  <tr key={inv.id} className="border-b border-lead/10">
-                    <td className="py-3 pr-4 text-starlight">{inv.invoiceNumber}</td>
-                    <td className="py-3 pr-4 text-silver">{inv.partyName}</td>
-                    <td className="py-3 pr-4 text-silver">{formatDate(inv.date)}</td>
-                    <td className="py-3 pr-4 text-starlight">{formatCurrency(inv.grandTotal)}</td>
+                  <tr key={inv.id} className="border-b border-bone/50">
+                    <td className="py-3 pr-4 text-ink">{inv.invoiceNumber}</td>
+                    <td className="py-3 pr-4 text-slate">{inv.partyName}</td>
+                    <td className="py-3 pr-4 text-slate">{formatDate(inv.date)}</td>
+                    <td className="py-3 pr-4 font-bold text-ink">{formatCurrency(inv.grandTotal)}</td>
                     <td className="py-3 pr-4">
                       <span
-                        className={`inline-block rounded-full px-2 py-0.5 text-xs ${
+                        className={`inline-block rounded-full px-2 py-0.5 text-xs font-bold ${
                           inv.status === "paid"
-                            ? "bg-emerald-500/20 text-emerald-300"
+                            ? "bg-emerald-500/15 text-emerald-600"
                             : inv.status === "unpaid"
-                            ? "bg-amber-500/20 text-amber-300"
-                            : "bg-lead/20 text-silver"
+                            ? "bg-amber-500/15 text-amber-600"
+                            : "bg-bone text-slate"
                         }`}
                       >
                         {inv.status}
@@ -140,7 +140,7 @@ export function Dashboard({ data, business, onNavigate, onEditInvoice }: Dashboa
                     <td className="py-3">
                       <button
                         onClick={() => onEditInvoice(inv)}
-                        className="text-mercury-blue hover:underline"
+                        className="text-signal-blue hover:underline"
                       >
                         View
                       </button>
@@ -154,20 +154,20 @@ export function Dashboard({ data, business, onNavigate, onEditInvoice }: Dashboa
       </div>
 
       {business && (
-        <div className="rounded-lg border border-lead/20 bg-midnight p-6">
-          <h2 className="mb-4 text-lg text-starlight">Business Details</h2>
+        <div className="rounded-card border border-bone bg-mist p-6">
+          <h2 className="mb-4 text-lg font-bold text-ink">Business Details</h2>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <div>
-              <p className="text-xs text-silver">GSTIN</p>
-              <p className="text-sm text-starlight">{business.gstin || "Not set"}</p>
+              <p className="text-xs text-slate">GSTIN</p>
+              <p className="text-sm text-ink">{business.gstin || "Not set"}</p>
             </div>
             <div>
-              <p className="text-xs text-silver">State</p>
-              <p className="text-sm text-starlight">{business.state || "Not set"}</p>
+              <p className="text-xs text-slate">State</p>
+              <p className="text-sm text-ink">{business.state || "Not set"}</p>
             </div>
             <div>
-              <p className="text-xs text-silver">Phone</p>
-              <p className="text-sm text-starlight">{business.phone || "Not set"}</p>
+              <p className="text-xs text-slate">Phone</p>
+              <p className="text-sm text-ink">{business.phone || "Not set"}</p>
             </div>
           </div>
         </div>

@@ -1,9 +1,10 @@
 "use client";
 
-import { ArrowLeft, Download, FileJson, FileText, Edit } from "lucide-react";
+import { useState } from "react";
+import { ArrowLeft, FileJson, FileText, Edit, FileDown, MessageCircle } from "lucide-react";
 import type { AppData, BusinessProfile, Invoice } from "@/lib/types";
 import { formatCurrency, formatDate, generateInvoiceHTML } from "@/lib/gst";
-import { saveInvoiceToFile, saveInvoiceAsHTML, downloadInvoiceFile, downloadInvoiceHTML, isUsingFileSystem } from "@/lib/storage";
+import { saveInvoiceToFile, saveInvoiceAsHTML, saveInvoiceAsPDF, downloadInvoiceFile, downloadInvoiceHTML, downloadInvoicePDF, isUsingFileSystem } from "@/lib/storage";
 
 type InvoicePreviewProps = {
   invoice: Invoice;
@@ -13,6 +14,8 @@ type InvoicePreviewProps = {
 };
 
 export function InvoicePreview({ invoice, business, onBack, onEdit }: InvoicePreviewProps) {
+  const [savingPDF, setSavingPDF] = useState(false);
+
   async function handleSaveJSON() {
     if (!business) return;
     if (isUsingFileSystem()) {
@@ -34,6 +37,65 @@ export function InvoicePreview({ invoice, business, onBack, onEdit }: InvoicePre
     }
   }
 
+  async function handleSavePDF() {
+    if (!business) return;
+    setSavingPDF(true);
+    try {
+      const html = generateInvoiceHTML(invoice, business);
+      const container = document.createElement("div");
+      container.style.position = "absolute";
+      container.style.left = "-9999px";
+      container.style.top = "0";
+      container.innerHTML = html;
+      document.body.appendChild(container);
+      const invoiceEl = container.querySelector(".invoice") as HTMLElement;
+      const { jsPDF } = await import("jspdf");
+      const html2canvas = (await import("html2canvas")).default;
+      const canvas = await html2canvas(invoiceEl, { scale: 2, backgroundColor: "#ffffff" });
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF("p", "mm", "a4");
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
+      const pdfBlob = pdf.output("blob");
+      document.body.removeChild(container);
+      if (isUsingFileSystem()) {
+        await saveInvoiceAsPDF(invoice, business.name, pdfBlob);
+        alert(`Invoice saved to folder as ${invoice.invoiceNumber}.pdf`);
+      } else {
+        downloadInvoicePDF(invoice, business.name, pdfBlob);
+      }
+    } catch (err) {
+      console.error("PDF generation error:", err);
+      alert("Failed to generate PDF. Try using Print instead.");
+    } finally {
+      setSavingPDF(false);
+    }
+  }
+
+  function handleWhatsAppShare() {
+    if (!business) return;
+    const itemSummary = invoice.items.map((i) => `• ${i.description} - ${i.quantity} ${i.unit} @ ${formatCurrency(i.rate)}`).join("\n");
+    const message = `*Invoice ${invoice.invoiceNumber}*
+*From:* ${business.name}
+*Date:* ${formatDate(invoice.date)}
+*Due:* ${formatDate(invoice.dueDate)}
+
+*Items:*
+${itemSummary}
+
+*Subtotal:* ${formatCurrency(invoice.subtotal)}
+${invoice.totalDiscount > 0 ? `*Discount:* -${formatCurrency(invoice.totalDiscount)}\n` : ""}*Taxable:* ${formatCurrency(invoice.totalTaxable)}
+${invoice.totalCgst > 0 ? `*CGST:* ${formatCurrency(invoice.totalCgst)}\n` : ""}${invoice.totalSgst > 0 ? `*SGST:* ${formatCurrency(invoice.totalSgst)}\n` : ""}${invoice.totalIgst > 0 ? `*IGST:* ${formatCurrency(invoice.totalIgst)}\n` : ""}*Grand Total:* ${formatCurrency(invoice.grandTotal)}
+${invoice.balanceDue > 0 ? `*Balance Due:* ${formatCurrency(invoice.balanceDue)}` : ""}
+
+_This invoice was generated using Argus GST Billing App_`;
+    const encodedMsg = encodeURIComponent(message);
+    const phone = invoice.partyPhone ? invoice.partyPhone.replace(/[^0-9]/g, "") : "";
+    const url = phone ? `https://wa.me/${phone}?text=${encodedMsg}` : `https://web.whatsapp.com/send?text=${encodedMsg}`;
+    window.open(url, "_blank");
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -43,15 +105,21 @@ export function InvoicePreview({ invoice, business, onBack, onEdit }: InvoicePre
           </button>
           <h1 className="text-2xl text-starlight">{invoice.invoiceNumber}</h1>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button onClick={() => onEdit(invoice)} className="btn-secondary !py-2">
             <Edit className="mr-1 h-4 w-4" /> Edit
+          </button>
+          <button onClick={handleWhatsAppShare} className="btn-secondary !py-2 !bg-green-600 !text-white hover:!bg-green-700">
+            <MessageCircle className="mr-1 h-4 w-4" /> WhatsApp
           </button>
           <button onClick={handleSaveJSON} className="btn-secondary !py-2">
             <FileJson className="mr-1 h-4 w-4" /> JSON
           </button>
-          <button onClick={handleSaveHTML} className="btn-primary !py-2">
-            <FileText className="mr-1 h-4 w-4" /> Save HTML
+          <button onClick={handleSaveHTML} className="btn-secondary !py-2">
+            <FileText className="mr-1 h-4 w-4" /> HTML
+          </button>
+          <button onClick={handleSavePDF} disabled={savingPDF} className="btn-primary !py-2 disabled:opacity-50">
+            <FileDown className="mr-1 h-4 w-4" /> {savingPDF ? "Generating..." : "Save PDF"}
           </button>
         </div>
       </div>
@@ -89,7 +157,8 @@ export function InvoicePreview({ invoice, business, onBack, onEdit }: InvoicePre
 
         <div className="mb-6">
           <h4 className="mb-1 text-xs uppercase text-gray-400">Bill To</h4>
-          <p className="font-semibold">{invoice.partyName}</p>
+          <p className="font-semibold">{invoice.partyName || "—"}</p>
+          {invoice.partyPhone && <p className="text-sm text-gray-600">Phone: {invoice.partyPhone}</p>}
           <p className="text-sm text-gray-600">GSTIN: {invoice.partyGstin || "Unregistered"}</p>
           <p className="text-sm text-gray-600">Place of Supply: {invoice.placeOfSupply}</p>
         </div>
