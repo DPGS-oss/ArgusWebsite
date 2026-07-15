@@ -27,6 +27,8 @@ export type AppUser = {
   gstin?: string;
   phone?: string;
   subscription?: { plan: string; details: string };
+  referralCode?: string;
+  referredBy?: string;
 };
 
 type AuthContextValue = {
@@ -67,7 +69,18 @@ async function syncUserWithBackend(token: string, name?: string): Promise<AppUse
 
   if (!response.ok) return null;
   const data = await response.json();
-  return data.user as AppUser;
+  const u = data.user;
+  if (!u) return null;
+  return {
+    name: u.name || "",
+    email: u.email || "",
+    business_name: u.business_name,
+    gstin: u.gstin,
+    phone: u.phone,
+    subscription: u.subscription,
+    referralCode: u.referral_code,
+    referredBy: u.referred_by,
+  } as AppUser;
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {

@@ -70,10 +70,12 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
   const [hsnSearch, setHsnSearch] = useState<string | null>(null);
   const [hsnItemIdx, setHsnItemIdx] = useState<number | null>(null);
   const [aiSuggestions, setAiSuggestions] = useState<{ idx: number; suggestions: { code: string; description: string; gstRate: GSTRate }[] } | null>(null);
-  const [isTotalMode, setIsTotalMode] = useState(editingInvoice?.isTotalMode || false);
+  const [isTotalMode, setIsTotalMode] = useState(editingInvoice?.isTotalMode ?? true);
   const [totalAmount, setTotalAmount] = useState(editingInvoice?.isTotalMode ? editingInvoice.grandTotal : 0);
   const [totalGstRate, setTotalGstRate] = useState<GSTRate>(editingInvoice?.isTotalMode ? (editingInvoice.items[0]?.gstRate || data.settings.defaultGstRate) : data.settings.defaultGstRate);
   const [totalDescription, setTotalDescription] = useState(editingInvoice?.isTotalMode ? (editingInvoice.items[0]?.description || "") : "");
+  const [totalDiscount, setTotalDiscount] = useState(editingInvoice?.isTotalMode ? (editingInvoice.items[0]?.discount || 0) : 0);
+  const [totalStockItemId, setTotalStockItemId] = useState<string | undefined>(editingInvoice?.isTotalMode ? editingInvoice.items[0]?.stockItemId : undefined);
   const [inlinePartyName, setInlinePartyName] = useState(editingInvoice && !editingInvoice.partyId ? editingInvoice.partyName : "");
   const [inlinePartyPhone, setInlinePartyPhone] = useState(editingInvoice?.partyPhone || "");
   const [showStockPicker, setShowStockPicker] = useState(false);
@@ -86,15 +88,17 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
 
   const totals = useMemo(() => {
     if (isTotalMode) {
-      const taxable = round2(totalAmount / (1 + totalGstRate / 100));
-      const tax = round2(totalAmount - taxable);
+      const afterDiscount = round2(totalAmount * (1 - totalDiscount / 100));
+      const taxable = round2(afterDiscount / (1 + totalGstRate / 100));
+      const tax = round2(afterDiscount - taxable);
       let cgst = 0, sgst = 0, igst = 0;
       if (interState) { igst = tax; } else { cgst = round2(tax / 2); sgst = round2(tax / 2); }
-      const grandTotal = data.settings.roundOff ? Math.round(totalAmount) : totalAmount;
-      const roundOff = round2(grandTotal - totalAmount);
+      const grandTotal = data.settings.roundOff ? Math.round(afterDiscount) : afterDiscount;
+      const roundOff = round2(grandTotal - afterDiscount);
+      const discountAmount = round2(totalAmount - afterDiscount);
       return {
         subtotal: round2(totalAmount),
-        totalDiscount: 0,
+        totalDiscount: discountAmount,
         totalTaxable: taxable,
         totalCgst: cgst,
         totalSgst: sgst,
@@ -105,7 +109,7 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
       };
     }
     return calculateInvoiceTotals(items, data.settings.roundOff);
-  }, [isTotalMode, totalAmount, totalGstRate, interState, data.settings.roundOff, items]);
+  }, [isTotalMode, totalAmount, totalGstRate, totalDiscount, interState, data.settings.roundOff, items]);
 
   function updateItem(idx: number, patch: Partial<InvoiceItem>) {
     setItems((prev) => {
@@ -159,6 +163,15 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
   }
 
   function addStockItemToInvoice(stock: StockItem) {
+    if (isTotalMode) {
+      setTotalDescription(stock.name);
+      setTotalGstRate(stock.gstRate);
+      setTotalStockItemId(stock.id);
+      if (totalAmount === 0) {
+        setTotalAmount(stock.rate);
+      }
+      return;
+    }
     const calc = calculateItem({
       quantity: 1,
       rate: stock.rate,
@@ -223,8 +236,9 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
 
     let invoiceItems: InvoiceItem[];
     if (isTotalMode) {
-      const taxable = round2(totalAmount / (1 + totalGstRate / 100));
-      const tax = round2(totalAmount - taxable);
+      const afterDiscount = round2(totalAmount * (1 - totalDiscount / 100));
+      const taxable = round2(afterDiscount / (1 + totalGstRate / 100));
+      const tax = round2(afterDiscount - taxable);
       let cgst = 0, sgst = 0, igst = 0;
       if (interState) { igst = tax; } else { cgst = round2(tax / 2); sgst = round2(tax / 2); }
       invoiceItems = [{
@@ -233,14 +247,15 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
         hsn: "",
         quantity: 1,
         unit: "NOS",
-        rate: taxable,
-        discount: 0,
+        rate: totalAmount,
+        discount: totalDiscount,
         gstRate: totalGstRate,
         taxableAmount: taxable,
         cgst,
         sgst,
         igst,
-        total: round2(totalAmount),
+        total: round2(afterDiscount),
+        stockItemId: totalStockItemId,
       }];
     } else {
       invoiceItems = items.filter((i) => i.description);
@@ -406,35 +421,30 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
               <h2 className="text-lg text-starlight">Items</h2>
               <div className="flex flex-wrap gap-2">
-                <label className="flex items-center gap-2 text-sm text-silver">
-                  <input
-                    type="checkbox"
-                    checked={isTotalMode}
-                    onChange={(e) => setIsTotalMode(e.target.checked)}
-                    className="h-4 w-4"
-                  />
-                  Total Amount Mode
-                </label>
+                <button
+                  onClick={() => setIsTotalMode(!isTotalMode)}
+                  className="rounded-btn border border-lead/30 bg-graphite px-3 py-1.5 text-xs text-silver hover:border-mercury-blue"
+                >
+                  {isTotalMode ? "Switch to Itemized" : "Switch to Total Mode"}
+                </button>
+                <button onClick={() => setShowStockPicker(true)} className="btn-secondary !py-2" disabled={data.stock.length === 0}>
+                  <Package className="mr-1 h-4 w-4" /> Inventory
+                </button>
+                <button onClick={handleScanBarcode} className="btn-secondary !py-2">
+                  <ScanLine className="mr-1 h-4 w-4" /> Scan
+                </button>
                 {!isTotalMode && (
-                  <>
-                    <button onClick={() => setShowStockPicker(true)} className="btn-secondary !py-2" disabled={data.stock.length === 0}>
-                      <Package className="mr-1 h-4 w-4" /> Inventory
-                    </button>
-                    <button onClick={handleScanBarcode} className="btn-secondary !py-2">
-                      <ScanLine className="mr-1 h-4 w-4" /> Scan
-                    </button>
-                    <button onClick={addItem} className="btn-secondary !py-2">
-                      <Plus className="mr-1 h-4 w-4" /> Add Item
-                    </button>
-                  </>
+                  <button onClick={addItem} className="btn-secondary !py-2">
+                    <Plus className="mr-1 h-4 w-4" /> Add Item
+                  </button>
                 )}
               </div>
             </div>
 
             {isTotalMode ? (
               <div className="rounded-lg bg-graphite p-4">
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="sm:col-span-3">
+                <div className="grid gap-3 sm:grid-cols-4">
+                  <div className="sm:col-span-4">
                     <label className="text-xs text-silver">Description (optional)</label>
                     <input
                       type="text"
@@ -464,12 +474,27 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
                       {GST_RATES.map((r) => <option key={r} value={r}>{r}%</option>)}
                     </select>
                   </div>
+                  <div>
+                    <label className="text-xs text-silver">Discount %</label>
+                    <input
+                      type="number"
+                      value={totalDiscount || ""}
+                      onChange={(e) => setTotalDiscount(parseFloat(e.target.value) || 0)}
+                      placeholder="0"
+                      min="0"
+                      max="100"
+                      className="mt-1 w-full rounded-btn border border-lead/30 bg-abyss px-3 py-2 text-sm text-starlight outline-none focus:border-mercury-blue"
+                    />
+                  </div>
                 </div>
                 {totalAmount > 0 && (
                   <div className="mt-3 rounded-lg bg-abyss p-3 text-sm text-silver">
-                    <div className="flex justify-between"><span>Taxable Amount:</span><span>{formatCurrency(round2(totalAmount / (1 + totalGstRate / 100)))}</span></div>
-                    <div className="flex justify-between"><span>GST ({totalGstRate}%):</span><span>{formatCurrency(round2(totalAmount - totalAmount / (1 + totalGstRate / 100)))}</span></div>
-                    <div className="flex justify-between font-medium text-starlight"><span>Total:</span><span>{formatCurrency(totalAmount)}</span></div>
+                    {totalDiscount > 0 && (
+                      <div className="flex justify-between"><span>After Discount:</span><span>{formatCurrency(round2(totalAmount * (1 - totalDiscount / 100)))}</span></div>
+                    )}
+                    <div className="flex justify-between"><span>Taxable Amount:</span><span>{formatCurrency(round2(totalAmount * (1 - totalDiscount / 100) / (1 + totalGstRate / 100)))}</span></div>
+                    <div className="flex justify-between"><span>GST ({totalGstRate}%):</span><span>{formatCurrency(round2(totalAmount * (1 - totalDiscount / 100) - totalAmount * (1 - totalDiscount / 100) / (1 + totalGstRate / 100)))}</span></div>
+                    <div className="flex justify-between font-medium text-starlight"><span>Grand Total:</span><span>{formatCurrency(round2(totalAmount * (1 - totalDiscount / 100)))}</span></div>
                   </div>
                 )}
               </div>

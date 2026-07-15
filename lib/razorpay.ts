@@ -30,7 +30,8 @@ async function fetchPlanAmount(plan: string): Promise<number> {
 export async function startRazorpayCheckout(
   plan: string,
   token: string,
-  user: { email?: string; phone?: string; name?: string }
+  user: { email?: string; phone?: string; name?: string },
+  referralCode?: string
 ) {
   const amount = await fetchPlanAmount(plan);
 
@@ -40,7 +41,7 @@ export async function startRazorpayCheckout(
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ plan, amount }),
+    body: JSON.stringify({ plan, amount, referralCode }),
   });
 
   if (!orderRes.ok) {
@@ -86,6 +87,7 @@ export async function startRazorpayCheckout(
               razorpay_signature: response.razorpay_signature,
               plan,
               duration_months: plan.endsWith("_yearly") ? 12 : 1,
+              referralCode,
             }),
           });
           const data = await verifyRes.json();

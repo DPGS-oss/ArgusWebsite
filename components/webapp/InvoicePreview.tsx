@@ -41,24 +41,7 @@ export function InvoicePreview({ invoice, business, onBack, onEdit }: InvoicePre
     if (!business) return;
     setSavingPDF(true);
     try {
-      const html = generateInvoiceHTML(invoice, business);
-      const container = document.createElement("div");
-      container.style.position = "absolute";
-      container.style.left = "-9999px";
-      container.style.top = "0";
-      container.innerHTML = html;
-      document.body.appendChild(container);
-      const invoiceEl = container.querySelector(".invoice") as HTMLElement;
-      const { jsPDF } = await import("jspdf");
-      const html2canvas = (await import("html2canvas")).default;
-      const canvas = await html2canvas(invoiceEl, { scale: 2, backgroundColor: "#ffffff" });
-      const imgData = canvas.toDataURL("image/png");
-      const pdf = new jsPDF("p", "mm", "a4");
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-      pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
-      const pdfBlob = pdf.output("blob");
-      document.body.removeChild(container);
+      const pdfBlob = await generatePDFBlob(invoice, business);
       if (isUsingFileSystem()) {
         await saveInvoiceAsPDF(invoice, business.name, pdfBlob);
         alert(`Invoice saved to folder as ${invoice.invoiceNumber}.pdf`);
@@ -73,7 +56,7 @@ export function InvoicePreview({ invoice, business, onBack, onEdit }: InvoicePre
     }
   }
 
-  function handleWhatsAppShare() {
+  async function handleWhatsAppShare() {
     if (!business) return;
     const itemSummary = invoice.items.map((i) => `• ${i.description} - ${i.quantity} ${i.unit} @ ${formatCurrency(i.rate)}`).join("\n");
     const message = `*Invoice ${invoice.invoiceNumber}*
@@ -90,10 +73,54 @@ ${invoice.totalCgst > 0 ? `*CGST:* ${formatCurrency(invoice.totalCgst)}\n` : ""}
 ${invoice.balanceDue > 0 ? `*Balance Due:* ${formatCurrency(invoice.balanceDue)}` : ""}
 
 _This invoice was generated using Argus GST Billing App_`;
+
+    // Try Web Share API with PDF file attached (works on mobile)
+    if (navigator.canShare && navigator.canShare({ files: [new File([""], "test.pdf", { type: "application/pdf" })] })) {
+      try {
+        setSavingPDF(true);
+        const pdfBlob = await generatePDFBlob(invoice, business);
+        const file = new File([pdfBlob], `${invoice.invoiceNumber}.pdf`, { type: "application/pdf" });
+        await navigator.share({
+          title: `Invoice ${invoice.invoiceNumber}`,
+          text: message,
+          files: [file],
+        });
+        return;
+      } catch (err) {
+        // User cancelled or share failed; fall through to URL method
+        console.log("Web Share failed, falling back to URL:", err);
+      } finally {
+        setSavingPDF(false);
+      }
+    }
+
+    // Fallback: open WhatsApp with text message
     const encodedMsg = encodeURIComponent(message);
     const phone = invoice.partyPhone ? invoice.partyPhone.replace(/[^0-9]/g, "") : "";
     const url = phone ? `https://wa.me/${phone}?text=${encodedMsg}` : `https://web.whatsapp.com/send?text=${encodedMsg}`;
     window.open(url, "_blank");
+  }
+
+  async function generatePDFBlob(inv: Invoice, biz: BusinessProfile): Promise<Blob> {
+    const html = generateInvoiceHTML(inv, biz);
+    const container = document.createElement("div");
+    container.style.position = "absolute";
+    container.style.left = "-9999px";
+    container.style.top = "0";
+    container.innerHTML = html;
+    document.body.appendChild(container);
+    const invoiceEl = container.querySelector(".invoice") as HTMLElement;
+    const { jsPDF } = await import("jspdf");
+    const html2canvas = (await import("html2canvas")).default;
+    const canvas = await html2canvas(invoiceEl, { scale: 2, backgroundColor: "#ffffff" });
+    const imgData = canvas.toDataURL("image/png");
+    const pdf = new jsPDF("p", "mm", "a4");
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+    pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
+    const pdfBlob = pdf.output("blob");
+    document.body.removeChild(container);
+    return pdfBlob;
   }
 
   return (
@@ -109,8 +136,8 @@ _This invoice was generated using Argus GST Billing App_`;
           <button onClick={() => onEdit(invoice)} className="btn-secondary !py-2">
             <Edit className="mr-1 h-4 w-4" /> Edit
           </button>
-          <button onClick={handleWhatsAppShare} className="btn-secondary !py-2 !bg-green-600 !text-white hover:!bg-green-700">
-            <MessageCircle className="mr-1 h-4 w-4" /> WhatsApp
+          <button onClick={handleWhatsAppShare} disabled={savingPDF} className="btn-secondary !py-2 !bg-green-600 !text-white hover:!bg-green-700 disabled:opacity-50">
+            <MessageCircle className="mr-1 h-4 w-4" /> {savingPDF ? "Preparing..." : "WhatsApp"}
           </button>
           <button onClick={handleSaveJSON} className="btn-secondary !py-2">
             <FileJson className="mr-1 h-4 w-4" /> JSON

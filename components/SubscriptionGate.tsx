@@ -47,13 +47,14 @@ export function SubscriptionGate() {
   const { user, token, logout, refreshProfile } = useAuth();
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [referralCode, setReferralCode] = useState("");
 
   async function handleSubscribe(planKey: string) {
     if (!token || !user) return;
     setLoading(planKey);
     setError("");
     try {
-      await startRazorpayCheckout(planKey, token, user);
+      await startRazorpayCheckout(planKey, token, user, referralCode.trim() || undefined);
       await refreshProfile();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unable to start payment";
@@ -88,6 +89,25 @@ export function SubscriptionGate() {
             {error}
           </p>
         )}
+
+        <div className="mb-6 w-full max-w-md">
+          <label className="block text-sm text-slate">
+            Referral Code (optional)
+            <input
+              type="text"
+              value={referralCode}
+              onChange={(e) => setReferralCode(e.target.value)}
+              placeholder="Enter referral code if you have one"
+              className="mt-1 w-full rounded-card border border-bone bg-white px-4 py-2.5 text-sm text-ink outline-none focus:border-brand-violet"
+            />
+          </label>
+          {user?.referralCode && (
+            <p className="mt-2 text-xs text-slate">
+              Your referral code: <span className="font-bold text-brand-violet">{user.referralCode}</span>
+              <br />Share this with others to track CAC per referrer.
+            </p>
+          )}
+        </div>
 
         <div className="grid w-full max-w-2xl gap-6 sm:grid-cols-2">
           {plans.map((plan) => (

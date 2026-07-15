@@ -123,8 +123,11 @@ export default function AppPage() {
   }
 
   function handleSaveInvoice(invoice: Invoice) {
+    const existing = data?.invoices.find((i) => i.id === invoice.id);
     saveInvoice(invoice);
-    deductStockForInvoice(invoice);
+    if (!existing) {
+      deductStockForInvoice(invoice);
+    }
     refresh();
     setEditingInvoice(null);
     setPreviewInvoice(invoice);

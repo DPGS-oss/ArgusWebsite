@@ -93,6 +93,7 @@ exports.apiAuthSync = onRequest({ region: 'us-central1', maxInstances: 10, secre
 
   if (!user) {
     const now = new Date().toISOString();
+    const referralCode = 'ARG' + uid.substring(0, 6).toUpperCase();
     const newUserData = {
       name: displayName,
       email,
@@ -101,6 +102,8 @@ exports.apiAuthSync = onRequest({ region: 'us-central1', maxInstances: 10, secre
       phone: '',
       subscription: null,
       customer_id: null,
+      referral_code: referralCode,
+      referred_by: null,
       created_at: now,
       updated_at: now,
     };
@@ -191,6 +194,7 @@ exports.apiPaymentCreateOrder = onRequest({ region: 'us-central1', maxInstances:
 
   const body = req.body || {};
   const plan = body.plan || 'business';
+  const referralCode = (body.referralCode || '').trim();
   const planConfig = getPlan(plan);
   if (!planConfig) return res.status(400).json({ error: 'Invalid plan' });
 
@@ -212,6 +216,11 @@ exports.apiPaymentCreateOrder = onRequest({ region: 'us-central1', maxInstances:
         currency: 'INR',
         receipt,
         payment_capture: 1,
+        notes: {
+          uid,
+          plan,
+          referral_code: referralCode || '',
+        },
       }),
     });
 
@@ -263,7 +272,7 @@ exports.apiPaymentVerify = onRequest({ region: 'us-central1', maxInstances: 10, 
   }
 
   const body = req.body || {};
-  const { razorpay_order_id, razorpay_payment_id, razorpay_signature, plan, duration_months } = body;
+  const { razorpay_order_id, razorpay_payment_id, razorpay_signature, plan, duration_months, referralCode } = body;
 
   if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
     return res.status(400).json({ error: 'Missing required fields: razorpay_order_id, razorpay_payment_id, razorpay_signature' });
@@ -308,6 +317,16 @@ exports.apiPaymentVerify = onRequest({ region: 'us-central1', maxInstances: 10, 
       customer_id: customerId,
       updated_at: new Date().toISOString(),
     };
+
+    // Store referral tracking: if a referral code was provided, store it as referred_by
+    if (referralCode) {
+      updateData.referred_by = referralCode;
+    }
+
+    // Ensure user has a referral code for future tracking
+    if (!user.referral_code) {
+      updateData.referral_code = 'ARG' + uid.substring(0, 6).toUpperCase();
+    }
 
     const updatedUser = await updateUser(uid, updateData);
 
