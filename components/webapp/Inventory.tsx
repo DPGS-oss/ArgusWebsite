@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Plus, Trash2, Upload, Barcode as BarcodeIcon, X, Edit } from "lucide-react";
+import { Plus, Trash2, Upload, Barcode as BarcodeIcon, X, Edit, ScanLine } from "lucide-react";
 import type { AppData, StockItem, GSTRate } from "@/lib/types";
 import { UNITS } from "@/lib/types";
 import { formatCurrency } from "@/lib/gst";
 import { saveStockItem, deleteStockItem, bulkSaveStockItems, generateId } from "@/lib/storage";
+import { BarcodeScannerModal } from "./BarcodeScannerModal";
 import JsBarcode from "jsbarcode";
 
 const GST_RATES: GSTRate[] = [0, 3, 5, 12, 18, 28];
@@ -34,10 +35,24 @@ export function Inventory({ data, onSaved }: InventoryProps) {
   const [editing, setEditing] = useState<StockItem | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [showBarcode, setShowBarcode] = useState<StockItem | null>(null);
+  const [showScanner, setShowScanner] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   function handleAdd() {
     setEditing(emptyStockItem());
+    setShowForm(true);
+  }
+
+  function handleScanDetected(code: string) {
+    setShowScanner(false);
+    const existing = data.stock.find((s) => s.barcode === code);
+    if (existing) {
+      setEditing({ ...existing });
+    } else {
+      const newItem = emptyStockItem();
+      newItem.barcode = code;
+      setEditing(newItem);
+    }
     setShowForm(true);
   }
 
@@ -120,9 +135,9 @@ export function Inventory({ data, onSaved }: InventoryProps) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl text-starlight">Inventory</h1>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <input
             ref={fileInputRef}
             type="file"
@@ -132,6 +147,9 @@ export function Inventory({ data, onSaved }: InventoryProps) {
           />
           <button onClick={() => fileInputRef.current?.click()} className="btn-secondary">
             <Upload className="mr-1 h-4 w-4" /> Import XML
+          </button>
+          <button onClick={() => setShowScanner(true)} className="btn-secondary">
+            <ScanLine className="mr-1 h-4 w-4" /> Scan
           </button>
           <button onClick={handleAdd} className="btn-primary">
             <Plus className="mr-1 h-4 w-4" /> Add Item
@@ -144,58 +162,115 @@ export function Inventory({ data, onSaved }: InventoryProps) {
           <p className="text-silver">No inventory items yet. Add items manually or import from XML.</p>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-lead/20 bg-midnight">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-lead/20 text-silver">
-                <th className="p-3 text-left">Name</th>
-                <th className="p-3 text-left">HSN</th>
-                <th className="p-3 text-right">Stock</th>
-                <th className="p-3 text-right">Min</th>
-                <th className="p-3 text-right">Rate</th>
-                <th className="p-3 text-center">GST</th>
-                <th className="p-3 text-center">Barcode</th>
-                <th className="p-3 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.stock.map((item) => (
-                <tr key={item.id} className="border-b border-lead/10 text-starlight">
-                  <td className="p-3">{item.name}</td>
-                  <td className="p-3 text-silver">{item.hsn || "—"}</td>
-                  <td className="p-3 text-right">
-                    <span className={item.currentStock <= item.minStock ? "text-red-400" : ""}>
+        <>
+          {/* Mobile card layout */}
+          <div className="space-y-3 lg:hidden">
+            {data.stock.map((item) => (
+              <div key={item.id} className="rounded-lg border border-lead/20 bg-midnight p-4">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="font-bold text-starlight">{item.name}</span>
+                  <span className="text-xs text-silver">{item.gstRate}%</span>
+                </div>
+                <div className="mb-3 grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <span className="text-silver">HSN: </span>
+                    <span className="text-starlight">{item.hsn || "—"}</span>
+                  </div>
+                  <div>
+                    <span className="text-silver">Rate: </span>
+                    <span className="text-starlight">{formatCurrency(item.rate)}</span>
+                  </div>
+                  <div>
+                    <span className="text-silver">Stock: </span>
+                    <span className={item.currentStock <= item.minStock ? "text-red-400" : "text-starlight"}>
                       {item.currentStock} {item.unit}
                     </span>
-                  </td>
-                  <td className="p-3 text-right text-silver">{item.minStock}</td>
-                  <td className="p-3 text-right">{formatCurrency(item.rate)}</td>
-                  <td className="p-3 text-center text-silver">{item.gstRate}%</td>
-                  <td className="p-3 text-center">
-                    {item.barcode ? (
-                      <button
-                        onClick={() => setShowBarcode(item)}
-                        className="text-mercury-blue hover:underline"
-                      >
-                        <BarcodeIcon className="h-4 w-4" />
-                      </button>
-                    ) : (
-                      <span className="text-silver">—</span>
-                    )}
-                  </td>
-                  <td className="p-3 text-right">
-                    <button onClick={() => handleEdit(item)} className="mr-2 rounded p-1 text-silver hover:text-starlight">
-                      <Edit className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <span className="text-silver">Min: </span>
+                    <span className="text-starlight">{item.minStock}</span>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleEdit(item)}
+                    className="flex-1 rounded-btn bg-graphite py-2 text-xs text-silver hover:text-mercury-blue"
+                  >
+                    <Edit className="mr-1 inline h-3.5 w-3.5" /> Edit
+                  </button>
+                  {item.barcode && (
+                    <button
+                      onClick={() => setShowBarcode(item)}
+                      className="flex-1 rounded-btn bg-graphite py-2 text-xs text-silver hover:text-mercury-blue"
+                    >
+                      <BarcodeIcon className="mr-1 inline h-3.5 w-3.5" /> Barcode
                     </button>
-                    <button onClick={() => handleDelete(item.id)} className="rounded p-1 text-silver hover:text-red-400">
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </td>
+                  )}
+                  <button
+                    onClick={() => handleDelete(item.id)}
+                    className="flex-1 rounded-btn bg-graphite py-2 text-xs text-silver hover:text-red-400"
+                  >
+                    <Trash2 className="mr-1 inline h-3.5 w-3.5" /> Delete
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop table layout */}
+          <div className="hidden overflow-x-auto rounded-lg border border-lead/20 bg-midnight lg:block">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-lead/20 text-silver">
+                  <th className="p-3 text-left">Name</th>
+                  <th className="p-3 text-left">HSN</th>
+                  <th className="p-3 text-right">Stock</th>
+                  <th className="p-3 text-right">Min</th>
+                  <th className="p-3 text-right">Rate</th>
+                  <th className="p-3 text-center">GST</th>
+                  <th className="p-3 text-center">Barcode</th>
+                  <th className="p-3 text-right">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {data.stock.map((item) => (
+                  <tr key={item.id} className="border-b border-lead/10 text-starlight">
+                    <td className="p-3">{item.name}</td>
+                    <td className="p-3 text-silver">{item.hsn || "—"}</td>
+                    <td className="p-3 text-right">
+                      <span className={item.currentStock <= item.minStock ? "text-red-400" : ""}>
+                        {item.currentStock} {item.unit}
+                      </span>
+                    </td>
+                    <td className="p-3 text-right text-silver">{item.minStock}</td>
+                    <td className="p-3 text-right">{formatCurrency(item.rate)}</td>
+                    <td className="p-3 text-center text-silver">{item.gstRate}%</td>
+                    <td className="p-3 text-center">
+                      {item.barcode ? (
+                        <button
+                          onClick={() => setShowBarcode(item)}
+                          className="text-mercury-blue hover:underline"
+                        >
+                          <BarcodeIcon className="h-4 w-4" />
+                        </button>
+                      ) : (
+                        <span className="text-silver">—</span>
+                      )}
+                    </td>
+                    <td className="p-3 text-right">
+                      <button onClick={() => handleEdit(item)} className="mr-2 rounded p-1 text-silver hover:text-starlight">
+                        <Edit className="h-4 w-4" />
+                      </button>
+                      <button onClick={() => handleDelete(item.id)} className="rounded p-1 text-silver hover:text-red-400">
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
 
       {showForm && editing && (
@@ -204,11 +279,19 @@ export function Inventory({ data, onSaved }: InventoryProps) {
           onChange={setEditing}
           onSave={handleSave}
           onCancel={() => { setShowForm(false); setEditing(null); }}
+          onScan={() => setShowScanner(true)}
         />
       )}
 
       {showBarcode && (
         <BarcodeDisplayModal item={showBarcode} onClose={() => setShowBarcode(null)} />
+      )}
+
+      {showScanner && (
+        <BarcodeScannerModal
+          onClose={() => setShowScanner(false)}
+          onDetected={handleScanDetected}
+        />
       )}
     </div>
   );
@@ -219,11 +302,13 @@ function StockItemForm({
   onChange,
   onSave,
   onCancel,
+  onScan,
 }: {
   item: StockItem;
   onChange: (item: StockItem) => void;
   onSave: () => void;
   onCancel: () => void;
+  onScan: () => void;
 }) {
   function update(patch: Partial<StockItem>) {
     onChange({ ...item, ...patch });
@@ -330,6 +415,9 @@ function StockItemForm({
               />
               <button onClick={generateBarcode} className="btn-secondary !py-2">
                 <BarcodeIcon className="mr-1 h-4 w-4" /> Generate
+              </button>
+              <button onClick={onScan} className="btn-secondary !py-2">
+                <ScanLine className="mr-1 h-4 w-4" /> Scan
               </button>
             </div>
           </label>

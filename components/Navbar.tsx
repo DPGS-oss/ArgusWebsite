@@ -3,7 +3,8 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { getInitials, useAuth } from "@/lib/auth-provider";
+import { ProfileDropdown } from "./ProfileDropdown";
+import { useAuth } from "@/lib/auth-provider";
 
 const navLinks = [
   { href: "#features", label: "Features" },
@@ -13,7 +14,7 @@ const navLinks = [
 ];
 
 export function Navbar() {
-  const { user, setShowAuthModal, setShowProfileModal } = useAuth();
+  const { user, setShowAuthModal } = useAuth();
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -57,12 +58,7 @@ export function Navbar() {
               Sign In
             </button>
           ) : (
-            <button
-              className="btn-primary !min-w-[3rem] !py-2"
-              onClick={() => setShowProfileModal(true)}
-            >
-              {getInitials(user.name)}
-            </button>
+            <ProfileDropdown />
           )}
           <a href="#download" className="btn-secondary !py-2">
             Download App

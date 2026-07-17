@@ -6,6 +6,7 @@ const RATE_LIMITS = {
   user_profile_put: { windowMs: 60 * 1000, maxCalls: 5 },
   payment_create_order: { windowMs: 60 * 1000, maxCalls: 5 },
   payment_verify: { windowMs: 60 * 1000, maxCalls: 5 },
+  data_save: { windowMs: 60 * 1000, maxCalls: 30 },
 };
 
 async function checkRateLimit(uid, endpoint) {

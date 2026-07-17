@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { Menu, X } from "lucide-react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { Menu, X, Cloud, CloudOff, RefreshCw } from "lucide-react";
 import type { AppData, BusinessProfile, Invoice, View } from "@/lib/types";
-import { loadData, saveInvoice, deleteInvoice, pickFolder, deductStockForInvoice } from "@/lib/storage";
+import { loadData, saveInvoice, deleteInvoice, pickFolder, deductStockForInvoice, saveData } from "@/lib/storage";
+import { syncFromCloud, syncToCloud, getLastSyncTime, type SyncStatus } from "@/lib/cloud-sync";
 import { Sidebar } from "@/components/webapp/Sidebar";
 import { Dashboard } from "@/components/webapp/Dashboard";
 import { InvoiceList } from "@/components/webapp/InvoiceList";
@@ -19,20 +20,63 @@ import { AuthModal } from "@/components/AuthModal";
 import { SubscriptionGate } from "@/components/SubscriptionGate";
 
 export default function AppPage() {
-  const { user, authReady, authConfigured, setShowAuthModal } = useAuth();
+  const { user, authReady, authConfigured, setShowAuthModal, token } = useAuth();
   const [data, setData] = useState<AppData | null>(null);
   const [view, setView] = useState<View>("dashboard");
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
   const [previewInvoice, setPreviewInvoice] = useState<Invoice | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>("idle");
+  const [lastSync, setLastSync] = useState<string | null>(null);
+  const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasSyncedFromCloud = useRef(false);
 
   useEffect(() => {
-    setData(loadData());
+    setLastSync(getLastSyncTime());
   }, []);
+
+  useEffect(() => {
+    if (!token || !user || !hasValidSubscription(user)) {
+      setData(loadData());
+      return;
+    }
+
+    if (hasSyncedFromCloud.current) return;
+    hasSyncedFromCloud.current = true;
+
+    setSyncStatus("syncing");
+    syncFromCloud(token).then(({ data: syncedData, merged }) => {
+      setData(syncedData);
+      setLastSync(getLastSyncTime());
+      setSyncStatus(merged ? "synced" : "idle");
+    }).catch(() => {
+      setData(loadData());
+      setSyncStatus("error");
+    });
+  }, [token, user]);
 
   const refresh = useCallback(() => {
     setData(loadData());
-  }, []);
+    if (token && user && hasValidSubscription(user)) {
+      if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
+      syncTimerRef.current = setTimeout(() => {
+        setSyncStatus("syncing");
+        syncToCloud(token).then((ok) => {
+          setSyncStatus(ok ? "synced" : "error");
+          setLastSync(getLastSyncTime());
+        }).catch(() => setSyncStatus("error"));
+      }, 2000);
+    }
+  }, [token, user]);
+
+  async function handleManualSync() {
+    if (!token) return;
+    setSyncStatus("syncing");
+    const result = await syncFromCloud(token);
+    setData(result.data);
+    setLastSync(getLastSyncTime());
+    setSyncStatus(result.merged ? "synced" : "idle");
+  }
 
   // Auth not ready yet — show loading
   if (!authReady) {
@@ -232,6 +276,8 @@ export default function AppPage() {
           view={view}
           onNavigate={navigate}
           onPickFolder={handlePickFolder}
+          onSync={handleManualSync}
+          syncStatus={syncStatus}
         />
       </div>
 
@@ -246,7 +292,43 @@ export default function AppPage() {
             {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
           <span className="text-lg font-bold text-ink">Argus</span>
-          <div className="w-9" />
+          <button
+            onClick={handleManualSync}
+            className="rounded-full p-2 text-slate hover:bg-plaster"
+            title="Sync"
+          >
+            {syncStatus === "syncing" ? (
+              <RefreshCw className="h-4 w-4 animate-spin" />
+            ) : syncStatus === "error" ? (
+              <CloudOff className="h-4 w-4 text-red-500" />
+            ) : (
+              <Cloud className="h-4 w-4 text-emerald-500" />
+            )}
+          </button>
+        </div>
+
+        {/* Desktop sync bar */}
+        <div className="hidden items-center justify-end gap-2 border-b border-bone bg-mist px-8 py-2 lg:flex">
+          <span className="text-xs text-slate">
+            {syncStatus === "syncing"
+              ? "Syncing..."
+              : syncStatus === "error"
+              ? "Sync failed"
+              : lastSync
+              ? `Last synced: ${new Date(lastSync).toLocaleTimeString()}`
+              : "Not synced yet"}
+          </span>
+          <button
+            onClick={handleManualSync}
+            className="flex items-center gap-1 rounded-full px-3 py-1 text-xs text-slate hover:bg-plaster hover:text-ink"
+          >
+            {syncStatus === "syncing" ? (
+              <RefreshCw className="h-3 w-3 animate-spin" />
+            ) : (
+              <RefreshCw className="h-3 w-3" />
+            )}
+            Sync Now
+          </button>
         </div>
 
         {/* Content area */}

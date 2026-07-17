@@ -105,51 +105,86 @@ export function Dashboard({ data, business, onNavigate, onEditInvoice }: Dashboa
             </button>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-bone text-left text-slate">
-                  <th className="pb-3 pr-4">Invoice #</th>
-                  <th className="pb-3 pr-4">Party</th>
-                  <th className="pb-3 pr-4">Date</th>
-                  <th className="pb-3 pr-4">Amount</th>
-                  <th className="pb-3 pr-4">Status</th>
-                  <th className="pb-3"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {recentInvoices.map((inv) => (
-                  <tr key={inv.id} className="border-b border-bone/50">
-                    <td className="py-3 pr-4 text-ink">{inv.invoiceNumber}</td>
-                    <td className="py-3 pr-4 text-slate">{inv.partyName}</td>
-                    <td className="py-3 pr-4 text-slate">{formatDate(inv.date)}</td>
-                    <td className="py-3 pr-4 font-bold text-ink">{formatCurrency(inv.grandTotal)}</td>
-                    <td className="py-3 pr-4">
-                      <span
-                        className={`inline-block rounded-full px-2 py-0.5 text-xs font-bold ${
-                          inv.status === "paid"
-                            ? "bg-emerald-500/15 text-emerald-600"
-                            : inv.status === "unpaid"
-                            ? "bg-amber-500/15 text-amber-600"
-                            : "bg-bone text-slate"
-                        }`}
-                      >
-                        {inv.status}
-                      </span>
-                    </td>
-                    <td className="py-3">
-                      <button
-                        onClick={() => onEditInvoice(inv)}
-                        className="text-signal-blue hover:underline"
-                      >
-                        View
-                      </button>
-                    </td>
+          <>
+            {/* Mobile card layout */}
+            <div className="space-y-3 lg:hidden">
+              {recentInvoices.map((inv) => (
+                <div
+                  key={inv.id}
+                  className="flex items-center justify-between rounded-card border border-bone bg-white p-3"
+                  onClick={() => onEditInvoice(inv)}
+                  role="button"
+                >
+                  <div className="flex-1 overflow-hidden">
+                    <p className="truncate text-sm font-bold text-ink">{inv.invoiceNumber}</p>
+                    <p className="truncate text-xs text-slate">{inv.partyName}</p>
+                    <p className="text-xs text-slate">{formatDate(inv.date)}</p>
+                  </div>
+                  <div className="ml-3 text-right">
+                    <p className="text-sm font-bold text-ink">{formatCurrency(inv.grandTotal)}</p>
+                    <span
+                      className={`inline-block rounded-full px-2 py-0.5 text-xs font-bold ${
+                        inv.status === "paid"
+                          ? "bg-emerald-500/15 text-emerald-600"
+                          : inv.status === "unpaid"
+                          ? "bg-amber-500/15 text-amber-600"
+                          : "bg-bone text-slate"
+                      }`}
+                    >
+                      {inv.status}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop table layout */}
+            <div className="hidden overflow-x-auto lg:block">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-bone text-left text-slate">
+                    <th className="pb-3 pr-4">Invoice #</th>
+                    <th className="pb-3 pr-4">Party</th>
+                    <th className="pb-3 pr-4">Date</th>
+                    <th className="pb-3 pr-4">Amount</th>
+                    <th className="pb-3 pr-4">Status</th>
+                    <th className="pb-3"></th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {recentInvoices.map((inv) => (
+                    <tr key={inv.id} className="border-b border-bone/50">
+                      <td className="py-3 pr-4 text-ink">{inv.invoiceNumber}</td>
+                      <td className="py-3 pr-4 text-slate">{inv.partyName}</td>
+                      <td className="py-3 pr-4 text-slate">{formatDate(inv.date)}</td>
+                      <td className="py-3 pr-4 font-bold text-ink">{formatCurrency(inv.grandTotal)}</td>
+                      <td className="py-3 pr-4">
+                        <span
+                          className={`inline-block rounded-full px-2 py-0.5 text-xs font-bold ${
+                            inv.status === "paid"
+                              ? "bg-emerald-500/15 text-emerald-600"
+                              : inv.status === "unpaid"
+                              ? "bg-amber-500/15 text-amber-600"
+                              : "bg-bone text-slate"
+                          }`}
+                        >
+                          {inv.status}
+                        </span>
+                      </td>
+                      <td className="py-3">
+                        <button
+                          onClick={() => onEditInvoice(inv)}
+                          className="text-signal-blue hover:underline"
+                        >
+                          View
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
 

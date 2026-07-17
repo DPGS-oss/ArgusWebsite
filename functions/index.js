@@ -411,6 +411,144 @@ exports.apiAccountDelete = onRequest({ region: 'us-central1', maxInstances: 10, 
   });
 });
 
+// ==================== /api/data/load ====================
+exports.apiDataLoad = onRequest({ region: 'us-central1', maxInstances: 10, secrets: FIREBASE_SECRETS }, async (req, res) => {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+
+  const token = extractToken(req);
+  if (!token) return res.status(401).json({ error: 'Unauthorized' });
+
+  let decoded;
+  try {
+    decoded = await verifyToken(token);
+  } catch (err) {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+
+  const uid = decoded.uid;
+  const db = getDb();
+
+  try {
+    const doc = await db.collection('users').doc(uid).collection('app_data').doc('main').get();
+    if (doc.exists) {
+      const data = doc.data();
+      return res.status(200).json({
+        data: data.appData || null,
+        updated_at: data.updated_at || null,
+        version: data.version || 1,
+      });
+    }
+    return res.status(200).json({ data: null, updated_at: null, version: 0 });
+  } catch (error) {
+    console.error('Data load error:', error);
+    return res.status(500).json({ error: 'Failed to load data' });
+  }
+});
+
+// ==================== /api/data/save ====================
+exports.apiDataSave = onRequest({ region: 'us-central1', maxInstances: 10, secrets: FIREBASE_SECRETS }, async (req, res) => {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const token = extractToken(req);
+  if (!token) return res.status(401).json({ error: 'Unauthorized' });
+
+  let decoded;
+  try {
+    decoded = await verifyToken(token);
+  } catch (err) {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+
+  const uid = decoded.uid;
+  const body = req.body || {};
+
+  if (!body.appData) {
+    return res.status(400).json({ error: 'Missing appData field' });
+  }
+
+  const rl = await checkRateLimit(uid, 'data_save');
+  if (!rl.allowed) {
+    return res.status(429).json({
+      error: 'Rate limit exceeded. Too many sync attempts.',
+      retry_after_seconds: rl.retryAfterSeconds,
+    });
+  }
+
+  const db = getDb();
+  const now = new Date().toISOString();
+
+  try {
+    await db.collection('users').doc(uid).collection('app_data').doc('main').set({
+      appData: body.appData,
+      updated_at: now,
+      version: body.version || 1,
+      device: body.device || 'unknown',
+    }, { merge: true });
+
+    return res.status(200).json({ success: true, updated_at: now });
+  } catch (error) {
+    console.error('Data save error:', error);
+    return res.status(500).json({ error: 'Failed to save data' });
+  }
+});
+
+// ==================== /api/data/scan-result ====================
+// Used by phone-as-scanner: mobile page posts scan result, PC polls for it
+exports.apiDataScanResult = onRequest({ region: 'us-central1', maxInstances: 10, secrets: FIREBASE_SECRETS }, async (req, res) => {
+  const token = extractToken(req);
+  if (!token) return res.status(401).json({ error: 'Unauthorized' });
+
+  let decoded;
+  try {
+    decoded = await verifyToken(token);
+  } catch (err) {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+
+  const uid = decoded.uid;
+  const db = getDb();
+  const scanRef = db.collection('users').doc(uid).collection('scan_results').doc('latest');
+
+  if (req.method === 'GET') {
+    try {
+      const doc = await scanRef.get();
+      if (doc.exists) {
+        const data = doc.data();
+        return res.status(200).json({ code: data.code || null, timestamp: data.timestamp || null });
+      }
+      return res.status(200).json({ code: null, timestamp: null });
+    } catch (error) {
+      return res.status(500).json({ error: 'Failed to get scan result' });
+    }
+  }
+
+  if (req.method === 'POST') {
+    const body = req.body || {};
+    if (!body.code) return res.status(400).json({ error: 'Missing code field' });
+
+    try {
+      await scanRef.set({
+        code: body.code,
+        timestamp: new Date().toISOString(),
+      });
+      return res.status(200).json({ success: true });
+    } catch (error) {
+      return res.status(500).json({ error: 'Failed to save scan result' });
+    }
+  }
+
+  if (req.method === 'DELETE') {
+    try {
+      await scanRef.delete();
+      return res.status(200).json({ success: true });
+    } catch (error) {
+      return res.status(500).json({ error: 'Failed to clear scan result' });
+    }
+  }
+
+  return res.status(405).json({ error: 'Method not allowed' });
+});
+
 // ==================== Scheduled cleanup for rate_limits ====================
 exports.cleanupRateLimits = onSchedule(
   { schedule: '0 3 * * *', region: 'us-central1', maxInstances: 1 },

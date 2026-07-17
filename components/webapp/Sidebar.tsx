@@ -10,18 +10,18 @@ import {
   Package,
   Settings as SettingsIcon,
   FolderOpen,
-  LogOut,
   Home,
 } from "lucide-react";
 import type { View } from "@/lib/types";
-import { useAuth } from "@/lib/auth-provider";
-import { getInitials } from "@/lib/auth-provider";
 import { isUsingFileSystem, getFolderName } from "@/lib/storage";
+import { ProfileDropdown } from "@/components/ProfileDropdown";
 
 type SidebarProps = {
   view: View;
   onNavigate: (view: View) => void;
   onPickFolder: () => void;
+  onSync?: () => void;
+  syncStatus?: string;
 };
 
 const menuItems: { view: View; label: string; icon: typeof LayoutDashboard }[] = [
@@ -34,8 +34,7 @@ const menuItems: { view: View; label: string; icon: typeof LayoutDashboard }[] =
   { view: "settings", label: "Settings", icon: SettingsIcon },
 ];
 
-export function Sidebar({ view, onNavigate, onPickFolder }: SidebarProps) {
-  const { user, logout } = useAuth();
+export function Sidebar({ view, onNavigate, onPickFolder, onSync, syncStatus }: SidebarProps) {
   const folderName = getFolderName();
   const usingFS = isUsingFileSystem();
 
@@ -79,34 +78,12 @@ export function Sidebar({ view, onNavigate, onPickFolder }: SidebarProps) {
           </div>
         </button>
 
-        {user && (
-          <div className="mb-2 flex items-center gap-3 rounded-full bg-plaster px-3 py-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-violet text-xs font-medium text-white">
-              {getInitials(user.name)}
-            </div>
-            <div className="flex-1 overflow-hidden">
-              <p className="truncate text-sm text-ink">{user.name}</p>
-              <p className="truncate text-xs text-slate">{user.email}</p>
-            </div>
-          </div>
-        )}
-
-        <div className="flex gap-2">
-          <Link
-            href="/"
-            className="flex flex-1 items-center justify-center gap-2 rounded-full border border-bone px-3 py-2 text-xs text-slate transition hover:text-ink"
-          >
-            <Home className="h-3.5 w-3.5" />
-            Home
-          </Link>
-          <button
-            onClick={() => logout()}
-            className="flex flex-1 items-center justify-center gap-2 rounded-full border border-bone px-3 py-2 text-xs text-slate transition hover:text-red-600"
-          >
-            <LogOut className="h-3.5 w-3.5" />
-            Logout
-          </button>
-        </div>
+        <ProfileDropdown
+          variant="sidebar"
+          onNavigateSettings={() => onNavigate("settings")}
+          onSync={onSync}
+          syncStatus={syncStatus}
+        />
       </div>
     </aside>
   );

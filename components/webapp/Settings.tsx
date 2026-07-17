@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, type ChangeEvent } from "react";
-import { Settings as SettingsIcon, Download, Upload, FolderOpen, Save } from "lucide-react";
+import { Settings as SettingsIcon, Download, Upload, FolderOpen, Save, Cloud, RefreshCw } from "lucide-react";
 import type { AppData, AppSettings, GSTRate } from "@/lib/types";
 import { saveSettings, exportAllData, importAllData, pickFolder, isUsingFileSystem, getFolderName } from "@/lib/storage";
+import { useAuth, hasValidSubscription } from "@/lib/auth-provider";
+import { syncFromCloud, syncToCloud, getLastSyncTime } from "@/lib/cloud-sync";
 
 type SettingsProps = {
   data: AppData;
@@ -13,8 +15,36 @@ type SettingsProps = {
 const GST_RATES: GSTRate[] = [0, 3, 5, 12, 18, 28];
 
 export function Settings({ data, onSaved }: SettingsProps) {
+  const { user, token } = useAuth();
   const [settings, setSettings] = useState<AppSettings>({ ...data.settings });
   const [saved, setSaved] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [lastSync, setLastSync] = useState<string | null>(getLastSyncTime());
+
+  const canSync = !!token && hasValidSubscription(user);
+
+  async function handleSyncFromCloud() {
+    if (!token) return;
+    setSyncing(true);
+    const result = await syncFromCloud(token);
+    setSyncing(false);
+    setLastSync(getLastSyncTime());
+    if (result.merged) {
+      onSaved();
+      alert("Data synced from cloud successfully!");
+    } else {
+      alert("No cloud data found or already up to date.");
+    }
+  }
+
+  async function handleSyncToCloud() {
+    if (!token) return;
+    setSyncing(true);
+    const ok = await syncToCloud(token);
+    setSyncing(false);
+    setLastSync(getLastSyncTime());
+    alert(ok ? "Data uploaded to cloud successfully!" : "Failed to upload data to cloud.");
+  }
 
   function update(field: keyof AppSettings, value: string | boolean | GSTRate) {
     setSettings((prev) => ({ ...prev, [field]: value }));
@@ -140,6 +170,40 @@ export function Settings({ data, onSaved }: SettingsProps) {
           </label>
         </div>
       </div>
+
+      {canSync && (
+        <div className="rounded-lg border border-lead/20 bg-midnight p-6">
+          <h2 className="mb-1 text-lg text-starlight">Cloud Sync</h2>
+          <p className="mb-4 text-sm text-silver">
+            Sync your invoices, businesses, and inventory across all your devices.
+            Data is securely stored in Firebase and tied to your account.
+          </p>
+          <div className="mb-4 flex items-center gap-2 rounded-lg bg-graphite p-3 text-sm text-silver">
+            <Cloud className="h-4 w-4 text-emerald-500" />
+            {lastSync
+              ? `Last synced: ${new Date(lastSync).toLocaleString()}`
+              : "Not synced yet"}
+          </div>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <button
+              onClick={handleSyncFromCloud}
+              disabled={syncing}
+              className="btn-secondary flex-1 !py-2 disabled:opacity-50"
+            >
+              <RefreshCw className={`mr-1 h-4 w-4 ${syncing ? "animate-spin" : ""}`} />
+              Sync From Cloud
+            </button>
+            <button
+              onClick={handleSyncToCloud}
+              disabled={syncing}
+              className="btn-primary flex-1 !py-2 disabled:opacity-50"
+            >
+              <Cloud className="mr-1 h-4 w-4" />
+              Upload To Cloud
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="rounded-lg border border-lead/20 bg-midnight p-6">
         <h2 className="mb-4 text-lg text-starlight">Storage & Folder</h2>

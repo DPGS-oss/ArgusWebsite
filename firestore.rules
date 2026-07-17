@@ -5,6 +5,16 @@ service cloud.firestore {
     // User data - only the owner can read/write their own document
     match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
+
+      // App data subcollection - stores synced businesses, invoices, parties, stock, settings
+      match /app_data/{dataId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+
+      // Scan results subcollection - for phone-as-scanner feature
+      match /scan_results/{scanId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
     }
 
     // Rate limiting collection - only Cloud Functions (Admin SDK) can write
