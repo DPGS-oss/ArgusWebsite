@@ -9,7 +9,10 @@
       { "source": "/api/user/profile", "function": "apiUserProfile" },
       { "source": "/api/payment/create-order", "function": "apiPaymentCreateOrder" },
       { "source": "/api/payment/verify", "function": "apiPaymentVerify" },
-      { "source": "/api/account/delete", "function": "apiAccountDelete" }
+      { "source": "/api/account/delete", "function": "apiAccountDelete" },
+      { "source": "/api/data/load", "function": "apiDataLoad" },
+      { "source": "/api/data/save", "function": "apiDataSave" },
+      { "source": "/api/data/scan-result", "function": "apiDataScanResult" }
     ],
     "cleanUrls": true
   },
