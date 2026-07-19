@@ -8,10 +8,11 @@ declare global {
 }
 
 const PLAN_LABELS: Record<string, string> = {
-  business: "Business Plan",
+  business: "Business Plan (Monthly)",
+  business_monthly: "Business Plan (Monthly)",
   business_yearly: "Business Plan (Yearly)",
-  business_plus: "Business+ Plan",
-  business_plus_yearly: "Business+ Plan (Yearly)",
+  business_plus: "Business Plan (Monthly)",
+  business_plus_yearly: "Business Plan (Yearly)",
   accountant: "Accountant Plan",
   accountant_yearly: "Accountant Plan (Yearly)",
   extra_gstin: "Extra GSTIN",

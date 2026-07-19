@@ -49,10 +49,27 @@ type AuthContextValue = {
   updateLocalUser: (patch: Partial<AppUser>) => void;
 };
 
-const ALLOWED_PLANS = ["business", "business_plus"];
+const ALLOWED_PLANS = ["business", "business_monthly", "business_yearly", "business_plus"];
+
+export type PlanLevel = "free" | "business";
+
+export function getPlanLevel(user: AppUser | null): PlanLevel {
+  const plan = user?.subscription?.plan;
+  if (!plan) return "free";
+  if (ALLOWED_PLANS.includes(plan)) return "business";
+  return "free";
+}
+
+const BUSINESS_ONLY_VIEWS = ["purchases", "expenses", "credit-notes", "recurring", "reports"];
+
+export function isFeatureUnlocked(view: string, user: AppUser | null): boolean {
+  const level = getPlanLevel(user);
+  if (level === "business") return true;
+  return !BUSINESS_ONLY_VIEWS.includes(view);
+}
 
 export function hasValidSubscription(user: AppUser | null): boolean {
-  return !!user?.subscription?.plan && ALLOWED_PLANS.includes(user.subscription.plan);
+  return getPlanLevel(user) === "business";
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);

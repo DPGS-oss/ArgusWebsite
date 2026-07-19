@@ -13,12 +13,11 @@ const plans = [
     suffix: "/month",
     featured: false,
     features: [
-      "✓ 1 GSTIN",
-      "✓ Khata & billing",
-      "✓ Basic GSTR reports",
-      "✓ Offline mode",
-      "✗ WhatsApp Business API",
-      "✗ Accountant collaboration",
+      "✓ Billing & invoices",
+      "✓ Customers",
+      "✓ Voice & photo entry (mobile)",
+      "✓ UPI payment links",
+      "✓ Works fully offline (mobile)",
     ],
     cta: "Get Started",
     buttonClass: "btn-outline w-full",
@@ -26,35 +25,21 @@ const plans = [
   {
     key: "business",
     name: "Business",
-    price: "₹400",
+    price: "₹600",
     suffix: "/month",
     featured: true,
     features: [
-      "✓ 3 GSTINs included",
-      "✓ Unlimited invoices",
-      "✓ All GSTR reports",
-      "✓ WhatsApp (deep link share)",
+      "✓ Everything in Free",
+      "✓ Purchases & input tax credit",
+      "✓ GSTR-1, 2B, 3B summaries",
+      "✓ Full inventory with barcode & CSV",
+      "✓ Sales & profit reports",
+      "✓ Recurring invoices",
       "✓ Accountant collaboration",
-      "✓ Priority support",
+      "✓ Up to 3 GSTINs",
     ],
     cta: "Subscribe Now",
     buttonClass: "btn-primary w-full",
-  },
-  {
-    key: "business_plus",
-    name: "Business+",
-    price: "₹600",
-    suffix: "/month",
-    featured: false,
-    features: [
-      "✓ Everything in Business",
-      "✓ Inventory management",
-      "✓ Sales & profit reports",
-      "✓ Up to 3 GSTINs",
-      "✓ Priority support",
-    ],
-    cta: "Subscribe Now",
-    buttonClass: "btn-outline w-full",
   },
   {
     key: "accountant",
@@ -112,7 +97,7 @@ export function Pricing() {
               <p>Choose the plan that fits your business</p>
             </div>
           </Reveal>
-          <Stagger className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4" stagger={0.1}>
+          <Stagger className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3" stagger={0.1}>
             {plans.map((plan) => (
               <StaggerItem
                 key={plan.key}
@@ -150,7 +135,7 @@ export function Pricing() {
           </Stagger>
           <Reveal delay={0.2}>
             <p className="mt-8 text-center text-sm text-slate">
-              Add extra GSTINs for ₹199/month each (max 5 total) | Yearly plans save up to 17%
+              Add extra GSTINs for ₹199/month each (max 5 total) | Yearly plan: ₹6,600/year (save ~8%)
             </p>
           </Reveal>
         </div>
