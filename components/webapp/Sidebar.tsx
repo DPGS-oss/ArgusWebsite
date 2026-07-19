@@ -11,6 +11,15 @@ import {
   Settings as SettingsIcon,
   FolderOpen,
   Home,
+  Receipt,
+  Truck,
+  CreditCard,
+  FileSignature,
+  ShoppingCart,
+  BookOpen,
+  LayoutTemplate,
+  Repeat,
+  ArrowLeftRight,
 } from "lucide-react";
 import type { View } from "@/lib/types";
 import { isUsingFileSystem, getFolderName } from "@/lib/storage";
@@ -27,9 +36,18 @@ type SidebarProps = {
 const menuItems: { view: View; label: string; icon: typeof LayoutDashboard }[] = [
   { view: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { view: "invoices", label: "Invoices", icon: FileText },
+  { view: "quotes", label: "Quotes", icon: FileSignature },
+  { view: "credit-notes", label: "Credit Notes", icon: ArrowLeftRight },
+  { view: "delivery-challans", label: "Delivery Challans", icon: Truck },
   { view: "parties", label: "Parties", icon: Users },
-  { view: "reports", label: "GSTR Reports", icon: BarChart3 },
+  { view: "khata", label: "Khata", icon: BookOpen },
+  { view: "payments", label: "Payments", icon: CreditCard },
   { view: "stock", label: "Inventory", icon: Package },
+  { view: "purchases", label: "Purchases", icon: ShoppingCart },
+  { view: "expenses", label: "Expenses", icon: Receipt },
+  { view: "recurring", label: "Recurring", icon: Repeat },
+  { view: "templates", label: "Templates", icon: LayoutTemplate },
+  { view: "reports", label: "GSTR Reports", icon: BarChart3 },
   { view: "business", label: "Business", icon: LayoutDashboard },
   { view: "settings", label: "Settings", icon: SettingsIcon },
 ];

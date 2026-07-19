@@ -1,6 +1,6 @@
 "use client";
 
-import { TrendingUp, FileText, Users, IndianRupee, Clock, CheckCircle2 } from "lucide-react";
+import { TrendingUp, FileText, Users, IndianRupee, Clock, CheckCircle2, Receipt, CreditCard, BookOpen, ShoppingCart } from "lucide-react";
 import type { AppData, BusinessProfile, Invoice } from "@/lib/types";
 import { formatCurrency, formatDate } from "@/lib/gst";
 
@@ -18,6 +18,13 @@ export function Dashboard({ data, business, onNavigate, onEditInvoice }: Dashboa
   const totalRevenue = paidInvoices.reduce((s, i) => s + i.grandTotal, 0);
   const totalOutstanding = unpaidInvoices.reduce((s, i) => s + i.balanceDue, 0);
   const parties = data.parties.length;
+
+  const totalExpenses = (data.expenses ?? []).reduce((s, e) => s + e.amount, 0);
+  const totalPayments = (data.payments ?? []).reduce((s, p) => s + p.amount, 0);
+  const totalPurchases = (data.purchases ?? []).reduce((s, p) => s + p.totalAmount, 0);
+  const khataDebit = (data.khataEntries ?? []).filter((e) => !e.isCredit).reduce((s, e) => s + e.amount, 0);
+  const khataCredit = (data.khataEntries ?? []).filter((e) => e.isCredit).reduce((s, e) => s + e.amount, 0);
+  const khataBalance = khataDebit - khataCredit;
 
   const recentInvoices = [...invoices]
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
@@ -48,6 +55,30 @@ export function Dashboard({ data, business, onNavigate, onEditInvoice }: Dashboa
       icon: Users,
       color: "text-purple-400",
     },
+    {
+      label: "Expenses",
+      value: formatCurrency(totalExpenses),
+      icon: Receipt,
+      color: "text-red-400",
+    },
+    {
+      label: "Payments Received",
+      value: formatCurrency(totalPayments),
+      icon: CreditCard,
+      color: "text-green-400",
+    },
+    {
+      label: "Purchases",
+      value: formatCurrency(totalPurchases),
+      icon: ShoppingCart,
+      color: "text-blue-400",
+    },
+    {
+      label: "Khata Balance",
+      value: formatCurrency(Math.abs(khataBalance)),
+      icon: BookOpen,
+      color: khataBalance >= 0 ? "text-amber-400" : "text-emerald-400",
+    },
   ];
 
   return (
@@ -71,13 +102,13 @@ export function Dashboard({ data, business, onNavigate, onEditInvoice }: Dashboa
         {stats.map(({ label, value, icon: Icon, color }) => (
           <div
             key={label}
-            className="rounded-card border border-bone bg-mist p-5"
+            className="rounded-card border border-bone bg-mist p-4"
           >
-            <div className="mb-3 flex items-center justify-between">
-              <span className="text-sm text-slate">{label}</span>
-              <Icon className={`h-5 w-5 ${color}`} />
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-xs text-slate">{label}</span>
+              <Icon className={`h-4 w-4 ${color}`} />
             </div>
-            <div className="text-2xl font-bold text-ink">{value}</div>
+            <div className="text-xl font-bold text-ink">{value}</div>
           </div>
         ))}
       </div>

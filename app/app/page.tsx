@@ -15,6 +15,15 @@ import { BusinessManager } from "@/components/webapp/BusinessManager";
 import { Parties } from "@/components/webapp/Parties";
 import { Settings } from "@/components/webapp/Settings";
 import { Inventory } from "@/components/webapp/Inventory";
+import { CreditNotes } from "@/components/webapp/CreditNotes";
+import { DeliveryChallans } from "@/components/webapp/DeliveryChallans";
+import { Expenses } from "@/components/webapp/Expenses";
+import { Quotes } from "@/components/webapp/Quotes";
+import { Purchases } from "@/components/webapp/Purchases";
+import { Payments } from "@/components/webapp/Payments";
+import { Templates } from "@/components/webapp/Templates";
+import { Khata } from "@/components/webapp/Khata";
+import { RecurringInvoices } from "@/components/webapp/RecurringInvoices";
 import { useAuth, hasValidSubscription } from "@/lib/auth-provider";
 import { AuthModal } from "@/components/AuthModal";
 import { SubscriptionGate } from "@/components/SubscriptionGate";
@@ -250,6 +259,33 @@ export default function AppPage() {
 
       case "settings":
         return <Settings data={d} onSaved={refresh} />;
+
+      case "credit-notes":
+        return <CreditNotes data={d} onSaved={refresh} />;
+
+      case "delivery-challans":
+        return <DeliveryChallans data={d} onSaved={refresh} />;
+
+      case "expenses":
+        return <Expenses data={d} onSaved={refresh} />;
+
+      case "quotes":
+        return <Quotes data={d} onSaved={refresh} />;
+
+      case "purchases":
+        return <Purchases data={d} onSaved={refresh} />;
+
+      case "payments":
+        return <Payments data={d} onSaved={refresh} />;
+
+      case "templates":
+        return <Templates data={d} onSaved={refresh} />;
+
+      case "khata":
+        return <Khata data={d} onSaved={refresh} />;
+
+      case "recurring":
+        return <RecurringInvoices data={d} onSaved={refresh} />;
 
       default:
         return <div className="text-slate">Unknown view.</div>;

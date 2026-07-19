@@ -119,6 +119,14 @@ export interface AppData {
   activeBusinessId: string | null;
   invoiceCounter: number;
   settings: AppSettings;
+  creditNotes: CreditNote[];
+  deliveryChallans: DeliveryChallan[];
+  expenses: Expense[];
+  quotes: Quote[];
+  purchases: Purchase[];
+  payments: Payment[];
+  templates: Template[];
+  khataEntries: KhataEntry[];
 }
 
 export interface AppSettings {
@@ -135,6 +143,131 @@ export interface AppSettings {
 }
 
 export type GSTRReportType = "gstr1" | "gstr2b" | "gstr3b" | "gstr4";
+
+// ─── Credit Note ───────────────────────────────────────────────
+export interface CreditNote {
+  id: string;
+  creditNoteNumber: string;
+  invoiceId?: string;
+  customerName: string;
+  customerId?: string;
+  reason: string;
+  items: InvoiceItem[];
+  subtotal: number;
+  totalGstAmount: number;
+  totalAmount: number;
+  notes: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ─── Delivery Challan ──────────────────────────────────────────
+export interface ChallanItem {
+  name: string;
+  hsnCode: string;
+  quantity: number;
+  unit: string;
+}
+
+export interface DeliveryChallan {
+  id: string;
+  challanNumber: string;
+  customerName: string;
+  customerId?: string;
+  invoiceId?: string;
+  items: ChallanItem[];
+  transportMode: string;
+  vehicleNumber: string;
+  deliveryAddress: string;
+  notes: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ─── Expense ───────────────────────────────────────────────────
+export interface Expense {
+  id: string;
+  category: string;
+  description: string;
+  amount: number;
+  date: string;
+  paymentMode: string;
+  vendor: string;
+  gstAmount: number;
+  isGstClaimable: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ─── Quote ─────────────────────────────────────────────────────
+export interface Quote {
+  id: string;
+  quoteNumber: string;
+  customerName: string;
+  customerId?: string;
+  items: InvoiceItem[];
+  subtotal: number;
+  totalGstAmount: number;
+  totalAmount: number;
+  status: string; // draft | sent | accepted | rejected | expired
+  validUntil: string;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ─── Purchase ──────────────────────────────────────────────────
+export interface Purchase {
+  id: string;
+  purchaseNumber: string;
+  supplierName: string;
+  createdAt: string;
+  totalAmount: number;
+  totalGstAmount: number;
+  items: InvoiceItem[];
+}
+
+// ─── Payment ───────────────────────────────────────────────────
+export interface Payment {
+  id: string;
+  invoiceId: string;
+  amount: number;
+  method: string;
+  date: string;
+  note?: string;
+}
+
+// ─── Template ──────────────────────────────────────────────────
+export interface Template {
+  id: string;
+  name: string;
+  customerName: string;
+  customerId?: string;
+  items: InvoiceItem[];
+  usageCount: number;
+}
+
+// ─── Khata Entry ───────────────────────────────────────────────
+export interface KhataEntry {
+  id: string;
+  customerId: string;
+  customerName: string;
+  amount: number;
+  description: string;
+  createdAt: string;
+  isCredit: boolean;
+}
+
+// ─── Recurring Config ──────────────────────────────────────────
+export interface RecurringConfig {
+  frequency: string; // weekly | monthly | quarterly | yearly
+  interval: number;
+  nextRun?: string;
+  endDate?: string;
+  active: boolean;
+}
 
 export interface GSTRReport {
   type: GSTRReportType;
@@ -172,7 +305,16 @@ export type View =
   | "reports"
   | "stock"
   | "business"
-  | "settings";
+  | "settings"
+  | "credit-notes"
+  | "delivery-challans"
+  | "expenses"
+  | "quotes"
+  | "purchases"
+  | "recurring"
+  | "khata"
+  | "payments"
+  | "templates";
 
 export const INDIAN_STATES: { name: string; code: string }[] = [
   { name: "Andhra Pradesh", code: "37" },

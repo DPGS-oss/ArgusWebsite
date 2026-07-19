@@ -1,6 +1,6 @@
 "use client";
 
-import type { AppData, AppSettings, BusinessProfile, Invoice, Party, StockItem } from "./types";
+import type { AppData, AppSettings, BusinessProfile, Invoice, Party, StockItem, CreditNote, DeliveryChallan, Expense, Quote, Purchase, Payment, Template, KhataEntry } from "./types";
 
 declare global {
   interface Window {
@@ -38,6 +38,14 @@ export function getDefaultData(): AppData {
     activeBusinessId: null,
     invoiceCounter: 1,
     settings: { ...DEFAULT_SETTINGS },
+    creditNotes: [],
+    deliveryChallans: [],
+    expenses: [],
+    quotes: [],
+    purchases: [],
+    payments: [],
+    templates: [],
+    khataEntries: [],
   };
 }
 
@@ -378,5 +386,129 @@ export function deleteParty(id: string): void {
 export function setActiveBusiness(id: string): void {
   const data = loadData();
   data.activeBusinessId = id;
+  saveData(data);
+}
+
+// ─── Credit Notes ──────────────────────────────────────────────
+export function saveCreditNote(cn: CreditNote): void {
+  const data = loadData();
+  const idx = data.creditNotes.findIndex((c) => c.id === cn.id);
+  if (idx >= 0) data.creditNotes[idx] = cn;
+  else data.creditNotes.push(cn);
+  saveData(data);
+}
+
+export function deleteCreditNote(id: string): void {
+  const data = loadData();
+  data.creditNotes = data.creditNotes.filter((c) => c.id !== id);
+  saveData(data);
+}
+
+// ─── Delivery Challans ─────────────────────────────────────────
+export function saveDeliveryChallan(dc: DeliveryChallan): void {
+  const data = loadData();
+  const idx = data.deliveryChallans.findIndex((d) => d.id === dc.id);
+  if (idx >= 0) data.deliveryChallans[idx] = dc;
+  else data.deliveryChallans.push(dc);
+  saveData(data);
+}
+
+export function deleteDeliveryChallan(id: string): void {
+  const data = loadData();
+  data.deliveryChallans = data.deliveryChallans.filter((d) => d.id !== id);
+  saveData(data);
+}
+
+// ─── Expenses ──────────────────────────────────────────────────
+export function saveExpense(exp: Expense): void {
+  const data = loadData();
+  const idx = data.expenses.findIndex((e) => e.id === exp.id);
+  if (idx >= 0) data.expenses[idx] = exp;
+  else data.expenses.push(exp);
+  saveData(data);
+}
+
+export function deleteExpense(id: string): void {
+  const data = loadData();
+  data.expenses = data.expenses.filter((e) => e.id !== id);
+  saveData(data);
+}
+
+// ─── Quotes ────────────────────────────────────────────────────
+export function saveQuote(quote: Quote): void {
+  const data = loadData();
+  const idx = data.quotes.findIndex((q) => q.id === quote.id);
+  if (idx >= 0) data.quotes[idx] = quote;
+  else data.quotes.push(quote);
+  saveData(data);
+}
+
+export function deleteQuote(id: string): void {
+  const data = loadData();
+  data.quotes = data.quotes.filter((q) => q.id !== id);
+  saveData(data);
+}
+
+// ─── Purchases ─────────────────────────────────────────────────
+export function savePurchase(purchase: Purchase): void {
+  const data = loadData();
+  const idx = data.purchases.findIndex((p) => p.id === purchase.id);
+  if (idx >= 0) data.purchases[idx] = purchase;
+  else data.purchases.push(purchase);
+  saveData(data);
+}
+
+export function deletePurchase(id: string): void {
+  const data = loadData();
+  data.purchases = data.purchases.filter((p) => p.id !== id);
+  saveData(data);
+}
+
+// ─── Payments ──────────────────────────────────────────────────
+export function savePayment(payment: Payment): void {
+  const data = loadData();
+  const idx = data.payments.findIndex((p) => p.id === payment.id);
+  if (idx >= 0) data.payments[idx] = payment;
+  else data.payments.push(payment);
+  saveData(data);
+}
+
+export function deletePayment(id: string): void {
+  const data = loadData();
+  data.payments = data.payments.filter((p) => p.id !== id);
+  saveData(data);
+}
+
+export function getPaymentsForInvoice(invoiceId: string): Payment[] {
+  return loadData().payments.filter((p) => p.invoiceId === invoiceId);
+}
+
+// ─── Templates ─────────────────────────────────────────────────
+export function saveTemplate(template: Template): void {
+  const data = loadData();
+  const idx = data.templates.findIndex((t) => t.id === template.id);
+  if (idx >= 0) data.templates[idx] = template;
+  else data.templates.push(template);
+  saveData(data);
+}
+
+export function deleteTemplate(id: string): void {
+  const data = loadData();
+  data.templates = data.templates.filter((t) => t.id !== id);
+  saveData(data);
+}
+
+// ─── Khata Entries ─────────────────────────────────────────────
+export function saveKhataEntry(entry: KhataEntry): void {
+  const data = loadData();
+  const idx = data.khataEntries.findIndex((k) => k.id === entry.id);
+  if (idx >= 0) data.khataEntries[idx] = entry;
+  else data.khataEntries.push(entry);
+  saveData(data);
+}
+
+export function deleteKhataEntry(id: string): void {
+  const data = loadData();
+  data.khataEntries = data.khataEntries.filter((k) => k.id !== id);
   saveData(data);
 }

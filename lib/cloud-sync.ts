@@ -120,6 +120,14 @@ function mergeData(local: AppData, cloud: AppData): AppData {
     activeBusinessId: cloud.activeBusinessId || local.activeBusinessId,
     invoiceCounter: Math.max(local.invoiceCounter, cloud.invoiceCounter),
     settings: { ...local.settings, ...cloud.settings },
+    creditNotes: mergeById(local.creditNotes ?? [], cloud.creditNotes ?? []),
+    deliveryChallans: mergeById(local.deliveryChallans ?? [], cloud.deliveryChallans ?? []),
+    expenses: mergeById(local.expenses ?? [], cloud.expenses ?? []),
+    quotes: mergeById(local.quotes ?? [], cloud.quotes ?? []),
+    purchases: mergeById(local.purchases ?? [], cloud.purchases ?? []),
+    payments: mergeById(local.payments ?? [], cloud.payments ?? []),
+    templates: mergeById(local.templates ?? [], cloud.templates ?? []),
+    khataEntries: mergeById(local.khataEntries ?? [], cloud.khataEntries ?? []),
   };
 
   return merged;
