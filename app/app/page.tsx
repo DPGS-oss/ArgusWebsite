@@ -24,6 +24,8 @@ import { Payments } from "@/components/webapp/Payments";
 import { Templates } from "@/components/webapp/Templates";
 import { Khata } from "@/components/webapp/Khata";
 import { RecurringInvoices } from "@/components/webapp/RecurringInvoices";
+import { Books } from "@/components/webapp/Books";
+import { postInvoiceLedger, persistLedger } from "@/lib/books";
 import { useAuth, hasValidSubscription } from "@/lib/auth-provider";
 import { AuthModal } from "@/components/AuthModal";
 import { SubscriptionGate } from "@/components/SubscriptionGate";
@@ -181,6 +183,8 @@ export default function AppPage() {
     if (!existing) {
       deductStockForInvoice(invoice);
     }
+    const after = loadData();
+    persistLedger(postInvoiceLedger(after, invoice));
     refresh();
     setEditingInvoice(null);
     setPreviewInvoice(invoice);
@@ -283,6 +287,9 @@ export default function AppPage() {
 
       case "khata":
         return <Khata data={d} onSaved={refresh} />;
+
+      case "books":
+        return <Books data={d} onSaved={refresh} />;
 
       case "recurring":
         return <RecurringInvoices data={d} onSaved={refresh} />;

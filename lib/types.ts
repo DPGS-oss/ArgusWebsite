@@ -223,10 +223,13 @@ export interface Purchase {
   id: string;
   purchaseNumber: string;
   supplierName: string;
+  supplierId?: string;
   createdAt: string;
   totalAmount: number;
   totalGstAmount: number;
   items: InvoiceItem[];
+  paymentMethod?: string;
+  paidAmount?: number;
 }
 
 // ─── Payment ───────────────────────────────────────────────────
@@ -258,6 +261,12 @@ export interface KhataEntry {
   description: string;
   createdAt: string;
   isCredit: boolean;
+  accountType?: "party" | "cash" | "bank" | "sales" | "purchase" | "expense";
+  partyKind?: "customer" | "supplier";
+  paymentMethod?: string;
+  sourceType?: string;
+  sourceId?: string;
+  runningBalance?: number;
 }
 
 // ─── Recurring Config ──────────────────────────────────────────
@@ -314,7 +323,8 @@ export type View =
   | "recurring"
   | "khata"
   | "payments"
-  | "templates";
+  | "templates"
+  | "books";
 
 export const INDIAN_STATES: { name: string; code: string }[] = [
   { name: "Andhra Pradesh", code: "37" },

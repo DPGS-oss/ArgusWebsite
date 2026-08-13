@@ -20,6 +20,8 @@ export function Settings({ data, onSaved }: SettingsProps) {
   const [saved, setSaved] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [lastSync, setLastSync] = useState<string | null>(getLastSyncTime());
+  const [caInvite, setCaInvite] = useState<{ redeem_url: string; backup_code: string } | null>(null);
+  const [caBusy, setCaBusy] = useState(false);
 
   const canSync = !!token && hasValidSubscription(user);
 
@@ -92,8 +94,50 @@ export function Settings({ data, onSaved }: SettingsProps) {
     }
   }
 
+  async function handleInviteCa() {
+    if (!token) {
+      alert("Sign in first");
+      return;
+    }
+    setCaBusy(true);
+    try {
+      const res = await fetch("/api/ca/invites", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Could not create invite");
+      setCaInvite({ redeem_url: data.redeem_url, backup_code: data.backup_code });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Invite failed");
+    } finally {
+      setCaBusy(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
+      <div className="rounded-lg border border-lead/20 bg-midnight p-6">
+        <h2 className="mb-2 text-lg text-starlight">Invite CA</h2>
+        <p className="mb-4 text-sm text-silver">
+          Generate a 7-day link. Your CA signs in, redeems once, and gets a free read-only portal.
+        </p>
+        <button className="btn-primary" disabled={caBusy} onClick={handleInviteCa}>
+          {caBusy ? "Creating…" : "Invite CA"}
+        </button>
+        {caInvite ? (
+          <div className="mt-4 space-y-2 text-sm text-silver">
+            <p className="break-all">Link: {caInvite.redeem_url}</p>
+            <p>Backup code: {caInvite.backup_code}</p>
+            <button
+              className="btn-outline"
+              onClick={() => navigator.clipboard.writeText(`${caInvite.redeem_url}\nBackup: ${caInvite.backup_code}`)}
+            >
+              Copy link + code
+            </button>
+          </div>
+        ) : null}
+      </div>
       <div className="flex items-center justify-between">
         <h1 className="text-2xl text-starlight">Settings</h1>
         <button onClick={handleSave} className="btn-primary">

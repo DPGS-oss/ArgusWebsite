@@ -40,6 +40,7 @@ const menuItems: { view: View; label: string; icon: typeof LayoutDashboard }[] =
   { view: "credit-notes", label: "Credit Notes", icon: ArrowLeftRight },
   { view: "delivery-challans", label: "Delivery Challans", icon: Truck },
   { view: "parties", label: "Parties", icon: Users },
+  { view: "books", label: "Books", icon: BookOpen },
   { view: "khata", label: "Khata", icon: BookOpen },
   { view: "payments", label: "Payments", icon: CreditCard },
   { view: "stock", label: "Inventory", icon: Package },
