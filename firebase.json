@@ -4,6 +4,7 @@
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
     "rewrites": [
       { "source": "/api/config", "function": "apiConfig" },
+      { "source": "/api/contact", "function": "apiContact" },
       { "source": "/api/auth/sync", "function": "apiAuthSync" },
       { "source": "/api/auth/plans", "function": "apiAuthPlans" },
       { "source": "/api/user/profile", "function": "apiUserProfile" },
