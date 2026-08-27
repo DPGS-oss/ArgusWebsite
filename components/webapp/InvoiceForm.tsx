@@ -117,15 +117,15 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
     : "";
   const originalShipGstin = openedInvoice?.shipToGstin || "";
   const originalShipAddress = openedInvoice?.shipToAddress || "";
-  const posEdited =
+  const originalPartyId = openedInvoice?.partyId || "";
+  const posOrPartyEdited =
     !!openedInvoice &&
     ((shipToStateCode || "") !== originalPosCode ||
       (shipToGstin || "") !== originalShipGstin ||
-      (shipToAddress || "") !== originalShipAddress);
-  const preserveStoredTax = !!openedInvoice && !posEdited;
-  // Historical walk-ins stored empty party state (treated as IGST on main).
-  // Do not fill that with the seller state or an accidental save rewrites the split.
-  const partyStateCode = selectedParty?.stateCode || (preserveStoredTax ? "" : businessStateCode);
+      (shipToAddress || "") !== originalShipAddress ||
+      (partyId || "") !== originalPartyId);
+  const preserveStoredTax = !!openedInvoice && !posOrPartyEdited;
+  const partyStateCode = selectedParty?.stateCode || businessStateCode;
   const partyAddress = selectedParty
     ? formatPartyAddress(selectedParty)
     : "";
@@ -381,7 +381,7 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
       partyGstin: billToGstin,
       partyPhone: party?.phone || inlinePartyPhone || "",
       partyAddress: party ? formatPartyAddress(party) : "",
-      partyStateCode: party?.stateCode || (preserveStoredTax ? "" : business.stateCode || ""),
+      partyStateCode: party?.stateCode || business.stateCode || "",
       shipToGstin,
       shipToAddress,
       shipToStateCode,

@@ -647,14 +647,13 @@ function inferInterStateFromItems(items: InvoiceItem[]): boolean | undefined {
   return undefined;
 }
 
-function shouldPreserveLineTax(
-  item: InvoiceItem,
-  interState: boolean,
-  preserveStoredTax: boolean
-): boolean {
+function shouldPreserveLineTax(item: InvoiceItem, forceRecalc: boolean): boolean {
+  // Do not compare the new POS classifier to the stored split. Walk-ins stored
+  // IGST because empty party state was inter-state on main; mapping POS to the
+  // seller code would otherwise rewrite IGST → CGST+SGST on accidental save.
+  if (forceRecalc) return false;
   if (!hasStoredLineTax(item)) return false;
-  if (preserveStoredTax) return lineAmountsMatchInputs(item);
-  return interState === lineLooksInterState(item);
+  return lineAmountsMatchInputs(item);
 }
 
 export function buildInvoiceDocument(input: BuildInvoiceInput): Invoice {
@@ -678,18 +677,19 @@ export function buildInvoiceDocument(input: BuildInvoiceInput): Invoice {
     ? resolvePlaceOfSupply(ship.shipToStateCode, billState)
     : historicalPos || resolvePlaceOfSupply(ship.shipToStateCode, billState);
   // Map a named historical POS to a code, but do not replace it with the seller
-  // state when preserving tax — that fallback is what flipped walk-in IGST.
-  const placeOfSupply = input.preserveStoredTax
+  // state when keeping stored tax — that fallback is what flipped walk-in IGST.
+  const keepStoredTax = input.preserveStoredTax !== false;
+  const placeOfSupply = keepStoredTax
     ? historicalPos || (input.placeOfSupply || "").trim() || computedPlaceOfSupply
     : computedPlaceOfSupply;
   const sellerCode = stateCodeFromPlaceOfSupply(input.sellerStateCode) || input.sellerStateCode;
   const computedInterState = isInterState(sellerCode, placeOfSupply);
-  const interState = input.preserveStoredTax
+  const interState = keepStoredTax
     ? (input.storedIsInterState ?? inferInterStateFromItems(input.items) ?? computedInterState)
     : computedInterState;
 
   const items = input.items.map((item) => {
-    if (shouldPreserveLineTax(item, interState, !!input.preserveStoredTax)) {
+    if (shouldPreserveLineTax(item, !keepStoredTax)) {
       return {
         ...item,
         uqc: item.uqc || item.unit,

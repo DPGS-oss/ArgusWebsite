@@ -311,6 +311,153 @@ describe("historical invoices", () => {
     expect(stateCodeFromPlaceOfSupply("Jammu & Kashmir")).toBe("01");
   });
 
+  it("keeps walk-in IGST on rebuild when mapped POS would classify as intra", () => {
+    // Accidental save of a paid walk-in: stored IGST, POS "Maharashtra", empty party.
+    // Open maps POS to 27; seller is 27 → classifier says intra. Must NOT rewrite IGST.
+    const items: InvoiceItem[] = [
+      {
+        id: "i1",
+        description: "Counter sale",
+        hsn: "9983",
+        quantity: 1,
+        unit: "NOS",
+        rate: 1000,
+        discount: 0,
+        gstRate: 18,
+        taxableAmount: 1000,
+        cgst: 0,
+        sgst: 0,
+        igst: 180,
+        total: 1180,
+      },
+    ];
+
+    const opened = openHistoricalInvoice({
+      id: "old-walkin-igst",
+      invoiceNumber: "INV-2024-0100",
+      type: "tax_invoice",
+      status: "paid",
+      businessId: "biz-1",
+      partyId: "",
+      partyName: "Walk-in",
+      partyGstin: "",
+      partyPhone: "",
+      date: "2024-06-01",
+      dueDate: "2024-06-16",
+      items,
+      subtotal: 1000,
+      totalDiscount: 0,
+      totalTaxable: 1000,
+      totalCgst: 0,
+      totalSgst: 0,
+      totalIgst: 180,
+      totalTax: 180,
+      roundOff: 0,
+      grandTotal: 1180,
+      paidAmount: 1180,
+      balanceDue: 0,
+      paymentMode: "Cash",
+      notes: "",
+      terms: "",
+      placeOfSupply: "Maharashtra",
+      isInterState: true,
+      isTotalMode: false,
+      createdAt: "2024-06-01T00:00:00.000Z",
+      updatedAt: "2024-06-01T00:00:00.000Z",
+    });
+    expect(stateCodeFromPlaceOfSupply(opened.placeOfSupply)).toBe(MH);
+    expect(opened.items[0].igst).toBe(180);
+
+    const rebuilt = buildInvoiceDocument({
+      id: opened.id,
+      invoiceNumber: opened.invoiceNumber,
+      type: opened.type,
+      status: opened.status,
+      businessId: opened.businessId,
+      sellerGstin: MH_GSTIN,
+      sellerStateCode: MH,
+      partyId: "",
+      partyName: opened.partyName,
+      partyGstin: opened.partyGstin,
+      partyPhone: "",
+      partyAddress: "Counter",
+      partyStateCode: "",
+      placeOfSupply: opened.placeOfSupply,
+      date: opened.date,
+      dueDate: opened.dueDate,
+      items: opened.items,
+      roundOffEnabled: false,
+      paidAmount: opened.paidAmount,
+      paymentMode: opened.paymentMode,
+      notes: "",
+      terms: "",
+      reverseCharge: false,
+      isTotalMode: false,
+      createdAt: opened.createdAt,
+    });
+
+    expect(isInterState(MH, rebuilt.placeOfSupply)).toBe(false);
+    expect(rebuilt.items[0].igst).toBe(180);
+    expect(rebuilt.items[0].cgst).toBe(0);
+    expect(rebuilt.items[0].sgst).toBe(0);
+    expect(rebuilt.totalIgst).toBe(180);
+    expect(rebuilt.totalCgst).toBe(0);
+    expect(rebuilt.totalSgst).toBe(0);
+    expect(rebuilt.totalTax).toBe(180);
+    expect(rebuilt.grandTotal).toBe(1180);
+  });
+
+  it("recalculates walk-in tax when the user edits POS (preserveStoredTax false)", () => {
+    const rebuilt = buildInvoiceDocument({
+      id: "walkin-pos-edit",
+      invoiceNumber: "INV-2024-0101",
+      type: "tax_invoice",
+      status: "paid",
+      businessId: "biz-1",
+      sellerGstin: MH_GSTIN,
+      sellerStateCode: MH,
+      partyId: "",
+      partyName: "Walk-in",
+      partyGstin: "",
+      partyPhone: "",
+      partyAddress: "Counter",
+      partyStateCode: "",
+      placeOfSupply: MH,
+      date: "2024-06-01",
+      dueDate: "2024-06-16",
+      items: [
+        {
+          id: "i1",
+          description: "Counter sale",
+          hsn: "9983",
+          quantity: 1,
+          unit: "NOS",
+          rate: 1000,
+          discount: 0,
+          gstRate: 18,
+          taxableAmount: 1000,
+          cgst: 0,
+          sgst: 0,
+          igst: 180,
+          total: 1180,
+        },
+      ],
+      roundOffEnabled: false,
+      paidAmount: 1180,
+      paymentMode: "Cash",
+      notes: "",
+      terms: "",
+      reverseCharge: false,
+      isTotalMode: false,
+      createdAt: "2024-06-01T00:00:00.000Z",
+      preserveStoredTax: false,
+    });
+    expect(rebuilt.items[0].igst).toBe(0);
+    expect(rebuilt.items[0].cgst).toBe(90);
+    expect(rebuilt.items[0].sgst).toBe(90);
+    expect(rebuilt.isInterState).toBe(false);
+  });
+
   it("keeps walk-in IGST when empty party state would otherwise fall back to the seller", () => {
     // On main, empty party stateCode made "" !== seller → IGST, while POS was often the
     // seller's state *name*. Falling back party → business.stateCode turns POS into the
