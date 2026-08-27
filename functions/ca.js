@@ -3,7 +3,7 @@
  * CAs do not pay. Owner generates a token; CA signs in and redeems.
  * GSTR-1 JSON and Tally XML are generated here from Firestore invoices (shop
  * phone may be offline). Argus is not a GSP — files are for GSTN offline tool
- * / TallyPrime import only.
+ * / TallyPrime import / NIC e-invoice JSON only. Does not mint IRNs.
  */
 const crypto = require('crypto');
 const { verifyToken, getUser, updateUser, getDb } = require('./_shared/firebase-admin');
@@ -16,6 +16,7 @@ const {
   parseMonthParam,
   monthBounds,
 } = require('./_shared/ca-exports');
+const { buildEinvoiceJson, buildEinvoiceBatch } = require('./_shared/einvoice');
 
 const SCOPES = [
   'read:invoices',
@@ -233,6 +234,57 @@ async function handleGstr1Download(req, res, decoded, ownerId) {
   });
 }
 
+function businessForInvoice(appData, inv) {
+  const list = (appData && appData.businesses) || [];
+  return (
+    list.find((b) => b && b.id === (inv && inv.businessId)) ||
+    list.find((b) => b && b.id === (appData && appData.activeBusinessId)) ||
+    list[0] ||
+    {}
+  );
+}
+
+async function requireLinkedOrOwner(uid, ownerId) {
+  if (uid && ownerId && uid === ownerId) return { owner: true };
+  return findLink(getDb(), uid, ownerId);
+}
+
+async function handleEinvoiceDownload(req, res, decoded, ownerId) {
+  const uid = decoded.uid;
+  const access = await requireLinkedOrOwner(uid, ownerId);
+  if (!access) return res.status(403).json({ error: 'Not linked to this business' });
+  const { appData } = await loadOwnerAppData(ownerId);
+  const invoiceNo = String((req.query && (req.query.invoice || req.query.inum)) || '').trim();
+  if (invoiceNo) {
+    const inv = (appData.invoices || []).find(
+      (i) => i.invoiceNumber === invoiceNo || i.id === invoiceNo
+    );
+    if (!inv) return res.status(404).json({ error: 'Invoice not found' });
+    const json = buildEinvoiceJson({
+      invoice: inv,
+      business: businessForInvoice(appData, inv),
+    });
+    const safe = invoiceNo.replace(/[^A-Za-z0-9._-]+/g, '_');
+    return sendAttachment(res, {
+      body: JSON.stringify(json, null, 2),
+      contentType: 'application/json; charset=utf-8',
+      filename: `EInvoice_${safe}.json`,
+    });
+  }
+  const month = parseMonthParam(req.query && req.query.month);
+  const batch = buildEinvoiceBatch({
+    month,
+    invoices: appData.invoices || [],
+    businesses: appData.businesses || [],
+  });
+  const { fp } = monthBounds(month);
+  return sendAttachment(res, {
+    body: JSON.stringify(batch, null, 2),
+    contentType: 'application/json; charset=utf-8',
+    filename: `EInvoice_${fp}.json`,
+  });
+}
+
 async function handleTallyDownload(req, res, decoded, ownerId) {
   const uid = decoded.uid;
   const link = await findLink(getDb(), uid, ownerId);
@@ -318,6 +370,10 @@ exports.apiCa = require('firebase-functions/v2/https').onRequest(
     const tallyMatch = path.match(/\/ca\/clients\/([^/]+)\/tally$/);
     if (req.method === 'GET' && tallyMatch) {
       return handleTallyDownload(req, res, decoded, decodeURIComponent(tallyMatch[1]));
+    }
+    const einvoiceMatch = path.match(/\/ca\/clients\/([^/]+)\/einvoice$/);
+    if (req.method === 'GET' && einvoiceMatch) {
+      return handleEinvoiceDownload(req, res, decoded, decodeURIComponent(einvoiceMatch[1]));
     }
     if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method) && /\/ca\/clients\//.test(path)) {
       return res.status(403).json({ error: 'CA portal is read-only' });

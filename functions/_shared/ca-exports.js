@@ -507,4 +507,5 @@ module.exports = {
   parseMonthParam,
   monthBounds,
   isRegisteredGstin,
+  posOf,
 };

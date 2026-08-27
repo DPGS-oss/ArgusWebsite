@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ArrowLeft, FileJson, FileText, Edit, FileDown } from "lucide-react";
+import { useAuth } from "@/lib/auth-provider";
 import type { BusinessProfile, Invoice } from "@/lib/types";
 import { formatCurrency, formatDate, generateInvoiceHTML } from "@/lib/gst";
 import { saveInvoiceToFile, saveInvoiceAsHTML, saveInvoiceAsPDF, downloadInvoiceFile, downloadInvoiceHTML, downloadInvoicePDF, isUsingFileSystem } from "@/lib/storage";
@@ -16,7 +17,37 @@ type InvoicePreviewProps = {
 };
 
 export function InvoicePreview({ invoice, business, onBack, onEdit, onAddUpi }: InvoicePreviewProps) {
+  const { token, firebaseUser } = useAuth();
   const [savingPDF, setSavingPDF] = useState(false);
+  const [savingEinvoice, setSavingEinvoice] = useState(false);
+
+  async function handleDownloadEinvoice() {
+    if (!token || !firebaseUser) {
+      alert("Sign in with a Business account to download NIC e-invoice JSON.");
+      return;
+    }
+    setSavingEinvoice(true);
+    try {
+      const r = await fetch(
+        `/api/ca/clients/${encodeURIComponent(firebaseUser.uid)}/einvoice?invoice=${encodeURIComponent(invoice.invoiceNumber)}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({}));
+        throw new Error((d as { error?: string }).error || `Download failed (${r.status})`);
+      }
+      const blob = await r.blob();
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `EInvoice_${invoice.invoiceNumber}.json`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Could not download e-invoice JSON.");
+    } finally {
+      setSavingEinvoice(false);
+    }
+  }
 
   async function handleSaveJSON() {
     if (!business) return;
@@ -116,6 +147,9 @@ export function InvoicePreview({ invoice, business, onBack, onEdit, onAddUpi }: 
           </button>
           <button onClick={handleSavePDF} disabled={savingPDF} className="btn-secondary !py-2 disabled:opacity-50">
             <FileDown className="mr-1 h-4 w-4" /> {savingPDF ? "Generating..." : "PDF"}
+          </button>
+          <button onClick={handleDownloadEinvoice} disabled={savingEinvoice} className="btn-secondary !py-2 disabled:opacity-50">
+            <FileJson className="mr-1 h-4 w-4" /> {savingEinvoice ? "Preparing..." : "Download e-invoice JSON"}
           </button>
           <button onClick={handleSaveJSON} className="btn-secondary !py-2">
             <FileJson className="mr-1 h-4 w-4" /> JSON

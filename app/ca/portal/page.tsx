@@ -31,7 +31,7 @@ export default function CaPortalPage() {
   const [tab, setTab] = useState<"invoices" | "purchases" | "expenses" | "khata" | "gst">("invoices");
   const [error, setError] = useState("");
   const [month, setMonth] = useState(currentMonthYm);
-  const [downloading, setDownloading] = useState<"" | "gstr1" | "tally">("");
+  const [downloading, setDownloading] = useState<"" | "gstr1" | "tally" | "einvoice">("");
 
   useEffect(() => {
     if (!token) return;
@@ -75,12 +75,12 @@ export default function CaPortalPage() {
     return [header, ...lines].join("\n");
   }, [books]);
 
-  async function downloadHandoff(kind: "gstr1" | "tally") {
+  async function downloadHandoff(kind: "gstr1" | "tally" | "einvoice") {
     if (!token || !ownerId) return;
     setDownloading(kind);
     setError("");
     try {
-      const path = kind === "gstr1" ? "gstr1" : "tally";
+      const path = kind === "gstr1" ? "gstr1" : kind === "tally" ? "tally" : "einvoice";
       const r = await fetch(
         `/api/ca/clients/${encodeURIComponent(ownerId)}/${path}?month=${encodeURIComponent(month)}`,
         { headers: { Authorization: `Bearer ${token}` } }
@@ -90,7 +90,8 @@ export default function CaPortalPage() {
         throw new Error((d as { error?: string }).error || `Download failed (${r.status})`);
       }
       const blob = await r.blob();
-      const fallback = kind === "gstr1" ? `GSTR1_${month}.json` : `Tally_${month}.xml`;
+      const fallback =
+        kind === "gstr1" ? `GSTR1_${month}.json` : kind === "tally" ? `Tally_${month}.xml` : `EInvoice_${month}.json`;
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
       a.download = filenameFromDisposition(r.headers.get("Content-Disposition"), fallback);
@@ -169,9 +170,9 @@ export default function CaPortalPage() {
           ) : tab === "gst" ? (
             <div>
               <p className="mb-3 text-sm text-slate">
-                Download GSTN offline-tool JSON and TallyPrime XML for this month, generated from the
-                owner’s invoices in the cloud (works if the shop phone is offline). Argus does not file
-                GSTR or push to Tally.
+                Download GSTN offline-tool JSON, TallyPrime XML, and NIC e-invoice JSON for this month,
+                generated from the owner’s invoices in the cloud (works if the shop phone is offline).
+                Argus does not file GSTR, mint IRNs, or push to Tally.
               </p>
               <label className="mb-4 flex items-center gap-2 text-sm text-ink">
                 Month
@@ -196,6 +197,13 @@ export default function CaPortalPage() {
                   onClick={() => downloadHandoff("tally")}
                 >
                   {downloading === "tally" ? "Preparing…" : "Download Tally XML (this month)"}
+                </button>
+                <button
+                  className="btn-outline"
+                  disabled={!ownerId || downloading === "einvoice"}
+                  onClick={() => downloadHandoff("einvoice")}
+                >
+                  {downloading === "einvoice" ? "Preparing…" : "Download e-invoice JSON"}
                 </button>
               </div>
               <p className="mb-2 text-xs text-slate">Optional spreadsheet of all invoices (not GSTN JSON):</p>
