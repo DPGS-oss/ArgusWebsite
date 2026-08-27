@@ -103,10 +103,10 @@ export function AuthModal() {
           ref={closeBtnRef}
           type="button"
           aria-label="Close"
-          className="absolute right-4 top-4 rounded-full p-1 text-slate transition hover:bg-plaster hover:text-ink"
+          className="absolute right-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded-full text-ink transition hover:bg-plaster"
           onClick={() => setShowAuthModal(false)}
         >
-          <X className="h-5 w-5" aria-hidden="true" />
+          <X className="h-5 w-5" strokeWidth={2.25} aria-hidden="true" />
         </button>
         <div className="mb-6 flex gap-2 rounded-full bg-plaster p-1 pr-10">
           {(["login", "register"] as Tab[]).map((value) => (
