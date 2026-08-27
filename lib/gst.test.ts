@@ -310,6 +310,133 @@ describe("historical invoices", () => {
     expect(stateCodeFromPlaceOfSupply("Pondicherry")).toBe("34");
     expect(stateCodeFromPlaceOfSupply("Jammu & Kashmir")).toBe("01");
   });
+
+  it("keeps walk-in IGST when empty party state would otherwise fall back to the seller", () => {
+    // On main, empty party stateCode made "" !== seller → IGST, while POS was often the
+    // seller's state *name*. Falling back party → business.stateCode turns POS into the
+    // seller code and would rewrite IGST → CGST+SGST on an accidental save.
+    const walkIn: Invoice = {
+      id: "old-walkin-igst",
+      invoiceNumber: "INV-2024-0100",
+      type: "tax_invoice",
+      status: "paid",
+      businessId: "biz-1",
+      partyId: "",
+      partyName: "Walk-in",
+      partyGstin: "",
+      partyPhone: "",
+      date: "2024-06-01",
+      dueDate: "2024-06-16",
+      items: [
+        {
+          id: "i1",
+          description: "Counter sale",
+          hsn: "9983",
+          quantity: 1,
+          unit: "NOS",
+          rate: 1000,
+          discount: 0,
+          gstRate: 18,
+          taxableAmount: 1000,
+          cgst: 0,
+          sgst: 0,
+          igst: 180,
+          total: 1180,
+        },
+      ],
+      subtotal: 1000,
+      totalDiscount: 0,
+      totalTaxable: 1000,
+      totalCgst: 0,
+      totalSgst: 0,
+      totalIgst: 180,
+      totalTax: 180,
+      roundOff: 0,
+      grandTotal: 1180,
+      paidAmount: 1180,
+      balanceDue: 0,
+      paymentMode: "Cash",
+      notes: "",
+      terms: "",
+      placeOfSupply: "Maharashtra",
+      isInterState: true,
+      isTotalMode: false,
+      createdAt: "2024-06-01T00:00:00.000Z",
+      updatedAt: "2024-06-01T00:00:00.000Z",
+    };
+
+    const opened = openHistoricalInvoice(walkIn);
+    expect(stateCodeFromPlaceOfSupply(opened.placeOfSupply)).toBe(MH);
+    expect(opened.items[0].igst).toBe(180);
+    expect(opened.items[0].cgst).toBe(0);
+    expect(opened.items[0].sgst).toBe(0);
+    expect(opened.isInterState).toBe(true);
+
+    const rebuildInput = {
+      id: walkIn.id,
+      invoiceNumber: walkIn.invoiceNumber,
+      type: walkIn.type,
+      status: walkIn.status,
+      businessId: walkIn.businessId,
+      sellerGstin: MH_GSTIN,
+      sellerStateCode: MH,
+      partyId: "",
+      partyName: walkIn.partyName,
+      partyGstin: walkIn.partyGstin,
+      partyPhone: walkIn.partyPhone,
+      partyAddress: "Counter",
+      date: walkIn.date,
+      dueDate: walkIn.dueDate,
+      items: walkIn.items,
+      roundOffEnabled: false,
+      paidAmount: walkIn.paidAmount,
+      paymentMode: walkIn.paymentMode,
+      notes: walkIn.notes,
+      terms: walkIn.terms,
+      reverseCharge: false,
+      isTotalMode: false,
+      createdAt: walkIn.createdAt,
+      preserveStoredTax: true,
+      storedIsInterState: true,
+    };
+
+    for (const partyStateCode of ["", MH]) {
+      const rebuilt = buildInvoiceDocument({
+        ...rebuildInput,
+        partyStateCode,
+        placeOfSupply: opened.placeOfSupply,
+        shipToStateCode: stateCodeFromPlaceOfSupply(opened.placeOfSupply) || "",
+      });
+      expect(rebuilt.items[0].igst).toBe(180);
+      expect(rebuilt.items[0].cgst).toBe(0);
+      expect(rebuilt.items[0].sgst).toBe(0);
+      expect(rebuilt.totalIgst).toBe(180);
+      expect(rebuilt.totalCgst).toBe(0);
+      expect(rebuilt.totalSgst).toBe(0);
+      expect(rebuilt.isInterState).toBe(true);
+      expect(stateCodeFromPlaceOfSupply(rebuilt.placeOfSupply)).toBe(MH);
+    }
+
+    const afterRateEdit = buildInvoiceDocument({
+      ...rebuildInput,
+      partyStateCode: MH,
+      placeOfSupply: opened.placeOfSupply,
+      shipToStateCode: MH,
+      items: [
+        {
+          ...walkIn.items[0],
+          quantity: 2,
+          taxableAmount: 1000,
+          igst: 180,
+          total: 1180,
+        },
+      ],
+    });
+    expect(afterRateEdit.isInterState).toBe(true);
+    expect(afterRateEdit.items[0].igst).toBe(360);
+    expect(afterRateEdit.items[0].cgst).toBe(0);
+    expect(afterRateEdit.items[0].sgst).toBe(0);
+  });
 });
 
 describe("GSTR-1 B2B vs B2C", () => {

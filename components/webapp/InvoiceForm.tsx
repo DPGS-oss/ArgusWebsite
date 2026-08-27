@@ -111,7 +111,21 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
 
   const selectedParty = parties.find((p) => p.id === partyId);
   const businessStateCode = business?.stateCode || "";
-  const partyStateCode = selectedParty?.stateCode || businessStateCode;
+  // Hydrating the POS dropdown from a mapped historical name is not a user edit.
+  const originalPosCode = openedInvoice
+    ? stateCodeFromPlaceOfSupply(openedInvoice.placeOfSupply) || ""
+    : "";
+  const originalShipGstin = openedInvoice?.shipToGstin || "";
+  const originalShipAddress = openedInvoice?.shipToAddress || "";
+  const posEdited =
+    !!openedInvoice &&
+    ((shipToStateCode || "") !== originalPosCode ||
+      (shipToGstin || "") !== originalShipGstin ||
+      (shipToAddress || "") !== originalShipAddress);
+  const preserveStoredTax = !!openedInvoice && !posEdited;
+  // Historical walk-ins stored empty party state (treated as IGST on main).
+  // Do not fill that with the seller state or an accidental save rewrites the split.
+  const partyStateCode = selectedParty?.stateCode || (preserveStoredTax ? "" : businessStateCode);
   const partyAddress = selectedParty
     ? formatPartyAddress(selectedParty)
     : "";
@@ -128,7 +142,10 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
     ? resolvePlaceOfSupply(resolvedShip.shipToStateCode, partyStateCode)
     : stateCodeFromPlaceOfSupply(openedInvoice?.placeOfSupply) ||
       resolvePlaceOfSupply(resolvedShip.shipToStateCode, partyStateCode);
-  const interState = isInterState(businessStateCode, placeOfSupply);
+  const computedInterState = isInterState(businessStateCode, placeOfSupply);
+  const interState = preserveStoredTax
+    ? (openedInvoice?.isInterState ?? computedInterState)
+    : computedInterState;
 
   const totals = useMemo(() => {
     if (isTotalMode) {
@@ -364,11 +381,13 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
       partyGstin: billToGstin,
       partyPhone: party?.phone || inlinePartyPhone || "",
       partyAddress: party ? formatPartyAddress(party) : "",
-      partyStateCode: party?.stateCode || business.stateCode || "",
+      partyStateCode: party?.stateCode || (preserveStoredTax ? "" : business.stateCode || ""),
       shipToGstin,
       shipToAddress,
       shipToStateCode,
       placeOfSupply: openedInvoice?.placeOfSupply,
+      preserveStoredTax,
+      storedIsInterState: openedInvoice?.isInterState,
       date,
       dueDate: dueDateVal,
       items: invoiceItems,

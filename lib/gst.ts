@@ -208,6 +208,12 @@ export type BuildInvoiceInput = {
   documentType?: GstDocumentType;
   /** Historical named or coded POS. Used when ship-to is blank so bill-to cannot steal tax. */
   placeOfSupply?: string;
+  /**
+   * Keep stored cgst/sgst/igst and isInterState unless qty/rate/discount/GST% changed.
+   * Used when reopening a historical invoice without the user editing POS / ship-to.
+   */
+  preserveStoredTax?: boolean;
+  storedIsInterState?: boolean;
 };
 
 
@@ -616,14 +622,38 @@ function lineLooksInterState(item: InvoiceItem): boolean {
   return (item.igst || 0) > 0 && (item.cgst || 0) === 0 && (item.sgst || 0) === 0;
 }
 
-function shouldPreserveLineTax(item: InvoiceItem, interState: boolean): boolean {
-  const hasStoredTax =
+function hasStoredLineTax(item: InvoiceItem): boolean {
+  return (
     (item.taxableAmount || 0) !== 0 ||
     (item.cgst || 0) !== 0 ||
     (item.sgst || 0) !== 0 ||
     (item.igst || 0) !== 0 ||
-    (item.total || 0) !== 0;
-  if (!hasStoredTax) return false;
+    (item.total || 0) !== 0
+  );
+}
+
+/** True when stored taxable + tax still match qty/rate/discount/GST%. */
+function lineAmountsMatchInputs(item: InvoiceItem): boolean {
+  const expectedTaxable = round2(item.quantity * item.rate * (1 - (item.discount || 0) / 100));
+  if (round2(item.taxableAmount || 0) !== expectedTaxable) return false;
+  const expectedTax = round2((expectedTaxable * (item.gstRate || 0)) / 100);
+  const storedTax = round2((item.cgst || 0) + (item.sgst || 0) + (item.igst || 0));
+  return storedTax === expectedTax;
+}
+
+function inferInterStateFromItems(items: InvoiceItem[]): boolean | undefined {
+  if (items.some(lineLooksInterState)) return true;
+  if (items.some((item) => (item.cgst || 0) > 0 || (item.sgst || 0) > 0)) return false;
+  return undefined;
+}
+
+function shouldPreserveLineTax(
+  item: InvoiceItem,
+  interState: boolean,
+  preserveStoredTax: boolean
+): boolean {
+  if (!hasStoredLineTax(item)) return false;
+  if (preserveStoredTax) return lineAmountsMatchInputs(item);
   return interState === lineLooksInterState(item);
 }
 
@@ -644,14 +674,22 @@ export function buildInvoiceDocument(input: BuildInvoiceInput): Invoice {
     shipToStateCode: shipState,
   });
   const historicalPos = stateCodeFromPlaceOfSupply(input.placeOfSupply);
-  const placeOfSupply = userSetShipTo
+  const computedPlaceOfSupply = userSetShipTo
     ? resolvePlaceOfSupply(ship.shipToStateCode, billState)
     : historicalPos || resolvePlaceOfSupply(ship.shipToStateCode, billState);
+  // Map a named historical POS to a code, but do not replace it with the seller
+  // state when preserving tax — that fallback is what flipped walk-in IGST.
+  const placeOfSupply = input.preserveStoredTax
+    ? historicalPos || (input.placeOfSupply || "").trim() || computedPlaceOfSupply
+    : computedPlaceOfSupply;
   const sellerCode = stateCodeFromPlaceOfSupply(input.sellerStateCode) || input.sellerStateCode;
-  const interState = isInterState(sellerCode, placeOfSupply);
+  const computedInterState = isInterState(sellerCode, placeOfSupply);
+  const interState = input.preserveStoredTax
+    ? (input.storedIsInterState ?? inferInterStateFromItems(input.items) ?? computedInterState)
+    : computedInterState;
 
   const items = input.items.map((item) => {
-    if (shouldPreserveLineTax(item, interState)) {
+    if (shouldPreserveLineTax(item, interState, !!input.preserveStoredTax)) {
       return {
         ...item,
         uqc: item.uqc || item.unit,
