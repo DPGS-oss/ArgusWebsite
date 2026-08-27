@@ -17,8 +17,54 @@ const BUSINESS_PLAN_KEYS = new Set([
   "business_monthly",
   "business_yearly",
   "business_lifetime",
+  "business_trial",
   "business_plus", // legacy alias
 ]);
+
+/** Start one-time 14-day Business trial (web). */
+const DEVICE_ID_KEY = "argus_device_id";
+
+function getOrCreateDeviceId(): string {
+  if (typeof window === "undefined") return "server_placeholder_device";
+  try {
+    const existing = localStorage.getItem(DEVICE_ID_KEY);
+    if (existing && /^[A-Za-z0-9_-]{16,128}$/.test(existing)) return existing;
+    const id =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? `d_${crypto.randomUUID().replace(/-/g, "")}`
+        : `d_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 14)}`;
+    localStorage.setItem(DEVICE_ID_KEY, id);
+    return id;
+  } catch {
+    return `d_fallback_${Date.now().toString(36)}abcdef`;
+  }
+}
+
+export async function startBusinessTrial(token: string): Promise<{
+  subscription: SubscriptionInfo;
+  message?: string;
+}> {
+  const deviceId = getOrCreateDeviceId();
+  const res = await fetch("/api/trial/start", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      "X-Argus-Device-Id": deviceId,
+    },
+    body: JSON.stringify({ device_id: deviceId }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(
+      typeof data.error === "string" ? data.error : "Could not start free trial",
+    );
+  }
+  return {
+    subscription: data.subscription as SubscriptionInfo,
+    message: typeof data.message === "string" ? data.message : undefined,
+  };
+}
 
 /** Normalize plan names from Firestore / FastAPI / Razorpay. */
 export function normalizePlanKey(plan: string | undefined | null): string {

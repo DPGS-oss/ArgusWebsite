@@ -3,6 +3,7 @@
 import { TrendingUp, FileText, Users, IndianRupee, Clock, CheckCircle2, Receipt, CreditCard, BookOpen, ShoppingCart } from "lucide-react";
 import type { AppData, BusinessProfile, Invoice } from "@/lib/types";
 import { formatCurrency, formatDate } from "@/lib/gst";
+import { AskArgusPanel } from "@/components/webapp/AskArgusPanel";
 
 type DashboardProps = {
   data: AppData;
@@ -97,6 +98,8 @@ export function Dashboard({ data, business, onNavigate, onEditInvoice }: Dashboa
           + New Invoice
         </button>
       </div>
+
+      <AskArgusPanel data={data} />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {stats.map(({ label, value, icon: Icon, color }) => (

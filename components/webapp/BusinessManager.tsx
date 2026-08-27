@@ -136,6 +136,24 @@ export function BusinessManager({ data, onSaved }: BusinessManagerProps) {
             <Field label="Branch" value={editing.bankBranch} onChange={(v) => updateField("bankBranch", v)} />
             <Field label="UPI ID" value={editing.upiId} onChange={(v) => updateField("upiId", v)} />
           </div>
+          {(editing.upiQrPng || editing.upiId) && (
+            <div className="mt-3">
+              <p className="mb-2 text-sm text-silver">UPI barcode (from phone or generated)</p>
+              {editing.upiQrPng ? (
+                <img
+                  alt="UPI QR"
+                  className="h-36 w-36 rounded bg-white p-2"
+                  src={editing.upiQrPng.startsWith("data:") ? editing.upiQrPng : `data:image/png;base64,${editing.upiQrPng}`}
+                />
+              ) : (
+                <img
+                  alt="UPI QR"
+                  className="h-36 w-36 rounded bg-white p-2"
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(`upi://pay?pa=${editing.upiId}&pn=${encodeURIComponent(editing.name || "Argus")}&cu=INR`)}`}
+                />
+              )}
+            </div>
+          )}
         </div>
       </div>
     );

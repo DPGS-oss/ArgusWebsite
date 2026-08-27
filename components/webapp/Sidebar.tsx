@@ -1,7 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import Image from "next/image";
+import { BrandLogo } from "@/components/BrandLogo";
 import {
   LayoutDashboard,
   FileText,
@@ -51,6 +50,7 @@ const menuItems: { view: View; label: string; icon: typeof LayoutDashboard }[] =
   { view: "reports", label: "GSTR Reports", icon: BarChart3 },
   { view: "business", label: "Business", icon: LayoutDashboard },
   { view: "settings", label: "Settings", icon: SettingsIcon },
+  { view: "files", label: "Files", icon: FolderOpen },
 ];
 
 export function Sidebar({ view, onNavigate, onPickFolder, onSync, syncStatus }: SidebarProps) {
@@ -59,11 +59,8 @@ export function Sidebar({ view, onNavigate, onPickFolder, onSync, syncStatus }: 
 
   return (
     <aside className="flex h-screen w-64 flex-col border-r border-bone bg-mist">
-      <div className="flex items-center gap-3 border-b border-bone px-5 py-4">
-        <Link href="/" className="flex items-center gap-3">
-          <Image src="/logo.svg" alt="Argus" width={28} height={28} />
-          <span className="text-lg font-bold text-ink">Argus</span>
-        </Link>
+      <div className="flex h-14 items-center overflow-hidden border-b border-bone px-4">
+        <BrandLogo href="/app/" size={28} showWordmark />
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3 py-4">

@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { BrandLogo } from "./BrandLogo";
 import { useAuth } from "@/lib/auth-provider";
 
 type Tab = "login" | "register";
@@ -69,6 +70,9 @@ export function AuthModal() {
         className="w-full max-w-md rounded-card border border-bone bg-white p-6 shadow-subtle"
         onClick={(event) => event.stopPropagation()}
       >
+        <div className="mb-5 flex justify-center">
+          <BrandLogo href={null} size={32} />
+        </div>
         <div className="mb-6 flex gap-2 rounded-full bg-plaster p-1">
           {(["login", "register"] as Tab[]).map((value) => (
             <button
@@ -103,6 +107,9 @@ export function AuthModal() {
           </svg>
           {loading ? "Signing in..." : "Continue with Google"}
         </button>
+        <p className="mb-4 text-center text-xs text-slate">
+          Popup blocked? We switch to a full-page Google sign-in, or use email below.
+        </p>
 
         <div className="mb-4 flex items-center gap-3">
           <div className="h-px flex-1 bg-bone" />

@@ -11,8 +11,8 @@ type ReportsProps = {
 
 const REPORT_TYPES: { value: GSTRReportType; label: string }[] = [
   { value: "gstr1", label: "GSTR-1 (Outward Supplies)" },
-  { value: "gstr3b", label: "GSTR-3B (Summary Return)" },
-  { value: "gstr2b", label: "GSTR-2B (ITC Available)" },
+  { value: "gstr3b", label: "GSTR-3 / GSTR-3B (Summary Return)" },
+  { value: "gstr2b", label: "GSTR-2 / GSTR-2B (ITC Available)" },
   { value: "gstr4", label: "GSTR-4 (Composition)" },
 ];
 
@@ -34,7 +34,7 @@ export function Reports({ data }: ReportsProps) {
 
   function generate() {
     const { from, to } = getMonthRange(month);
-    const r = generateGSTRReport(invoices, reportType, from, to);
+    const r = generateGSTRReport(invoices, reportType, from, to, data.purchases || []);
     setReport(r);
   }
 

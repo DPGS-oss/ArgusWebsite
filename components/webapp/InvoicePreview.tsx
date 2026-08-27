@@ -2,18 +2,20 @@
 
 import { useState } from "react";
 import { ArrowLeft, FileJson, FileText, Edit, FileDown, MessageCircle } from "lucide-react";
-import type { AppData, BusinessProfile, Invoice } from "@/lib/types";
+import type { BusinessProfile, Invoice, StockItem } from "@/lib/types";
 import { formatCurrency, formatDate, generateInvoiceHTML } from "@/lib/gst";
 import { saveInvoiceToFile, saveInvoiceAsHTML, saveInvoiceAsPDF, downloadInvoiceFile, downloadInvoiceHTML, downloadInvoicePDF, isUsingFileSystem } from "@/lib/storage";
 
 type InvoicePreviewProps = {
   invoice: Invoice;
   business: BusinessProfile | null;
+  stock?: StockItem[];
   onBack: () => void;
   onEdit: (invoice: Invoice) => void;
+  onMarkPaid?: () => void;
 };
 
-export function InvoicePreview({ invoice, business, onBack, onEdit }: InvoicePreviewProps) {
+export function InvoicePreview({ invoice, business, stock = [], onBack, onEdit, onMarkPaid }: InvoicePreviewProps) {
   const [savingPDF, setSavingPDF] = useState(false);
 
   async function handleSaveJSON() {
@@ -133,6 +135,11 @@ _This invoice was generated using Argus GST Billing App_`;
           <h1 className="text-2xl text-starlight">{invoice.invoiceNumber}</h1>
         </div>
         <div className="flex flex-wrap gap-2">
+          {onMarkPaid && invoice.status !== "paid" ? (
+            <button onClick={onMarkPaid} className="btn-primary !py-2">
+              I got it
+            </button>
+          ) : null}
           <button onClick={() => onEdit(invoice)} className="btn-secondary !py-2">
             <Edit className="mr-1 h-4 w-4" /> Edit
           </button>
@@ -214,7 +221,12 @@ _This invoice was generated using Argus GST Billing App_`;
           <tbody>
             {invoice.items.map((item) => (
               <tr key={item.id} className="border-b border-gray-100">
-                <td className="p-2">{item.description}</td>
+                <td className="p-2">
+                  {item.description}
+                  {stock.some((s) => s.id === item.stockItemId || s.name.toLowerCase() === item.description.toLowerCase()) ? (
+                    <div className="text-xs text-orange-700">This bill deducted {item.quantity} from stock</div>
+                  ) : null}
+                </td>
                 <td className="p-2 text-center">{item.hsn}</td>
                 <td className="p-2 text-right">{item.quantity} {item.unit}</td>
                 <td className="p-2 text-right">{formatCurrency(item.rate)}</td>

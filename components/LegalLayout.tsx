@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BrandLogo } from "./BrandLogo";
 
 type LegalLayoutProps = {
   title: string;
@@ -9,12 +10,15 @@ export function LegalLayout({ title, children }: LegalLayoutProps) {
   return (
     <main className="container-page py-16 md:py-24">
       <div className="mx-auto max-w-3xl">
-        <h1 className="mb-8 text-4xl font-normal text-starlight">{title}</h1>
-        <div className="space-y-4 text-silver [&_a]:text-mercury-blue [&_a]:underline">
+        <div className="mb-8">
+          <BrandLogo size={32} />
+        </div>
+        <h1 className="mb-8 text-4xl font-bold tracking-tight text-ink">{title}</h1>
+        <div className="space-y-4 text-slate [&_a]:text-brand-violet [&_a]:underline [&_h2]:text-ink">
           {children}
         </div>
         <p className="mt-10">
-          <Link href="/" className="text-mercury-blue hover:underline">
+          <Link href="/" className="text-brand-violet hover:underline">
             ← Back to home
           </Link>
         </p>

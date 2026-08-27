@@ -2,29 +2,106 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // User data - only the owner can read/write their own document
-    match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
 
-      // App data subcollection - stores synced businesses, invoices, parties, stock, settings
+    // Entitlement / billing / role fields — Admin SDK (Cloud Functions) only.
+    function protectedUserKeys() {
+      return [
+        'subscription',
+        'trial_used',
+        'trial_started_at',
+        'trial_device_id_hash',
+        'trial_ip_hash',
+        'account_type',
+        'role',
+        'razorpay_customer_id',
+        'referral_code',
+        'referred_by',
+        'intro_promo_code',
+        'customer_key',
+        'customer_hash',
+        'admin'
+      ];
+    }
+
+    function noProtectedUserFieldsOnCreate() {
+      return !request.resource.data.keys().hasAny(protectedUserKeys());
+    }
+
+    function noProtectedUserFieldChanges() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(protectedUserKeys());
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      // Profile fields only — never subscription / trial / role via client SDK.
+      allow create: if isOwner(userId) && noProtectedUserFieldsOnCreate();
+      allow update: if isOwner(userId) && noProtectedUserFieldChanges();
+      allow delete: if false;
+
+      // Cloud sync via Functions (Admin SDK) only — enforces Business paywall.
       match /app_data/{dataId} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
+        allow read: if isOwner(userId);
+        allow write: if false;
       }
 
-      // Scan results subcollection - for phone-as-scanner feature
       match /scan_results/{scanId} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
+        allow read, write: if isOwner(userId);
+      }
+
+      match /files/{fileId} {
+        allow read: if isOwner(userId);
+        allow write: if false;
       }
     }
 
-    // Rate limiting collection - only Cloud Functions (Admin SDK) can write
-    // Users cannot directly read or write rate limit data
     match /rate_limits/{userId} {
       allow read, write: if false;
-
       match /{endpoint}/{docId} {
         allow read, write: if false;
       }
+    }
+
+    match /promo_codes/{codeId} {
+      allow read, write: if false;
+    }
+
+    match /promo_redemptions/{redemptionId} {
+      allow read, write: if false;
+    }
+
+    match /payments/{paymentId} {
+      allow read, write: if false;
+    }
+
+    match /system/{docId} {
+      allow read, write: if false;
+    }
+
+    match /links/{linkId} {
+      allow read, write: if false;
+    }
+
+    match /ca_invites/{inviteId} {
+      allow read, write: if false;
+    }
+
+    match /trial_claims/{claimId} {
+      allow read, write: if false;
+    }
+
+    match /ca_shares/{shareId} {
+      allow read, write: if false;
+    }
+
+    match /subscriptions/{docId} {
+      allow read, write: if false;
+    }
+
+    match /deletion_requests/{docId} {
+      allow read, write: if false;
     }
   }
 }

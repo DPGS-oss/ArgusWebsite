@@ -17,8 +17,16 @@ import {
   signOut,
   GoogleAuthProvider,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
 } from "firebase/auth";
 import { getFirebaseAuth, initFirebase } from "./firebase";
+import { isSubscriptionActive, type SubscriptionInfo } from "./subscription";
+import {
+  SUB_CACHE_KEY,
+  parseCachedSubscription,
+  keepSubscriptionOnSyncFailure,
+} from "./entitlement";
 
 export type AppUser = {
   name: string;
@@ -26,9 +34,11 @@ export type AppUser = {
   business_name?: string;
   gstin?: string;
   phone?: string;
-  subscription?: { plan: string; details: string };
+  subscription?: SubscriptionInfo;
   referralCode?: string;
   referredBy?: string;
+  trial_used?: boolean;
+  trial_started_at?: string;
 };
 
 type AuthContextValue = {
@@ -49,18 +59,14 @@ type AuthContextValue = {
   updateLocalUser: (patch: Partial<AppUser>) => void;
 };
 
-const ALLOWED_PLANS = ["business", "business_monthly", "business_yearly", "business_plus"];
+const BUSINESS_ONLY_VIEWS = ["purchases", "expenses", "credit-notes", "recurring", "reports"];
 
 export type PlanLevel = "free" | "business";
 
 export function getPlanLevel(user: AppUser | null): PlanLevel {
-  const plan = user?.subscription?.plan;
-  if (!plan) return "free";
-  if (ALLOWED_PLANS.includes(plan)) return "business";
+  if (isSubscriptionActive(user?.subscription)) return "business";
   return "free";
 }
-
-const BUSINESS_ONLY_VIEWS = ["purchases", "expenses", "credit-notes", "recurring", "reports"];
 
 export function isFeatureUnlocked(view: string, user: AppUser | null): boolean {
   const level = getPlanLevel(user);
@@ -69,10 +75,56 @@ export function isFeatureUnlocked(view: string, user: AppUser | null): boolean {
 }
 
 export function hasValidSubscription(user: AppUser | null): boolean {
-  return getPlanLevel(user) === "business";
+  return isSubscriptionActive(user?.subscription);
+}
+
+function readCachedSubscription(): SubscriptionInfo | undefined {
+  if (typeof window === "undefined") return undefined;
+  try {
+    return parseCachedSubscription(sessionStorage.getItem(SUB_CACHE_KEY)) as SubscriptionInfo | undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function writeCachedSubscription(sub: SubscriptionInfo | undefined) {
+  if (typeof window === "undefined") return;
+  try {
+    if (sub) sessionStorage.setItem(SUB_CACHE_KEY, JSON.stringify(sub));
+    else sessionStorage.removeItem(SUB_CACHE_KEY);
+  } catch {
+    /* ignore quota / private mode */
+  }
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+
+function mapBackendUser(u: Record<string, unknown>): AppUser {
+  const sub = u.subscription as Record<string, unknown> | null | undefined;
+  return {
+    name: String(u.name || ""),
+    email: String(u.email || ""),
+    business_name: u.business_name ? String(u.business_name) : undefined,
+    gstin: u.gstin ? String(u.gstin) : undefined,
+    phone: u.phone ? String(u.phone) : undefined,
+    subscription: sub
+      ? {
+          plan: sub.plan ? String(sub.plan) : undefined,
+          plan_key: String(sub.plan_key ?? sub.plan ?? ""),
+          details: sub.details ? String(sub.details) : undefined,
+          active: sub.active === true,
+          expiry_date:
+            (sub.expiry_date as string | null | undefined) ??
+            (sub.expiryDate as string | null | undefined) ??
+            null,
+        }
+      : undefined,
+    referralCode: u.referral_code ? String(u.referral_code) : undefined,
+    referredBy: u.referred_by ? String(u.referred_by) : undefined,
+    trial_used: u.trial_used === true,
+    trial_started_at: u.trial_started_at ? String(u.trial_started_at) : undefined,
+  };
+}
 
 async function syncUserWithBackend(token: string, name?: string): Promise<AppUser | null> {
   const response = await fetch("/api/auth/sync", {
@@ -88,16 +140,19 @@ async function syncUserWithBackend(token: string, name?: string): Promise<AppUse
   const data = await response.json();
   const u = data.user;
   if (!u) return null;
-  return {
-    name: u.name || "",
-    email: u.email || "",
-    business_name: u.business_name,
-    gstin: u.gstin,
-    phone: u.phone,
-    subscription: u.subscription,
-    referralCode: u.referral_code,
-    referredBy: u.referred_by,
-  } as AppUser;
+  return mapBackendUser(u);
+}
+
+/** Lightweight profile refresh (avoids hourly auth/sync rate limit). */
+async function fetchUserProfile(token: string): Promise<AppUser | null> {
+  const response = await fetch("/api/user/profile", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) return null;
+  const data = await response.json();
+  const u = data.user;
+  if (!u) return null;
+  return mapBackendUser(u);
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -125,6 +180,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
+      getRedirectResult(auth).catch(() => {
+        /* popup-blocked browsers finish Google sign-in via redirect */
+      });
+
       unsubscribe = onAuthStateChanged(auth, async (nextUser) => {
         setFirebaseUser(nextUser);
         if (nextUser) {
@@ -132,18 +191,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setToken(idToken);
           const synced = await syncUserWithBackend(idToken);
           if (synced) {
+            writeCachedSubscription(synced.subscription);
             setUser(synced);
           } else {
-            // Sync failed (e.g. rate limited) — fall back to Firebase user data
-            // so the user isn't incorrectly treated as logged out
-            setUser({
-              name: nextUser.displayName || nextUser.email?.split("@")[0] || "User",
-              email: nextUser.email || "",
+            setUser((prev) => {
+              const cached = keepSubscriptionOnSyncFailure(
+                prev?.subscription ?? readCachedSubscription(),
+                undefined,
+              );
+              return {
+                name: nextUser.displayName || nextUser.email?.split("@")[0] || prev?.name || "User",
+                email: nextUser.email || prev?.email || "",
+                business_name: prev?.business_name,
+                gstin: prev?.gstin,
+                phone: prev?.phone,
+                subscription: cached,
+                referralCode: prev?.referralCode,
+                referredBy: prev?.referredBy,
+              };
             });
           }
         } else {
           setToken(null);
           setUser(null);
+          writeCachedSubscription(undefined);
         }
         setAuthReady(true);
       });
@@ -160,6 +231,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const synced = await syncUserWithBackend(idToken);
     if (!synced) throw new Error("Failed to sync user data");
     setToken(idToken);
+    writeCachedSubscription(synced.subscription);
     setUser(synced);
     setShowAuthModal(false);
   }, []);
@@ -168,11 +240,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const auth = getFirebaseAuth();
     if (!auth) throw new Error("Authentication is not configured yet.");
     const provider = new GoogleAuthProvider();
-    const credential = await signInWithPopup(auth, provider);
+    let credential;
+    try {
+      credential = await signInWithPopup(auth, provider);
+    } catch (err) {
+      const code = err && typeof err === "object" && "code" in err ? String((err as { code?: string }).code) : "";
+      const message = err instanceof Error ? err.message : String(err || "");
+      if (
+        code === "auth/popup-blocked" ||
+        code === "auth/cancelled-popup-request" ||
+        code === "auth/operation-not-supported-in-this-environment" ||
+        /popup|blocked/i.test(`${code} ${message}`)
+      ) {
+        await signInWithRedirect(auth, provider);
+        return;
+      }
+      throw err;
+    }
     const idToken = await credential.user.getIdToken();
     const synced = await syncUserWithBackend(idToken, credential.user.displayName || undefined);
     if (!synced) throw new Error("Failed to sync user data");
     setToken(idToken);
+    writeCachedSubscription(synced.subscription);
     setUser(synced);
     setShowAuthModal(false);
   }, []);
@@ -187,6 +276,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const synced = await syncUserWithBackend(idToken, name);
       if (!synced) throw new Error("Registration succeeded but failed to sync user data");
       setToken(idToken);
+      writeCachedSubscription(synced.subscription);
       setUser(synced);
       setShowAuthModal(false);
     },
@@ -198,14 +288,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (auth) await signOut(auth);
     setToken(null);
     setUser(null);
+    writeCachedSubscription(undefined);
     setShowProfileModal(false);
   }, []);
 
   const refreshProfile = useCallback(async () => {
     if (!firebaseUser) return;
     const idToken = await firebaseUser.getIdToken();
-    const synced = await syncUserWithBackend(idToken);
-    if (synced) setUser(synced);
+    const synced = (await fetchUserProfile(idToken)) || (await syncUserWithBackend(idToken));
+    if (synced) {
+      writeCachedSubscription(synced.subscription);
+      setUser(synced);
+    }
   }, [firebaseUser]);
 
   const updateLocalUser = useCallback((patch: Partial<AppUser>) => {

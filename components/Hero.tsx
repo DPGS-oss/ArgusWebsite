@@ -1,6 +1,8 @@
 "use client";
 
-import { ArrowRight, Menu } from "lucide-react";
+import { useState } from "react";
+import { ArrowRight, Menu, X } from "lucide-react";
+import { BrandLogo } from "./BrandLogo";
 import { ShinyText } from "./ShinyText";
 import { getInitials, useAuth } from "@/lib/auth-provider";
 
@@ -10,15 +12,19 @@ const navLinks = [
   { label: "Pricing", href: "#pricing" },
   { label: "About", href: "#about" },
   { label: "Download", href: "#download" },
-  { label: "Contact", href: "#contact" },
+  { label: "Contact us", href: "#contact" },
 ];
 
 export function Hero() {
   const { user, setShowAuthModal, setShowProfileModal } = useAuth();
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  function closeMobile() {
+    setMobileOpen(false);
+  }
 
   return (
     <section className="relative h-screen w-full overflow-hidden bg-black">
-      {/* Video Background */}
       <video
         autoPlay
         loop
@@ -32,23 +38,13 @@ export function Hero() {
         />
       </video>
 
-      {/* Dark overlay for readability */}
       <div className="absolute inset-0 bg-black/40" />
 
-      {/* Content */}
       <div className="relative z-10 flex h-full flex-col">
-        {/* Navigation Bar */}
         <nav className="w-full px-4 py-4 md:px-6">
           <div className="mx-auto flex max-w-7xl items-center justify-between">
-            {/* Logo */}
-            <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white">
-                <div className="h-3 w-3 rounded-full bg-white" />
-              </div>
-              <span className="text-lg font-semibold text-white">Argus</span>
-            </div>
+            <BrandLogo size={32} priority />
 
-            {/* Desktop Nav Links */}
             <div className="hidden items-center gap-1 rounded-full border border-gray-700 px-2 py-1.5 lg:flex">
               {navLinks.map((link) => (
                 <a
@@ -64,8 +60,13 @@ export function Hero() {
               ))}
             </div>
 
-            {/* Auth buttons */}
             <div className="hidden items-center gap-3 lg:flex">
+              <a
+                href="/app/"
+                className="rounded-full bg-white px-4 py-1.5 text-sm font-semibold text-black transition hover:bg-white/90"
+              >
+                Launch Web App
+              </a>
               {!user ? (
                 <button
                   onClick={() => setShowAuthModal(true)}
@@ -83,40 +84,84 @@ export function Hero() {
               )}
             </div>
 
-            {/* Mobile Hamburger */}
             <button
+              type="button"
               className="text-white/80 transition hover:text-white lg:hidden"
-              aria-label="Toggle menu"
+              aria-label={mobileOpen ? "Close menu" : "Open menu"}
+              aria-expanded={mobileOpen}
+              onClick={() => setMobileOpen((o) => !o)}
             >
-              <Menu className="h-6 w-6" />
+              {mobileOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
             </button>
           </div>
+
+          {mobileOpen ? (
+            <div className="mt-3 rounded-card border border-white/15 bg-black/80 p-4 backdrop-blur lg:hidden">
+              <div className="flex flex-col gap-1">
+                {navLinks.map((link) => (
+                  <a
+                    key={link.label}
+                    href={link.href}
+                    onClick={closeMobile}
+                    className="rounded-full px-3 py-2.5 text-sm text-white/90 hover:bg-white/10"
+                  >
+                    {link.label}
+                  </a>
+                ))}
+              </div>
+              <div className="mt-3 flex flex-col gap-2 border-t border-white/10 pt-3">
+                <a
+                  href="/app/"
+                  onClick={closeMobile}
+                  className="rounded-full bg-white px-4 py-2.5 text-center text-sm font-semibold text-black"
+                >
+                  Launch Web App
+                </a>
+                {!user ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      closeMobile();
+                      setShowAuthModal(true);
+                    }}
+                    className="rounded-full border border-white/30 px-4 py-2.5 text-sm text-white"
+                  >
+                    Sign In
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      closeMobile();
+                      setShowProfileModal(true);
+                    }}
+                    className="rounded-full border border-white/30 px-4 py-2.5 text-sm text-white"
+                  >
+                    Profile
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : null}
         </nav>
 
-        {/* Top Section - Two columns */}
         <div className="mx-auto w-full max-w-7xl px-4 pt-6 md:px-6">
-          <div className="grid gap-4 lg:grid-cols-2">
-            <p className="text-sm text-white/80 md:text-base">
-              GST billing made simple for Indian businesses. Create professional
-              invoices, manage inventory, and file GSTR reports — all in one place.
-            </p>
-            <p className="text-sm text-white/80 lg:text-right md:text-base">
-              10,000+ Businesses. 1M+ Invoices Generated.
-            </p>
-          </div>
+          <p className="max-w-2xl text-sm text-white/80 md:text-base">
+            Books, GST, inventory, and collections for Indian businesses —
+            one login on phone and web.
+          </p>
         </div>
 
-        {/* Hero Center Content */}
         <div className="flex flex-1 flex-col items-center justify-center px-4 text-center">
           <p className="mb-6 text-xs tracking-tight text-white/80 sm:text-sm">
-            GST COMPLIANT BILLING FOR MODERN INDIA
+            COMPLETE ACCOUNTING FOR INDIAN SHOPS
           </p>
 
-          <h1 className="text-5xl font-medium leading-[0.85] tracking-tighter text-white md:text-7xl xl:text-9xl">
-            Billing
+          <h1 className="text-5xl font-medium leading-[0.85] tracking-tighter text-white md:text-7xl xl:text-8xl">
+            Accounting
             <br />
             <ShinyText
-              text="Made Simple."
+              text="Made Clear."
               baseColor="#64CEFB"
               shineColor="#ffffff"
               duration={3}
@@ -124,14 +169,30 @@ export function Hero() {
             />
           </h1>
 
-          {/* CTA Button */}
-          <a
-            href="#pricing"
-            className="group mt-10 inline-flex items-center gap-2 rounded-full bg-black px-6 py-3 text-sm text-white transition hover:bg-gray-900 md:px-8 md:py-4 md:text-base"
-          >
-            Get Started Free
-            <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
-          </a>
+          <p className="mx-auto mt-6 max-w-lg text-sm text-white/75 md:text-base">
+            Bill customers, track stock and dues, prepare GST summaries, and share
+            books with your CA — without juggling five tools. Web app works best
+            in Chrome or Edge.
+          </p>
+
+          <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
+            <a
+              href="/app/"
+              className="group inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-semibold text-black transition hover:bg-white/90 md:px-8 md:py-4 md:text-base"
+            >
+              Start free trial
+              <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
+            </a>
+            <a
+              href="#download"
+              className="group inline-flex items-center gap-2 rounded-full border border-white/40 bg-black/40 px-6 py-3 text-sm text-white transition hover:border-white hover:bg-black/60 md:px-8 md:py-4 md:text-base"
+            >
+              Download App
+            </a>
+          </div>
+          <p className="mt-4 text-xs text-white/60">
+            14-day Business trial on web · Free tier on Android (5 invoices/month)
+          </p>
         </div>
       </div>
     </section>

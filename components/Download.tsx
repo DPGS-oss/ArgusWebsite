@@ -11,7 +11,8 @@ export function Download() {
             Download Argus Today
           </h2>
           <p className="mb-10 text-lg text-slate">
-            Available on Android and Web. Coming soon to iOS.
+            Free on Android to get started. Full books on the web when you subscribe.
+            Web works best in Chrome or Edge on desktop.
           </p>
         </Reveal>
         <Stagger className="flex flex-wrap items-center justify-center gap-4" stagger={0.12}>
@@ -40,7 +41,7 @@ export function Download() {
                 </svg>
               </div>
               <div className="text-left">
-                <span className="block text-xs text-slate">Launch the</span>
+                <span className="block text-xs text-slate">Best on Chrome / Edge</span>
                 <strong className="text-ink">Web App</strong>
               </div>
             </Link>

@@ -2,27 +2,42 @@
   "hosting": {
     "public": "out",
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "redirects": [
+      { "source": "/sitemap", "destination": "/sitemap.xml", "type": 301 },
+      { "source": "/sitemap/", "destination": "/sitemap.xml", "type": 301 },
+      { "source": "/redirect", "destination": "/redirect/", "type": 301 }
+    ],
     "rewrites": [
       { "source": "/api/config", "function": "apiConfig" },
       { "source": "/api/auth/sync", "function": "apiAuthSync" },
       { "source": "/api/auth/plans", "function": "apiAuthPlans" },
       { "source": "/api/user/profile", "function": "apiUserProfile" },
+      { "source": "/api/trial/start", "function": "apiTrialStart" },
+      { "source": "/api/contact", "function": "apiContact" },
       { "source": "/api/payment/create-order", "function": "apiPaymentCreateOrder" },
+      { "source": "/api/payment/create-subscription", "function": "apiPaymentCreateSubscription" },
       { "source": "/api/payment/verify", "function": "apiPaymentVerify" },
+      { "source": "/api/payment/verify-subscription", "function": "apiPaymentVerifySubscription" },
+      { "source": "/api/webhooks/razorpay", "function": "apiRazorpayWebhook" },
       { "source": "/api/promo/validate", "function": "apiPromoValidate" },
       { "source": "/api/promo/seed", "function": "apiPromoSeed" },
+      { "source": "/api/promo/seed-intro", "function": "apiPromoSeedIntro" },
+      { "source": "/api/promo/seed-launch", "function": "apiPromoSeedLaunch" },
       { "source": "/api/promo/self-test", "function": "apiPromoSelfTest" },
       { "source": "/api/account/delete", "function": "apiAccountDelete" },
       { "source": "/api/data/load", "function": "apiDataLoad" },
       { "source": "/api/data/save", "function": "apiDataSave" },
       { "source": "/api/data/scan-result", "function": "apiDataScanResult" },
-      { "source": "/api/ca/**", "function": "apiCa" }
+      { "source": "/api/files", "function": "apiFiles" },
+      { "source": "/api/ca/**", "function": "apiCa" },
+      { "source": "/api/admin/**", "function": "apiAdmin" },
+      { "source": "/api/ask", "function": "apiAsk" }
     ],
     "cleanUrls": true
   },
   "functions": {
     "source": "functions",
-    "runtime": "nodejs20"
+    "runtime": "nodejs22"
   },
   "firestore": {
     "rules": "firestore.rules",

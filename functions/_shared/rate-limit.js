@@ -6,7 +6,17 @@ const RATE_LIMITS = {
   user_profile_put: { windowMs: 60 * 1000, maxCalls: 5 },
   payment_create_order: { windowMs: 60 * 1000, maxCalls: 5 },
   payment_verify: { windowMs: 60 * 1000, maxCalls: 5 },
+  payment_create_subscription: { windowMs: 60 * 1000, maxCalls: 5 },
+  payment_verify_subscription: { windowMs: 60 * 1000, maxCalls: 5 },
+  promo_validate: { windowMs: 60 * 1000, maxCalls: 10 },
   data_save: { windowMs: 60 * 1000, maxCalls: 30 },
+  data_load: { windowMs: 60 * 1000, maxCalls: 30 },
+  contact_form: { windowMs: 60 * 60 * 1000, maxCalls: 5 },
+  account_delete: { windowMs: 60 * 60 * 1000, maxCalls: 3 },
+  admin_portal: { windowMs: 60 * 1000, maxCalls: 30 },
+  ask_argus: { windowMs: 60 * 1000, maxCalls: 10 },
+  ca_portal: { windowMs: 60 * 1000, maxCalls: 60 },
+  trial_start: { windowMs: 60 * 60 * 1000, maxCalls: 3 },
 };
 
 async function checkRateLimit(uid, endpoint) {

@@ -1,0 +1,449 @@
+# Argus User Guide
+
+A plain-English guide to getting the most out of Argus, your GST billing and invoicing app.
+
+---
+
+## Table of Contents
+
+1. [Getting Started](#getting-started)
+2. [The Home Screen](#the-home-screen)
+3. [Creating Invoices](#creating-invoices)
+4. [Quick Bill](#quick-bill)
+5. [Managing Customers](#managing-customers)
+6. [Khata (Credit Book)](#khata-credit-book)
+7. [Purchases](#purchases)
+8. [Inventory](#inventory)
+9. [GST Reports and Filing](#gst-reports-and-filing)
+10. [Reports](#reports)
+11. [Quotations and Estimates](#quotations-and-estimates)
+12. [Expenses](#expenses)
+13. [Credit Notes](#credit-notes)
+14. [Delivery Challans](#delivery-challans)
+15. [Recurring Invoices](#recurring-invoices)
+16. [Invoice Templates](#invoice-templates)
+17. [AI Assist](#ai-assist)
+18. [Working with Your Accountant](#working-with-your-accountant)
+19. [Cloud Sync and Offline Mode](#cloud-sync-and-offline-mode)
+20. [Settings](#settings)
+21. [Subscriptions and Plans](#subscriptions-and-plans)
+22. [Frequently Asked Questions](#frequently-asked-questions)
+
+---
+
+## Getting Started
+
+When you first open Argus, the app will ask you a couple of questions to set things up.
+
+**Choosing your business type:** You will be asked whether you run an "Everyday Shop" or a "GST-registered Business." Pick "Everyday Shop" if you just need simple billing without GST. Pick "GST-registered Business" if you have a GSTIN and need to create GST invoices, file returns, and track inventory.
+
+**Entering your GSTIN:** If you chose GST-registered, the app will ask for your GSTIN. This is your 15-digit Goods and Services Tax Identification Number. It gets printed on every invoice you create, so make sure you type it correctly. You can always change it later in Settings.
+
+**Setting your business name and details:** You can add your business name, address, phone number, and email. These details appear on your invoices, so fill them in to make your invoices look professional.
+
+---
+
+## The Home Screen
+
+The Home screen is the first thing you see when you open the app. Think of it as your dashboard. Here is what you will find:
+
+**Business Health Score:** At the top, you will see a score that gives you a quick sense of how your business is doing. It looks at your sales, payments, and outstanding balances to come up with a simple rating.
+
+**Net GST Position:** This card shows you how much GST you have collected from customers minus how much GST you have paid on purchases. If the number is positive, that is roughly how much you owe the government. If it is negative, you have credit that can be used to offset future tax bills.
+
+**Quick Actions:** Just below the health score, you will see a row of buttons:
+
+- **Quick Bill** -- Opens a fast, no-frills billing screen for when you are in a hurry.
+- **Create Invoice** -- Opens the full invoice creation screen with all options.
+- **Sync** -- Uploads your data to the cloud and downloads any changes from other devices.
+- **WhatsApp (sim)** -- Lets you send invoices and payment reminders through WhatsApp.
+
+**Stats Grid:** Six cards show your key numbers at a glance:
+
+- **Total Sales** -- How much you have sold in total.
+- **GST Collected** -- How much GST you have charged customers.
+- **Invoices** -- How many invoices you have created.
+- **GST Paid (ITC)** -- How much GST you have paid on purchases (this is your input tax credit).
+- **Purchases** -- How many purchase entries you have recorded.
+- **Customers** -- How many customers you have saved.
+
+**Monthly Sales Chart:** A simple bar chart showing your sales month by month. It helps you spot trends at a glance.
+
+**Overdue Invoices:** If any invoices are past their due date and still unpaid, they show up here in red. You can tap on any of them to see the full details.
+
+**Top Customers and Top Products:** These sections show who your biggest customers are and which products bring in the most revenue.
+
+**Recent Invoices and Recent Purchases:** The latest few invoices and purchases you have created, so you can quickly jump back into them.
+
+Pull down on the screen to refresh everything.
+
+---
+
+## Creating Invoices
+
+Creating an invoice is the most common thing you will do in Argus. Here is how it works:
+
+1. **Tap "Create Invoice"** from the Home screen or tap the "+" button on the Billing tab.
+
+2. **Choose a customer:** Start typing a customer name. If the customer is already saved, you can tap on their name to auto-fill their details. If it is a new customer, just type the name -- you can save their details later.
+
+3. **Add items:** For each item you want to bill, fill in:
+   - **Name** -- What the item is (for example, "Cement 50kg bag").
+   - **HSN code** -- The classification code for the product. You can tap the search icon to look up the right code from the built-in catalog. The app can also suggest the correct GST rate based on the HSN code.
+   - **Quantity** -- How many units.
+   - **Unit Price** -- The price per unit.
+   - **GST Rate** -- The tax percentage (5%, 12%, 18%, or 28%). This is usually filled in automatically when you pick an HSN code.
+   - **Discount** -- An optional percentage discount on this item.
+
+4. **Add from Inventory:** If you have set up your inventory, you can tap "Add from Inventory" to pick items directly from your stock. The price, HSN code, and GST rate will be filled in automatically. If selling an item would take your stock below zero, the app will warn you.
+
+5. **Review your items:** As you add items, they appear in a list below with their individual totals. You can swipe or tap to remove any item.
+
+6. **Set dates:** The invoice date defaults to today. You can change it by tapping on it. You can also set a due date -- this is the date by which the customer should pay you.
+
+7. **Add extra details (optional):**
+   - **Place of Supply** -- The state where the sale happened. This is important for inter-state GST. It is usually filled in automatically based on the customer's GSTIN.
+   - **Notes** -- Any extra information you want on the invoice (for example, "Goods once sold will not be taken back").
+   - **Discount** -- An overall discount on the entire invoice.
+   - **Shipping Charges** -- If you are charging for delivery.
+   - **Round Off** -- To round the total to the nearest rupee.
+   - **TCS / TDS** -- If you need to collect or deduct tax at source, turn these on in Settings first.
+
+8. **Save the invoice:** Tap the Save button at the bottom. The app calculates all the totals, GST, and grand total for you.
+
+9. **Share or print:** After saving, you can share the invoice as a PDF through WhatsApp, email, or any other app on your phone. You can also print it directly if your phone is connected to a printer.
+
+---
+
+## Quick Bill
+
+Quick Bill is a stripped-down version of the invoice screen for when you just need to bill someone fast. It skips the extra options and focuses on the essentials: customer name, items, quantity, price, and GST.
+
+You can also scan a barcode to quickly pull up an item from your inventory, which makes billing at the counter very fast.
+
+To use it, tap "Quick Bill" on the Home screen.
+
+---
+
+## Managing Customers
+
+The Customers tab is where you keep track of everyone who buys from you.
+
+**Adding a customer:** Tap the "+" button and fill in their name, phone number, email, address, and GSTIN (if they have one). Having customer details saved makes billing faster and helps you track who owes you what.
+
+**Searching:** Use the search bar at the top to find a customer by name.
+
+**Customer details:** Tap on any customer to see their full details and their transaction history with you.
+
+**Outstanding balances:** Each customer card shows how much they currently owe you, so you know who to follow up with.
+
+---
+
+## Khata (Credit Book)
+
+Khata is a traditional Indian term for a credit ledger. The Khata screen shows you all the customers who currently owe you money, along with the total amount outstanding.
+
+This is useful if you run a shop where customers buy on credit and pay later. You can see the total amount all your customers owe you at the top, and then a list of each customer with their individual balance.
+
+You can search for a specific customer and send them a payment reminder through WhatsApp.
+
+Find Khata in the side menu (tap the three lines in the top-left corner).
+
+---
+
+## Purchases
+
+The Purchases tab lets you record things you buy for your business -- whether that is raw materials, goods for resale, or supplies.
+
+**Creating a purchase entry:** Tap the "New Purchase" button. Fill in the supplier name, the items you bought, their quantities, prices, and GST paid. This is important because the GST you pay on purchases counts as Input Tax Credit (ITC), which reduces the amount of tax you owe.
+
+Just like with invoices, you can add items from your inventory, and the app will calculate the totals and GST automatically.
+
+Purchases are available on the Business plan and only show up if you selected "GST-registered Business" as your business type.
+
+---
+
+## Inventory
+
+The Inventory screen lets you keep track of your stock. You can find it in the side menu.
+
+**Adding items manually:** Tap the "+" button and fill in the item name, category, barcode (optional), HSN code, GST rate, selling price, cost price, and how many you have in stock.
+
+**Scanning barcodes:** Instead of typing in a barcode, you can scan it with your phone's camera. Tap the scan icon at the top of the screen. If the barcode already belongs to an item in your inventory, the app opens that item for editing. If not, it creates a new item with the barcode pre-filled.
+
+**Importing from a CSV file:** If you already have your product list in a spreadsheet, you can import it. Save your file as a CSV, tap the import icon at the top of the Inventory screen, and select the file. The app will bring in all your items at once.
+
+**Exporting to Excel:** You can also export your entire inventory to an Excel file. Tap the export icon at the top of the screen.
+
+**Low stock alerts:** When an item's stock falls to or below its reorder level, the app shows a warning at the top of the screen. Items that are completely out of stock are shown in red. You can tap "View" to see a full list of what needs restocking.
+
+**Reorder suggestions:** The app can suggest items you should reorder based on your sales patterns and current stock levels.
+
+**Stock and invoices:** When you create an invoice and add items from inventory, the app automatically reduces the stock count for those items. This means your inventory stays up to date without any extra work.
+
+Inventory is available on the Business plan.
+
+---
+
+## GST Reports and Filing
+
+The GST tab is your one-stop shop for everything related to GST returns. It is available on the Business plan for GST-registered businesses.
+
+**GST Portal Login:** You can log in to the GST portal directly from the app. This lets you file returns, generate Invoice Reference Numbers (IRN), and create E-Way Bills without leaving the app.
+
+**GSTR-1 (Summary):** This is a summary of all your outward sales (invoices you have issued). The app automatically organizes your invoices into the format needed for GSTR-1 filing, including HSN-wise summaries. You can download this as a CSV file and upload it to the GST portal.
+
+**GSTR-2B (View):** This shows your Input Tax Credit based on your purchases. It helps you verify that the ITC you are claiming matches what your suppliers have reported.
+
+**GSTR-3B:** This is your monthly GST return summary. It shows the total GST you owe after subtracting your input tax credit from the GST you collected. The app calculates this for you based on your invoices and purchases.
+
+**GSTR-4:** If you are registered under the Composition Scheme, this is your quarterly return summary.
+
+**Regular vs. Composition:** You can switch between Regular and Composition regimes in Settings under "GST Configuration." The app will show you the relevant filing options based on your selection.
+
+**Enabling filings:** In Settings, you can choose which GST returns you want to see. Just toggle the ones that apply to your business.
+
+---
+
+## Reports
+
+The Reports screen gives you a deeper look at your business numbers. You can find it in the side menu.
+
+You can download your GSTR-1 data as a CSV file for easy upload to the GST portal. The report includes invoice numbers, customer names, GSTINs, invoice dates, taxable values, GST amounts, and invoice totals -- all organized the way the GST portal expects.
+
+Reports are available on the Business plan for GST-registered businesses.
+
+---
+
+## Quotations and Estimates
+
+Sometimes a customer asks for a price quote before deciding to buy. You can create a quotation that looks just like an invoice but is clearly marked as an estimate.
+
+The process is the same as creating an invoice. Fill in the customer and items, and the app calculates the totals. When the customer confirms the order, you can convert the quotation into a proper invoice.
+
+Find Quotations in the side menu.
+
+---
+
+## Expenses
+
+The Expenses screen lets you record business expenses -- rent, electricity, salaries, supplies, and so on. Keeping track of expenses helps you understand your actual profit and can be useful for tax purposes.
+
+Find Expenses in the side menu. It is available on the Business plan.
+
+---
+
+## Credit Notes
+
+A credit note is issued when you need to give a customer a refund or adjustment -- for example, if goods were returned or there was a pricing error on the original invoice.
+
+The Credit Notes screen lets you create and track these adjustments. Each credit note is linked to a specific invoice and reduces the amount the customer owes you.
+
+Find Credit Notes in the side menu. It is available on the Business plan.
+
+---
+
+## Delivery Challans
+
+A delivery challan is a document that accompanies goods when they are transported. It is not a bill -- it just lists what is being delivered, in what quantity, and where it is going.
+
+You can create delivery challans from the side menu. This is useful if you send goods to customers before billing them, or if you move stock between locations.
+
+---
+
+## Recurring Invoices
+
+If you bill the same customer the same amount on a regular basis -- for example, a monthly maintenance contract -- you can set up a recurring invoice. The app will automatically create a new invoice at the interval you choose (weekly, monthly, or yearly).
+
+You just set up the customer, the items, and the schedule once. The app takes care of the rest.
+
+Find Recurring Invoices in the side menu. It is available on the Business plan.
+
+---
+
+## Invoice Templates
+
+You can customize how your invoices look. In the side menu, tap "Invoice Templates" to:
+
+- **Choose a template style** (such as Classic, Modern, or Minimal).
+- **Pick a color palette** from several preset options (Indigo, Teal, Crimson, Amber, Slate, Graphite).
+- **Set your invoice numbering** -- choose a prefix (like "INV") and the app will automatically number your invoices in sequence.
+- **Add your logo** so it appears on every invoice.
+- **Set default terms and conditions** that appear on all invoices.
+
+You can also access these options from Settings under "Invoice Customization."
+
+---
+
+## AI Assist
+
+Argus has a built-in AI assistant that can help you create invoices faster. You can find it by tapping the AI icon when creating an invoice.
+
+**Three ways to use it:**
+
+- **Type text:** Just type or paste a description of what was sold (for example, "5 bags of cement at 350 each, 10 steel rods at 450 each"). The app will read through it and create an invoice with the items, quantities, and prices filled in automatically.
+
+- **Take a photo:** Snap a picture of a handwritten bill, a printed receipt, or an old invoice. The app will read the text and pull out the items, quantities, and prices for you.
+
+- **Speak:** Tap the microphone button and just describe what was sold out loud. The app transcribes your voice and creates the invoice from what you said. It supports multiple Indian languages including Hindi, Tamil, Telugu, Kannada, Malayalam, Marathi, Gujarati, Punjabi, and Bengali.
+
+After the AI extracts the information, you get a chance to review and edit everything before saving the invoice. This way you are always in control of what goes out.
+
+---
+
+## Working with Your Accountant
+
+If you work with a CA or accountant, Argus makes it easy to share your business data with them securely.
+
+**How it works:**
+
+1. Your accountant needs to have Argus installed on their phone with an Accountant plan.
+2. In Settings, go to "Owner / Accountant Linking." You will get a linking code.
+3. Share this code with your accountant. They enter it in their app to request access.
+4. You approve the request from the "Accountant Access Requests" screen in Settings.
+
+Once linked, your accountant can see your invoices, customers, and GST data from their own phone. Everything is encrypted, so your data stays private. This eliminates the need to send Excel sheets back and forth.
+
+**For accountants:** If you are an accountant, switch your usage type to "Accountant" in Settings. You will see a different set of screens:
+
+- **Businesses** -- A list of all your clients whose data you can access.
+- **Billing** -- Verify and review invoices for your clients.
+- **Filing** -- Help your clients file their GST returns.
+
+---
+
+## Cloud Sync and Offline Mode
+
+One of the best things about Argus is that it works completely offline. You do not need an internet connection to create invoices, add customers, or manage inventory. All your data is stored on your phone.
+
+**Cloud sync** is an optional feature that lets you back up your data and access it from other devices. Here is how it works:
+
+- **Sync Now:** Go to Settings and tap "Sync Now" under Cloud Sync. This uploads your data to the cloud and downloads any changes from other devices.
+- **Upload:** If you just want to push your local data to the cloud (without downloading anything), tap "Upload."
+- **Automatic sync:** The app also syncs automatically in the background when you are online, so you do not have to remember to do it manually.
+- **Sync status:** The Home screen shows a small sync indicator so you can see if your data is up to date.
+
+**When you are offline:** Everything still works. Any invoices or changes you make are saved on your phone. The next time you are online and sync, everything gets uploaded to the cloud.
+
+**Conflicts:** If you made changes on your phone and also on the web app, the app keeps the most recent version. This is called "last write wins" -- whichever change was made most recently is the one that stays.
+
+---
+
+## Settings
+
+The Settings screen is where you customize the app to fit your business. Tap the gear icon in the top-right corner to open it.
+
+**Business Profile:** Set or edit your business name, address, phone, email, and GSTIN. You can also change your business type (Everyday Shop or GST-registered).
+
+**Invoice Customization:** Choose your template style, color palette, and invoice numbering prefix. Add your logo and set default terms and conditions.
+
+**Subscription:** See your current plan and upgrade if needed.
+
+**Appearance:**
+- **Theme:** Choose between Light, Dark, or Auto (follows your phone's setting).
+- **Language:** Switch between English, Hindi, or Hinglish.
+
+**Notifications:**
+- **Credit/Debit Reminders:** Set how often the app should remind you about overdue payments. You can choose from every day up to every 30 days.
+- **Reminder Time:** Pick what time of day you want to receive reminders.
+- **Re-engagement Reminders:** Get a nudge if you have not created an invoice in a while.
+- **WhatsApp Business API:** Connect your WhatsApp Business account through Twilio to send automated invoices and payment reminders to customers.
+
+**Cloud Sync:** See when you last synced, sync manually, or upload your data to the cloud.
+
+**GST Configuration (GST-registered only):**
+- **Regime:** Switch between Regular and Composition.
+- **Enabled Filings:** Choose which GST returns you want to see (GSTR-1, GSTR-2B, GSTR-3B, or GSTR-4).
+- **GSTN API Credentials:** Set up credentials for E-Invoice, E-Way Bill, and GST filing through the GST portal.
+
+**Tax & Inventory:**
+- **TCS:** Turn on Tax Collected at Source fields on invoices.
+- **TDS:** Turn on Tax Deducted at Source fields on invoices.
+- **Stock Valuation Method:** Choose how your stock value is calculated -- FIFO (first in, first out), LIFO (last in, first out), or Average Cost.
+
+**AI & Premium:**
+- **Premium AI:** Turn on cloud-based AI for smarter HSN and GST detection. If this is off, the app uses on-device AI which works without internet.
+- **OpenAI API Key:** Shows whether the advanced AI key is configured.
+
+**Account:**
+- See your signed-in account.
+- Change your usage type (Business Owner or Accountant).
+- Manage accountant linking.
+- Approve or deny accountant access requests.
+- View your legal agreement.
+- Sign out.
+
+**Data & Tools:**
+- **HSN Catalog:** View and update the built-in list of HSN codes and their GST rates.
+- **Sync Offline Data:** Upload any invoices created while offline to the server.
+
+---
+
+## Subscriptions and Plans
+
+Argus offers two plans:
+
+**Free Plan:** Includes basic billing on the mobile app:
+- Create up to 5 invoices
+- Manage customers (limited by free tier)
+- Offline mode on mobile
+
+**Business Plan (₹500/month or ₹5,000/year):** Unlocks the full set of tools on mobile and web:
+- Unlimited invoices
+- Purchases tracking
+- GST reports and filing (GSTR-1, GSTR-2B, GSTR-3B, GSTR-4)
+- Inventory management with barcode scanning
+- Reports and analytics
+- Expenses tracking
+- Credit notes
+- Recurring invoices
+- Premium AI (cloud-based HSN and GST detection)
+- Web app access
+
+**Upgrading:** Go to Settings and tap on your plan, or open the side menu and tap "Upgrade plan." On Android you subscribe through Google Play. On the website you subscribe with Razorpay. Prices match on both.
+
+**Managing your subscription:** You can see your plan details and expiry date in Settings under "Subscription." To cancel a Play Store subscription, use Google Play. For web (Razorpay) subscriptions, contact support@argus.app.
+
+---
+
+## Frequently Asked Questions
+
+**Do I need an internet connection to use Argus?**
+No. Argus works completely offline. You can create invoices, add customers, and manage inventory without any internet. When you do get online, you can sync your data to the cloud as a backup.
+
+**Can I use Argus without a GSTIN?**
+Yes. If you select "Everyday Shop" as your business type, you can create simple invoices without GST. You can switch to GST-registered later in Settings if you get a GSTIN.
+
+**How do I share an invoice with my customer?**
+After creating or opening an invoice, tap the share button. You can send it as a PDF through WhatsApp, email, or any other app on your phone. You can also print it directly.
+
+**What happens if I make a mistake on an invoice?**
+Open the invoice, and you can edit the details. If the invoice has already been shared, make sure to share the updated version with your customer.
+
+**Can I import my existing product list?**
+Yes. Go to the Inventory screen and tap the import icon. Select a CSV file with your product details, and the app will bring them all in at once.
+
+**Is my data safe?**
+Yes. Your data is stored on your phone by default. If you enable cloud sync, your data is encrypted before being uploaded. Even your accountant can only see your data through an encrypted connection that you approve.
+
+**Can I use Argus on multiple devices?**
+Yes. Enable cloud sync in Settings, and your data will be available across devices. The app also has a web version that you can sync with.
+
+**How does the AI Assist work?**
+You can type, speak, or take a photo of a bill, and the app will automatically extract the items, quantities, and prices to create an invoice. You always get to review and edit the results before saving.
+
+**Can my accountant access my data?**
+Yes, but only if you approve it. Go to Settings, set up accountant linking, and approve their access request. Your accountant can then see your invoices and GST data from their own phone.
+
+**What is the difference between Quick Bill and Create Invoice?**
+Quick Bill is a simplified screen for fast billing at the counter. It has just the essentials -- customer name, items, and totals. Create Invoice gives you the full set of options including due dates, discounts, shipping charges, TCS/TDS, and more.
+
+**How do I track who owes me money?**
+The Khata screen shows all customers with outstanding credit balances. The Home screen also shows overdue invoices in a red warning card.
+
+**Can I set up automatic invoices for repeat customers?**
+Yes. Use the Recurring Invoices feature in the side menu. Set up the customer, items, and schedule once, and the app creates new invoices automatically at the interval you choose.
+
+---
+
+If you have any questions or run into issues, you can reach support at **support@argus.app**.

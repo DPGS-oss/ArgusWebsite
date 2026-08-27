@@ -10,44 +10,46 @@ import {
   CheckCircle2,
   Clock,
   Plus,
+  Package,
 } from "lucide-react";
 import { Reveal, Stagger, StaggerItem } from "./Reveal";
 
+/** Sample preview only — illustrative shop data for the marketing mock. */
 const stats = [
-  { label: "Total Revenue", value: "₹4,82,750", icon: IndianRupee, color: "text-emerald-600" },
-  { label: "Invoices Created", value: "127", icon: FileText, color: "text-brand-violet" },
-  { label: "Active Parties", value: "34", icon: Users, color: "text-signal-blue" },
-  { label: "Pending Payments", value: "₹68,400", icon: Clock, color: "text-amber-600" },
+  { label: "Total Revenue", value: "₹1,24,500", icon: IndianRupee, color: "text-emerald-600" },
+  { label: "Invoices Created", value: "147", icon: FileText, color: "text-brand-violet" },
+  { label: "Active Parties", value: "38", icon: Users, color: "text-signal-blue" },
+  { label: "To Collect", value: "₹18,240", icon: Clock, color: "text-amber-600" },
 ];
 
 const recentInvoices = [
-  { number: "INV-2024-001", party: "Acme Corporation", date: "15 Jul 2026", amount: "₹59,900", status: "Paid" },
-  { number: "INV-2024-002", party: "Sharma Traders", date: "14 Jul 2026", amount: "₹23,500", status: "Paid" },
-  { number: "INV-2024-003", party: "Patel Electronics", date: "12 Jul 2026", amount: "₹1,12,200", status: "Unpaid" },
-  { number: "INV-2024-004", party: "Global Imports Ltd", date: "10 Jul 2026", amount: "₹47,800", status: "Paid" },
-  { number: "INV-2024-005", party: "Verma Wholesale", date: "08 Jul 2026", amount: "₹68,400", status: "Unpaid" },
+  { number: "INV-2026-0142", party: "Sharma Traders", date: "22 Aug", amount: "₹12,480", status: "Paid" },
+  { number: "INV-2026-0141", party: "Mehta Retail", date: "21 Aug", amount: "₹8,260", status: "Paid" },
+  { number: "INV-2026-0140", party: "Green Valley Stores", date: "20 Aug", amount: "₹21,150", status: "Unpaid" },
+  { number: "INV-2026-0139", party: "Patel Distributors", date: "19 Aug", amount: "₹5,900", status: "Paid" },
+  { number: "INV-2026-0138", party: "City Mart", date: "18 Aug", amount: "₹3,450", status: "Unpaid" },
 ];
 
 const workflowSteps = [
   {
     icon: Building2,
-    title: "Set Up Your Business",
-    description: "Add your business details, GSTIN, and logo. Get started in under 2 minutes.",
+    title: "Set up your business",
+    description: "GSTIN, logo, and defaults once. Every invoice and report inherits them.",
   },
   {
     icon: Plus,
-    title: "Create Professional Invoices",
-    description: "Generate GST-compliant invoices with auto-calculated tax, discounts, and item details.",
+    title: "Bill & buy in one place",
+    description: "Sales invoices, purchases, and stock updates — tax calculated for you.",
   },
   {
-    icon: Users,
-    title: "Manage Parties & Inventory",
-    description: "Track customers, suppliers, and stock levels. All your business contacts in one place.",
+    icon: Package,
+    title: "Keep books current",
+    description: "Khata, expenses, quotes, and payments stay linked to the same parties.",
   },
   {
     icon: TrendingUp,
-    title: "Analyze Reports & GSTR",
-    description: "View sales reports, profit margins, and generate GSTR-1/GSTR-3B filings instantly.",
+    title: "Close GST with confidence",
+    description: "Sales and ITC views that match how you file — less spreadsheet scramble.",
   },
 ];
 
@@ -55,35 +57,32 @@ export function ProductShowcase() {
   return (
     <section id="workflow" className="bg-white py-20 md:py-28">
       <div className="container-page">
-        {/* Section Header */}
         <Reveal>
           <div className="section-header">
-            <h2>See Argus in Action</h2>
-            <p>A complete GST billing workflow — from invoice creation to tax filing</p>
+            <h2>Your shop, on one dashboard</h2>
+            <p>
+              Sample preview — revenue, invoices, parties, and dues the way Argus surfaces them
+            </p>
           </div>
         </Reveal>
 
-        {/* Dashboard Preview */}
         <Reveal delay={0.1} y={60}>
           <div className="mb-16 overflow-hidden rounded-card border border-bone bg-mist shadow-subtle">
-          {/* Window chrome */}
           <div className="flex items-center gap-2 border-b border-bone bg-plaster px-4 py-3">
             <div className="h-3 w-3 rounded-full bg-red-400" />
             <div className="h-3 w-3 rounded-full bg-amber-400" />
             <div className="h-3 w-3 rounded-full bg-emerald-400" />
-            <span className="ml-3 text-xs font-medium text-slate">argusinvoicing.com / app / dashboard</span>
+            <span className="ml-3 text-xs font-medium text-slate">Argus Web · Sample shop</span>
           </div>
 
-          {/* Dashboard content */}
           <div className="flex">
-            {/* Sidebar mock */}
             <div className="hidden w-48 border-r border-bone bg-mist p-3 md:block">
               <div className="mb-4 flex items-center gap-2">
                 <div className="h-6 w-6 rounded-full bg-brand-violet" />
                 <span className="text-sm font-bold text-ink">Argus</span>
               </div>
               <div className="space-y-1">
-                {["Dashboard", "Invoices", "Parties", "Items", "Reports", "Business", "Settings"].map((item, i) => (
+                {["Dashboard", "Invoices", "Books", "Inventory", "GST", "Khata", "Settings"].map((item, i) => (
                   <div
                     key={item}
                     className={`rounded-full px-3 py-2 text-xs ${
@@ -96,9 +95,7 @@ export function ProductShowcase() {
               </div>
             </div>
 
-            {/* Main content */}
             <div className="flex-1 p-4 md:p-6">
-              {/* Stats grid */}
               <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
                 {stats.map(({ label, value, icon: Icon, color }) => (
                   <div key={label} className="rounded-card border border-bone bg-white p-4">
@@ -111,11 +108,10 @@ export function ProductShowcase() {
                 ))}
               </div>
 
-              {/* Recent invoices table */}
               <div className="rounded-card border border-bone bg-white p-4">
                 <div className="mb-4 flex items-center justify-between">
                   <h3 className="text-sm font-bold text-ink">Recent Invoices</h3>
-                  <button className="flex items-center gap-1 rounded-full bg-brand-violet px-3 py-1.5 text-xs font-bold text-white">
+                  <button type="button" className="flex items-center gap-1 rounded-full bg-brand-violet px-3 py-1.5 text-xs font-bold text-white">
                     <Plus className="h-3 w-3" />
                     New Invoice
                   </button>
@@ -165,7 +161,6 @@ export function ProductShowcase() {
         </div>
         </Reveal>
 
-        {/* Workflow Steps */}
         <Stagger className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4" stagger={0.12}>
           {workflowSteps.map((step, i) => (
             <StaggerItem
@@ -184,14 +179,13 @@ export function ProductShowcase() {
           ))}
         </Stagger>
 
-        {/* CTA */}
         <Reveal delay={0.2}>
           <div className="mt-12 text-center">
             <a
               href="/app/"
               className="group inline-flex items-center gap-2 rounded-full bg-ink px-8 py-4 text-sm font-bold text-white transition hover:bg-brand-violet"
             >
-              Try the Web App Now
+              Open the web app
               <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
             </a>
           </div>

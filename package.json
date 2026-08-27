@@ -6,7 +6,8 @@
     "dev": "next dev --port 3000",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "node --test functions/_shared/app_data.test.js functions/_shared/admin-dashboard.test.js functions/_shared/admin-stats.test.js functions/_shared/subscription-billing.test.js functions/_shared/trial.test.js functions/_shared/crypto-safe.test.js functions/ask.test.js test/website.test.js && node scripts/check-no-secrets.js"
   },
   "dependencies": {
     "@types/qrcode": "^1.5.6",

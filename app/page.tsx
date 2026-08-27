@@ -1,4 +1,5 @@
 import { Hero } from "@/components/Hero";
+import { CapabilityProof } from "@/components/CapabilityProof";
 import { ProductShowcase } from "@/components/ProductShowcase";
 import { Features } from "@/components/Features";
 import { Pricing } from "@/components/Pricing";
@@ -14,6 +15,7 @@ export default function HomePage() {
     <>
       <main>
         <Hero />
+        <CapabilityProof />
         <ProductShowcase />
         <Features />
         <Pricing />

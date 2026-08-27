@@ -2,25 +2,47 @@
 
 import { Building2, Globe, Mail } from "lucide-react";
 import { FormEvent, useState } from "react";
+import { BrandLogo } from "./BrandLogo";
 import { Reveal, Stagger, StaggerItem } from "./Reveal";
 
 export function Contact() {
   const [submitted, setSubmitted] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
     const data = new FormData(form);
-    const email = String(data.get("email") || "");
+    const name = String(data.get("name") || "").trim();
+    const email = String(data.get("email") || "").trim();
+    const subject = String(data.get("subject") || "").trim();
+    const message = String(data.get("message") || "").trim();
 
     if (!email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
-      alert("Please enter a valid email address");
+      setError("Please enter a valid email address");
       return;
     }
 
-    setSubmitted(true);
-    form.reset();
-    alert("Thank you for your message! We will get back to you soon.");
+    setSending(true);
+    setError("");
+    try {
+      const res = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, subject, message }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(typeof body.error === "string" ? body.error : "Could not send message");
+      }
+      setSubmitted(true);
+      form.reset();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not send message");
+    } finally {
+      setSending(false);
+    }
   }
 
   return (
@@ -28,7 +50,10 @@ export function Contact() {
       <div className="container-page">
         <Reveal>
           <div className="section-header">
-            <h2>Get in Touch</h2>
+            <div className="mb-4 flex items-center justify-center gap-3">
+              <BrandLogo href={null} size={32} />
+              <h2 className="!mb-0">Contact us</h2>
+            </div>
             <p>Have questions? We&apos;re here to help</p>
           </div>
         </Reveal>
@@ -38,7 +63,7 @@ export function Contact() {
               {
                 icon: Mail,
                 title: "Email",
-                value: "support@Argusinvoicing.com",
+                value: "support@argusinvoicing.com",
               },
               {
                 icon: Globe,
@@ -68,37 +93,43 @@ export function Contact() {
               onSubmit={handleSubmit}
               className="space-y-4 rounded-card border border-bone bg-mist p-6"
             >
-            <input
-              name="name"
-              type="text"
-              placeholder="Your Name"
-              required
-              className="w-full rounded-input border border-bone bg-white px-4 py-3 text-ink outline-none focus:border-signal-blue"
-            />
-            <input
-              name="email"
-              type="email"
-              placeholder="Your Email"
-              required
-              className="w-full rounded-input border border-bone bg-white px-4 py-3 text-ink outline-none focus:border-signal-blue"
-            />
-            <input
-              name="subject"
-              type="text"
-              placeholder="Subject"
-              required
-              className="w-full rounded-input border border-bone bg-white px-4 py-3 text-ink outline-none focus:border-signal-blue"
-            />
-            <textarea
-              name="message"
-              placeholder="Your Message"
-              rows={5}
-              required
-              className="w-full rounded-input border border-bone bg-white px-4 py-3 text-ink outline-none focus:border-signal-blue"
-            />
-            <button type="submit" className="btn-primary w-full">
-              {submitted ? "Message Sent" : "Send Message"}
-            </button>
+              <input
+                name="name"
+                type="text"
+                placeholder="Your Name"
+                required
+                className="w-full rounded-input border border-bone bg-white px-4 py-3 text-ink outline-none focus:border-signal-blue"
+              />
+              <input
+                name="email"
+                type="email"
+                placeholder="Your Email"
+                required
+                className="w-full rounded-input border border-bone bg-white px-4 py-3 text-ink outline-none focus:border-signal-blue"
+              />
+              <input
+                name="subject"
+                type="text"
+                placeholder="Subject"
+                required
+                className="w-full rounded-input border border-bone bg-white px-4 py-3 text-ink outline-none focus:border-signal-blue"
+              />
+              <textarea
+                name="message"
+                placeholder="Your Message"
+                rows={5}
+                required
+                className="w-full rounded-input border border-bone bg-white px-4 py-3 text-ink outline-none focus:border-signal-blue"
+              />
+              {error ? <p className="text-sm text-red-600">{error}</p> : null}
+              {submitted ? (
+                <p className="text-sm text-emerald-700">
+                  Message sent — we&apos;ll reply to your email soon.
+                </p>
+              ) : null}
+              <button type="submit" className="btn-primary w-full" disabled={sending}>
+                {sending ? "Sending…" : submitted ? "Send another" : "Send Message"}
+              </button>
             </form>
           </Reveal>
         </div>

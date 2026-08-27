@@ -24,6 +24,26 @@ const INVOICE_TYPES: { value: InvoiceType; label: string }[] = [
   { value: "debit_note", label: "Debit Note" },
 ];
 
+function addPeriod(iso: string, frequency: string, interval = 1): string {
+  const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso}T00:00:00` : iso);
+  const start = Number.isNaN(d.getTime()) ? new Date() : d;
+  const n = Math.max(1, interval);
+  switch (frequency) {
+    case "weekly":
+      start.setDate(start.getDate() + 7 * n);
+      break;
+    case "quarterly":
+      start.setMonth(start.getMonth() + 3 * n);
+      break;
+    case "yearly":
+      start.setFullYear(start.getFullYear() + n);
+      break;
+    default:
+      start.setMonth(start.getMonth() + n);
+  }
+  return start.toISOString().slice(0, 10);
+}
+
 function emptyItem(businessStateCode: string, partyStateCode: string, defaultGstRate: GSTRate): InvoiceItem {
   const calc = calculateItem({
     quantity: 1,
@@ -80,6 +100,8 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
   const [inlinePartyPhone, setInlinePartyPhone] = useState(editingInvoice?.partyPhone || "");
   const [showStockPicker, setShowStockPicker] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
+  const [repeatBill, setRepeatBill] = useState(Boolean(editingInvoice?.recurring));
+  const [repeatFrequency, setRepeatFrequency] = useState(editingInvoice?.recurring?.frequency || "monthly");
 
   const selectedParty = parties.find((p) => p.id === partyId);
   const businessStateCode = business?.stateCode || "";
@@ -293,6 +315,14 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
       isTotalMode,
       createdAt: editingInvoice?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+      recurring: repeatBill
+        ? {
+            frequency: repeatFrequency,
+            interval: 1,
+            nextRun: addPeriod(date, repeatFrequency, 1),
+            active: true,
+          }
+        : undefined,
     };
 
     onSave(invoice);
@@ -369,10 +399,13 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
 
           <div className="rounded-lg border border-lead/20 bg-midnight p-5">
             <h2 className="mb-4 text-lg text-starlight">Bill To</h2>
+            <label className="block text-sm text-silver">
+              Party
             <select
               value={partyId}
               onChange={(e) => setPartyId(e.target.value)}
-              className="w-full rounded-btn border border-lead/30 bg-graphite px-4 py-2.5 text-starlight outline-none focus:border-mercury-blue"
+              aria-label="Party"
+              className="mt-1 w-full rounded-btn border border-lead/30 bg-graphite px-4 py-2.5 text-starlight outline-none focus:border-mercury-blue"
             >
               <option value="">No Party (Walk-in customer)</option>
               {parties.map((p) => (
@@ -381,6 +414,7 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
                 </option>
               ))}
             </select>
+            </label>
             {selectedParty ? (
               <div className="mt-3 rounded-lg bg-graphite p-3 text-sm text-silver">
                 <p className="text-starlight">{selectedParty.name}</p>
@@ -668,6 +702,25 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
                 className="mt-1 w-full rounded-btn border border-lead/30 bg-graphite px-4 py-2.5 text-sm text-starlight outline-none focus:border-mercury-blue"
               />
             </label>
+          </div>
+
+          <div className="rounded-lg border border-lead/20 bg-midnight p-5">
+            <label className="flex items-center gap-2 text-sm text-starlight">
+              <input type="checkbox" checked={repeatBill} onChange={(e) => setRepeatBill(e.target.checked)} />
+              Repeat this bill
+            </label>
+            {repeatBill && (
+              <select
+                value={repeatFrequency}
+                onChange={(e) => setRepeatFrequency(e.target.value)}
+                className="mt-3 w-full rounded-btn border border-lead/30 bg-graphite px-4 py-2.5 text-sm text-starlight outline-none focus:border-mercury-blue"
+              >
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+                <option value="quarterly">Quarterly</option>
+                <option value="yearly">Yearly</option>
+              </select>
+            )}
           </div>
         </div>
 

@@ -1,4 +1,4 @@
-import type { GSTRate, HSNCode, Invoice, InvoiceItem, GSTRReport, GSTRSection, GSTRReportType } from "./types";
+import type { GSTRate, HSNCode, Invoice, InvoiceItem, GSTRReport, GSTRSection, GSTRReportType, Purchase } from "./types";
 
 export const HSN_DATABASE: HSNCode[] = [
   { code: "0101", description: "Live animals (bovine)", gstRate: 0, category: "Agriculture" },
@@ -389,24 +389,78 @@ export function isInterState(businessStateCode: string, partyStateCode: string):
   return businessStateCode !== partyStateCode;
 }
 
+export function purchaseToInvoice(purchase: Purchase): Invoice {
+  const items = purchase.items || [];
+  const totalCgst = items.reduce((s, i) => s + (i.cgst || 0), 0);
+  const totalSgst = items.reduce((s, i) => s + (i.sgst || 0), 0);
+  const totalIgst = items.reduce((s, i) => s + (i.igst || 0), 0);
+  const totalTax = purchase.totalGstAmount || totalCgst + totalSgst + totalIgst;
+  const grandTotal = purchase.totalAmount || 0;
+  const totalTaxable =
+    items.reduce((s, i) => s + (i.taxableAmount || 0), 0) || Math.max(0, grandTotal - totalTax);
+  const date = String(purchase.createdAt || "").slice(0, 10);
+  return {
+    id: purchase.id,
+    invoiceNumber: purchase.purchaseNumber || purchase.id,
+    type: "tax_invoice",
+    status: "paid",
+    businessId: "",
+    partyId: purchase.supplierId || "",
+    partyName: purchase.supplierName || "",
+    partyGstin: purchase.supplierGstin || "",
+    partyPhone: "",
+    date,
+    dueDate: date,
+    items,
+    subtotal: totalTaxable,
+    totalDiscount: 0,
+    totalTaxable,
+    totalCgst,
+    totalSgst,
+    totalIgst,
+    totalTax,
+    roundOff: 0,
+    grandTotal,
+    paidAmount: purchase.paidAmount ?? grandTotal,
+    balanceDue: Math.max(0, grandTotal - (purchase.paidAmount ?? grandTotal)),
+    paymentMode: purchase.paymentMethod || "",
+    notes: "",
+    terms: "",
+    placeOfSupply: "",
+    isInterState: totalIgst > 0,
+    isTotalMode: false,
+    createdAt: purchase.createdAt || date,
+    updatedAt: purchase.createdAt || date,
+  };
+}
+
 export function generateGSTRReport(
   invoices: Invoice[],
   type: GSTRReportType,
   fromDate: string,
-  toDate: string
+  toDate: string,
+  purchases: Purchase[] = []
 ): GSTRReport {
   const filtered = invoices.filter((inv) => {
     if (inv.status === "draft" || inv.status === "cancelled") return false;
-    return inv.date >= fromDate && inv.date <= toDate;
+    const d = String(inv.date || inv.createdAt || "").slice(0, 10);
+    return d >= fromDate && d <= toDate;
   });
+  const purchaseInvoices = purchases
+    .filter((p) => {
+      const d = String(p.createdAt || "").slice(0, 10);
+      return d >= fromDate && d <= toDate;
+    })
+    .map(purchaseToInvoice);
 
   const period = `${formatDate(fromDate)} - ${formatDate(toDate)}`;
 
   const sections: GSTRSection[] = [];
 
   if (type === "gstr1") {
-    const b2b = filtered.filter((i) => i.partyGstin && i.partyGstin.length > 0);
-    const b2c = filtered.filter((i) => !i.partyGstin || i.partyGstin.length === 0);
+    const sales = filtered.filter((i) => i.type !== "credit_note");
+    const b2b = sales.filter((i) => i.partyGstin && i.partyGstin.length > 0);
+    const b2c = sales.filter((i) => !i.partyGstin || i.partyGstin.length === 0);
     const creditNotes = filtered.filter((i) => i.type === "credit_note");
 
     sections.push(buildSection("B2B", "Business to Business Invoices", b2b));
@@ -420,25 +474,27 @@ export function generateGSTRReport(
 
     sections.push(buildSection("3.1(a)", "Outward taxable supplies (intra-state)", intraState));
     sections.push(buildSection("3.1(b)", "Outward taxable supplies (inter-state)", interState));
+    sections.push(buildSection("4(A)", "Eligible ITC (from purchases / GSTR-2)", purchaseInvoices));
   } else if (type === "gstr2b") {
-    sections.push(buildSection("ITC", "Input Tax Credit available", filtered));
+    sections.push(buildSection("ITC", "Input Tax Credit available (GSTR-2 / GSTR-2B)", purchaseInvoices));
   } else if (type === "gstr4") {
     sections.push(buildSection("4(a)", "Outward supplies", filtered));
   }
 
-  const totalTaxableValue = filtered.reduce((s, i) => s + i.totalTaxable, 0);
-  const totalCgst = filtered.reduce((s, i) => s + i.totalCgst, 0);
-  const totalSgst = filtered.reduce((s, i) => s + i.totalSgst, 0);
-  const totalIgst = filtered.reduce((s, i) => s + i.totalIgst, 0);
+  const source = type === "gstr2b" ? purchaseInvoices : filtered;
+  const totalTaxableValue = source.reduce((s, i) => s + i.totalTaxable, 0);
+  const totalCgst = source.reduce((s, i) => s + i.totalCgst, 0);
+  const totalSgst = source.reduce((s, i) => s + i.totalSgst, 0);
+  const totalIgst = source.reduce((s, i) => s + i.totalIgst, 0);
   const totalTax = totalCgst + totalSgst + totalIgst;
-  const totalInvoiceValue = filtered.reduce((s, i) => s + i.grandTotal, 0);
+  const totalInvoiceValue = source.reduce((s, i) => s + i.grandTotal, 0);
 
   return {
     type,
     period,
     fromDate,
     toDate,
-    totalInvoices: filtered.length,
+    totalInvoices: source.length,
     totalTaxableValue: round2(totalTaxableValue),
     totalCgst: round2(totalCgst),
     totalSgst: round2(totalSgst),
@@ -446,6 +502,195 @@ export function generateGSTRReport(
     totalTax: round2(totalTax),
     totalInvoiceValue: round2(totalInvoiceValue),
     sections,
+  };
+}
+
+function gstnItem(inv: Invoice) {
+  const rate = inv.items[0]?.gstRate ?? (inv.totalTaxable ? round2((inv.totalTax / inv.totalTaxable) * 100) : 0);
+  return {
+    num: 1,
+    itm_det: {
+      txval: round2(inv.totalTaxable),
+      rt: rate,
+      iamt: round2(inv.totalIgst),
+      camt: round2(inv.totalCgst),
+      samt: round2(inv.totalSgst),
+      csamt: 0,
+    },
+  };
+}
+
+function posCode(inv: Invoice) {
+  const raw = String(inv.placeOfSupply || "").trim();
+  if (/^\d{2}$/.test(raw)) return raw;
+  return "";
+}
+
+/** GSTN-shaped JSON a CA can upload (not a live GSP filing). */
+export function generateGstnJson(
+  invoices: Invoice[],
+  type: GSTRReportType,
+  fromDate: string,
+  toDate: string,
+  purchases: Purchase[] = [],
+  gstin = ""
+): Record<string, unknown> {
+  const filtered = invoices.filter((inv) => {
+    if (inv.status === "draft" || inv.status === "cancelled") return false;
+    const d = String(inv.date || inv.createdAt || "").slice(0, 10);
+    return d >= fromDate && d <= toDate;
+  });
+  const sales = filtered.filter((i) => i.type !== "credit_note");
+  const notes = filtered.filter((i) => i.type === "credit_note");
+  const fp = fromDate.slice(5, 7) + fromDate.slice(0, 4);
+  const inPeriodPurchases = purchases.filter((p) => {
+    const d = String(p.createdAt || "").slice(0, 10);
+    return d >= fromDate && d <= toDate;
+  });
+
+  if (type === "gstr2b") {
+    return {
+      gstin,
+      fp,
+      itc: inPeriodPurchases.map((p) => ({
+        ctin: p.supplierGstin || "",
+        inum: p.purchaseNumber,
+        idt: String(p.createdAt || "").slice(0, 10),
+        val: round2(p.totalAmount),
+        txval: round2(Math.max(0, p.totalAmount - p.totalGstAmount)),
+        iamt: 0,
+        camt: 0,
+        samt: 0,
+        supplier: p.supplierName,
+      })),
+    };
+  }
+
+  if (type === "gstr3b") {
+    const intra = sales.filter((i) => !i.isInterState);
+    const inter = sales.filter((i) => i.isInterState);
+    const sum = (rows: Invoice[], key: keyof Invoice) => round2(rows.reduce((s, i) => s + Number(i[key] || 0), 0));
+    return {
+      gstin,
+      fp,
+      "3.1": {
+        osup_det: {
+          txval: sum(intra, "totalTaxable"),
+          iamt: 0,
+          camt: sum(intra, "totalCgst"),
+          samt: sum(intra, "totalSgst"),
+        },
+        osup_zero: {
+          txval: sum(inter, "totalTaxable"),
+          iamt: sum(inter, "totalIgst"),
+          camt: 0,
+          samt: 0,
+        },
+      },
+      "4": {
+        itc_avl: inPeriodPurchases.map((p) => ({
+          ctin: p.supplierGstin || "",
+          txval: round2(Math.max(0, p.totalAmount - p.totalGstAmount)),
+          iamt: 0,
+          camt: 0,
+          samt: 0,
+        })),
+      },
+    };
+  }
+
+  const b2bSales = sales.filter((i) => i.partyGstin);
+  const b2cSales = sales.filter((i) => !i.partyGstin);
+  const b2cl = b2cSales.filter((i) => i.isInterState && i.grandTotal > 250000);
+  const b2cs = b2cSales.filter((i) => !(i.isInterState && i.grandTotal > 250000));
+
+  const b2bByCtin = new Map<string, Invoice[]>();
+  for (const inv of b2bSales) {
+    const list = b2bByCtin.get(inv.partyGstin) || [];
+    list.push(inv);
+    b2bByCtin.set(inv.partyGstin, list);
+  }
+
+  const hsnMap = new Map<string, { txval: number; iamt: number; camt: number; samt: number; qty: number; val: number }>();
+  for (const inv of sales) {
+    for (const item of inv.items || []) {
+      const key = item.hsn || "NA";
+      const cur = hsnMap.get(key) || { txval: 0, iamt: 0, camt: 0, samt: 0, qty: 0, val: 0 };
+      cur.txval += item.taxableAmount || 0;
+      cur.iamt += item.igst || 0;
+      cur.camt += item.cgst || 0;
+      cur.samt += item.sgst || 0;
+      cur.qty += item.quantity || 0;
+      cur.val += item.total || 0;
+      hsnMap.set(key, cur);
+    }
+  }
+
+  return {
+    gstin,
+    fp,
+    gt: 0,
+    cur_gt: 0,
+    b2b: Array.from(b2bByCtin.entries()).map(([ctin, invs]) => ({
+      ctin,
+      inv: invs.map((inv) => ({
+        inum: inv.invoiceNumber,
+        idt: String(inv.date || "").slice(0, 10),
+        val: round2(inv.grandTotal),
+        pos: posCode(inv),
+        rchrg: "N",
+        inv_typ: "R",
+        itms: [gstnItem(inv)],
+      })),
+    })),
+    b2cl: b2cl.map((inv) => ({
+      pos: posCode(inv),
+      inv: [
+        {
+          inum: inv.invoiceNumber,
+          idt: String(inv.date || "").slice(0, 10),
+          val: round2(inv.grandTotal),
+          itms: [gstnItem(inv)],
+        },
+      ],
+    })),
+    b2cs: b2cs.map((inv) => ({
+      sply_ty: inv.isInterState ? "INTER" : "INTRA",
+      pos: posCode(inv),
+      typ: "OE",
+      txval: round2(inv.totalTaxable),
+      rt: inv.items[0]?.gstRate ?? 0,
+      iamt: round2(inv.totalIgst),
+      camt: round2(inv.totalCgst),
+      samt: round2(inv.totalSgst),
+    })),
+    cdnr: notes.map((inv) => ({
+      ctin: inv.partyGstin || "",
+      nt: [
+        {
+          ntty: "C",
+          nt_num: inv.invoiceNumber,
+          nt_dt: String(inv.date || "").slice(0, 10),
+          val: round2(inv.grandTotal),
+          pos: posCode(inv),
+          itms: [gstnItem(inv)],
+        },
+      ],
+    })),
+    hsn: {
+      data: Array.from(hsnMap.entries()).map(([hsn, row], idx) => ({
+        num: idx + 1,
+        hsn_sc: hsn,
+        desc: "",
+        uqc: "NOS",
+        qty: round2(row.qty),
+        val: round2(row.val),
+        txval: round2(row.txval),
+        iamt: round2(row.iamt),
+        camt: round2(row.camt),
+        samt: round2(row.samt),
+      })),
+    },
   };
 }
 
@@ -600,9 +845,13 @@ export function generateInvoiceHTML(invoice: Invoice, business: {
       ${invoice.balanceDue > 0 ? `<tr><td>Balance Due</td><td style="text-align:right">${formatCurrency(invoice.balanceDue)}</td></tr>` : ""}
     </table>
   </div>
-  ${business.bankName ? `<div class="bank-details">
-    <h4>Bank Details</h4>
-    <p>Bank: ${business.bankName} | Account: ${business.bankAccount} | IFSC: ${business.bankIfsc}<br>UPI: ${business.upiId || "N/A"}</p>
+  ${business.bankName || business.upiId ? `<div class="bank-details">
+    ${business.bankName ? `<h4>Bank Details</h4>
+    <p>Bank: ${business.bankName} | Account: ${business.bankAccount} | IFSC: ${business.bankIfsc}</p>` : ""}
+    ${business.upiId ? `<h4 style="margin-top:10px">Pay via UPI</h4>
+    <p>${business.upiId} · ₹${invoice.grandTotal.toFixed(2)} · ${invoice.invoiceNumber}</p>
+    <img alt="UPI QR" width="140" height="140" src="https://api.qrserver.com/v1/create-qr-code/?size=140x140&amp;data=${encodeURIComponent(`upi://pay?pa=${business.upiId}&pn=${encodeURIComponent(business.name || "Argus")}&am=${invoice.grandTotal.toFixed(2)}&cu=INR&tn=${encodeURIComponent(invoice.invoiceNumber)}`)}" />
+    <p>upi://pay?pa=${business.upiId}&amp;am=${invoice.grandTotal.toFixed(2)}&amp;tn=${invoice.invoiceNumber}</p>` : ""}
   </div>` : ""}
   ${invoice.notes ? `<div class="notes"><p><strong>Notes:</strong> ${invoice.notes}</p></div>` : ""}
   ${invoice.terms ? `<div class="notes"><p><strong>Terms:</strong> ${invoice.terms}</p></div>` : ""}

@@ -21,6 +21,7 @@ export interface BusinessProfile {
   bankIfsc: string;
   bankBranch: string;
   upiId: string;
+  upiQrPng?: string;
   logo?: string;
 }
 
@@ -89,6 +90,7 @@ export interface Invoice {
   isTotalMode: boolean;
   createdAt: string;
   updatedAt: string;
+  recurring?: RecurringConfig;
 }
 
 export interface HSNCode {
@@ -140,6 +142,9 @@ export interface AppSettings {
   defaultTerms: string;
   roundOff: boolean;
   folderName: string;
+  cloudSharing?: boolean;
+  /** When true, Ask Argus may include top party names in the cloud summary. */
+  askArgusIncludeParties?: boolean;
 }
 
 export type GSTRReportType = "gstr1" | "gstr2b" | "gstr3b" | "gstr4";
@@ -224,6 +229,7 @@ export interface Purchase {
   purchaseNumber: string;
   supplierName: string;
   supplierId?: string;
+  supplierGstin?: string;
   createdAt: string;
   totalAmount: number;
   totalGstAmount: number;
@@ -324,7 +330,8 @@ export type View =
   | "khata"
   | "payments"
   | "templates"
-  | "books";
+  | "books"
+  | "files";
 
 export const INDIAN_STATES: { name: string; code: string }[] = [
   { name: "Andhra Pradesh", code: "37" },

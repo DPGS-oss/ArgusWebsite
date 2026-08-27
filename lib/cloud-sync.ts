@@ -90,7 +90,12 @@ export async function syncFromCloud(token: string): Promise<{
 
   let mergedData: AppData;
 
-  if (cloudData.invoices.length > 0 || cloudData.businesses.length > 0) {
+  if (
+    cloudData.invoices.length > 0 ||
+    cloudData.businesses.length > 0 ||
+    (cloudData.stock || []).length > 0 ||
+    (cloudData.khataEntries || []).length > 0
+  ) {
     mergedData = mergeData(localData, cloudData);
   } else {
     mergedData = localData;
@@ -119,7 +124,12 @@ function mergeData(local: AppData, cloud: AppData): AppData {
     stock: mergeById(local.stock, cloud.stock),
     activeBusinessId: cloud.activeBusinessId || local.activeBusinessId,
     invoiceCounter: Math.max(local.invoiceCounter, cloud.invoiceCounter),
-    settings: { ...local.settings, ...cloud.settings },
+    settings: {
+      ...local.settings,
+      ...Object.fromEntries(
+        Object.entries(cloud.settings || {}).filter(([, v]) => v !== undefined && v !== "")
+      ),
+    },
     creditNotes: mergeById(local.creditNotes ?? [], cloud.creditNotes ?? []),
     deliveryChallans: mergeById(local.deliveryChallans ?? [], cloud.deliveryChallans ?? []),
     expenses: mergeById(local.expenses ?? [], cloud.expenses ?? []),

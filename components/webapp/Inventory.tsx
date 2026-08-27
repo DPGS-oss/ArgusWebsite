@@ -133,8 +133,15 @@ export function Inventory({ data, onSaved }: InventoryProps) {
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
+  const low = data.stock.filter((s) => s.minStock > 0 && s.currentStock <= s.minStock);
+
   return (
     <div className="space-y-6">
+      {low.length > 0 && (
+        <div className="rounded-lg border border-orange-300 bg-orange-50 px-4 py-3 text-sm text-orange-900">
+          Low stock: {low.map((s) => `${s.name} (${s.currentStock})`).join(", ")}
+        </div>
+      )}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl text-starlight">Inventory</h1>
         <div className="flex flex-wrap gap-2">

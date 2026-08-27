@@ -1,14 +1,15 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { BrandLogo } from "./BrandLogo";
 import { ProfileDropdown } from "./ProfileDropdown";
 import { useAuth } from "@/lib/auth-provider";
 
 const navLinks = [
   { href: "#features", label: "Features" },
   { href: "#pricing", label: "Pricing" },
+  { href: "/guide/", label: "User Guide" },
   { href: "#about", label: "About" },
   { href: "#contact", label: "Contact" },
 ];
@@ -33,10 +34,7 @@ export function Navbar() {
       }`}
     >
       <div className="container-page flex h-16 items-center justify-between">
-        <Link href="/" className="flex items-center gap-3">
-          <Image src="/logo.svg" alt="Argus Logo" width={36} height={36} />
-          <span className="text-lg font-bold text-ink">Argus</span>
-        </Link>
+        <BrandLogo size={32} priority />
 
         <div
           className={`absolute left-0 right-0 top-16 flex flex-col gap-4 border-b border-bone bg-white p-4 md:static md:flex md:flex-row md:items-center md:border-0 md:bg-transparent md:p-0 ${
@@ -63,8 +61,8 @@ export function Navbar() {
           <a href="#download" className="btn-secondary !py-2">
             Download App
           </a>
-          <Link href="/app/" className="btn-primary !py-2">
-            Open Web App
+          <Link href="/app/" className="btn-primary !py-2" onClick={() => setMobileOpen(false)}>
+            Launch Web App
           </Link>
         </div>
 

@@ -2,38 +2,101 @@
 
 import { useState } from "react";
 import { Plus, Trash2, ShoppingCart } from "lucide-react";
-import type { AppData, Purchase, InvoiceItem } from "@/lib/types";
-import { savePurchase, deletePurchase, generateId } from "@/lib/storage";
+import type { AppData, GSTRate, InvoiceItem, Purchase } from "@/lib/types";
+import { savePurchase, deletePurchase, generateId, loadData } from "@/lib/storage";
+import { persistLedger, postPurchaseLedger } from "@/lib/books";
+import { round2 } from "@/lib/gst";
 
 type Props = {
   data: AppData;
   onSaved: () => void;
 };
 
+const GST_RATES: GSTRate[] = [0, 3, 5, 12, 18, 28];
+const PAYMENT_METHODS = ["Cash", "UPI", "Bank Transfer", "Cheque", "Card", "Credit"];
+
+function todayIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function splitInclusive(total: number, gstRate: GSTRate) {
+  const taxable = round2(total / (1 + gstRate / 100));
+  const gst = round2(total - taxable);
+  return { taxable, gst, total: round2(total) };
+}
+
 export function Purchases({ data, onSaved }: Props) {
   const [showForm, setShowForm] = useState(false);
   const [supplierName, setSupplierName] = useState("");
-  const [items, setItems] = useState<InvoiceItem[]>([]);
+  const [description, setDescription] = useState("");
+  const [amount, setAmount] = useState(0);
+  const [gstRate, setGstRate] = useState<GSTRate>(data.settings.defaultGstRate || 18);
+  const [date, setDate] = useState(todayIso());
+  const [paymentMethod, setPaymentMethod] = useState("Cash");
+  const [paidAmount, setPaidAmount] = useState(0);
+  const [paidTouched, setPaidTouched] = useState(false);
 
   const purchases = data.purchases ?? [];
+  const suppliers = data.parties.filter((p) => p.type === "supplier");
+
+  function resetForm() {
+    setShowForm(false);
+    setSupplierName("");
+    setDescription("");
+    setAmount(0);
+    setGstRate(data.settings.defaultGstRate || 18);
+    setDate(todayIso());
+    setPaymentMethod("Cash");
+    setPaidAmount(0);
+    setPaidTouched(false);
+  }
 
   function handleSave() {
-    if (!supplierName.trim()) return;
+    if (!supplierName.trim()) {
+      alert("Enter a supplier name.");
+      return;
+    }
+    if (amount <= 0) {
+      alert("Enter a purchase amount.");
+      return;
+    }
+    const split = splitInclusive(amount, gstRate);
+    const isCredit = paymentMethod === "Credit";
+    const paid = isCredit ? 0 : paidTouched ? Math.min(paidAmount, amount) : amount;
     const now = new Date().toISOString();
+    const item: InvoiceItem = {
+      id: generateId(),
+      description: description.trim() || "Purchase",
+      hsn: "",
+      quantity: 1,
+      unit: "NOS",
+      rate: split.taxable,
+      discount: 0,
+      gstRate,
+      taxableAmount: split.taxable,
+      cgst: round2(split.gst / 2),
+      sgst: round2(split.gst / 2),
+      igst: 0,
+      total: split.total,
+    };
+    const supplier = data.parties.find((p) => p.name.toLowerCase() === supplierName.trim().toLowerCase());
     const p: Purchase = {
       id: generateId(),
       purchaseNumber: `PUR-${Date.now()}`,
       supplierName: supplierName.trim(),
-      createdAt: now,
-      totalAmount: items.reduce((s, i) => s + i.total, 0),
-      totalGstAmount: items.reduce((s, i) => s + i.cgst + i.sgst + i.igst, 0),
-      items,
+      supplierId: supplier?.id,
+      supplierGstin: supplier?.gstin,
+      createdAt: date ? `${date}T00:00:00.000Z` : now,
+      totalAmount: split.total,
+      totalGstAmount: split.gst,
+      items: [item],
+      paymentMethod,
+      paidAmount: paid,
     };
     savePurchase(p);
+    persistLedger(postPurchaseLedger(loadData(), p));
     onSaved();
-    setShowForm(false);
-    setSupplierName("");
-    setItems([]);
+    resetForm();
   }
 
   function handleDelete(id: string) {
@@ -73,13 +136,112 @@ export function Purchases({ data, onSaved }: Props) {
       {showForm && (
         <div className="mb-6 rounded-2xl border border-bone bg-white p-6">
           <h2 className="mb-4 text-lg font-semibold text-ink">New Purchase</h2>
-          <div>
-            <label className="mb-1 block text-sm text-slate">Supplier Name</label>
-            <input type="text" value={supplierName} onChange={(e) => setSupplierName(e.target.value)} className="input-field" placeholder="Supplier name" />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm text-slate">Supplier Name</label>
+              <input
+                list="purchase-suppliers"
+                type="text"
+                value={supplierName}
+                onChange={(e) => setSupplierName(e.target.value)}
+                className="input-field"
+                placeholder="Supplier name"
+              />
+              <datalist id="purchase-suppliers">
+                {suppliers.map((s) => (
+                  <option key={s.id} value={s.name} />
+                ))}
+              </datalist>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm text-slate">Amount (₹, incl. GST)</label>
+              <input
+                type="number"
+                min={0}
+                value={amount || ""}
+                onChange={(e) => {
+                  const next = parseFloat(e.target.value) || 0;
+                  setAmount(next);
+                  if (!paidTouched && paymentMethod !== "Credit") setPaidAmount(next);
+                }}
+                className="input-field"
+                placeholder="0"
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="mb-1 block text-sm text-slate">What did you buy?</label>
+              <input
+                type="text"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                className="input-field"
+                placeholder="Stock, goods, materials…"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm text-slate">GST %</label>
+              <select
+                value={gstRate}
+                onChange={(e) => setGstRate(Number(e.target.value) as GSTRate)}
+                className="input-field"
+              >
+                {GST_RATES.map((r) => (
+                  <option key={r} value={r}>
+                    {r}%
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm text-slate">Date</label>
+              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="input-field" />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm text-slate">Payment</label>
+              <select
+                value={paymentMethod}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setPaymentMethod(next);
+                  if (next === "Credit") {
+                    setPaidAmount(0);
+                    setPaidTouched(true);
+                  } else if (!paidTouched) {
+                    setPaidAmount(amount);
+                  }
+                }}
+                className="input-field"
+              >
+                {PAYMENT_METHODS.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {paymentMethod !== "Credit" && (
+              <div>
+                <label className="mb-1 block text-sm text-slate">Paid now (₹)</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={paidAmount || ""}
+                  onChange={(e) => {
+                    setPaidTouched(true);
+                    setPaidAmount(parseFloat(e.target.value) || 0);
+                  }}
+                  className="input-field"
+                />
+              </div>
+            )}
           </div>
           <div className="mt-4 flex gap-2">
-            <button onClick={handleSave} className="btn-primary">Save</button>
-            <button onClick={() => setShowForm(false)} className="btn-secondary">Cancel</button>
+            <button onClick={handleSave} className="btn-primary">
+              Save
+            </button>
+            <button onClick={resetForm} className="btn-secondary">
+              Cancel
+            </button>
           </div>
         </div>
       )}
@@ -94,9 +256,15 @@ export function Purchases({ data, onSaved }: Props) {
           {purchases.map((p) => (
             <div key={p.id} className="flex items-center justify-between rounded-xl border border-bone bg-white p-4">
               <div>
-                <div className="font-semibold text-ink">{p.purchaseNumber}</div>
-                <div className="text-sm text-slate">{p.supplierName} · {p.items.length} items</div>
-                <div className="text-xs text-ash">{new Date(p.createdAt).toLocaleDateString()}</div>
+                <div className="font-semibold text-ink">{p.supplierName}</div>
+                <div className="text-sm text-slate">
+                  {p.purchaseNumber}
+                  {p.items[0]?.description ? ` · ${p.items[0].description}` : ""}
+                </div>
+                <div className="text-xs text-ash">
+                  {new Date(p.createdAt).toLocaleDateString()}
+                  {p.paymentMethod ? ` · ${p.paymentMethod}` : ""}
+                </div>
               </div>
               <div className="flex items-center gap-4">
                 <div className="text-right">

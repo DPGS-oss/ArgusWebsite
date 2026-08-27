@@ -1,8 +1,13 @@
 node_modules/
 .next/
 out/
-.env*.local
-.env
+.env*
+!.env.example
+functions/.env.local
+functions/.env
 .firebase/
 .DS_Store
 *.log
+functions/scripts/promo-codes-*.csv
+**/secrets.json
+**/*service_account*.json

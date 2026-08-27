@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { Plus, Trash2, CreditCard } from "lucide-react";
 import type { AppData, Payment } from "@/lib/types";
-import { savePayment, deletePayment, generateId } from "@/lib/storage";
+import { deletePayment, generateId } from "@/lib/storage";
+import { applyPaymentToInvoice, persistLedger } from "@/lib/books";
 
 type Props = {
   data: AppData;
@@ -32,7 +33,7 @@ export function Payments({ data, onSaved }: Props) {
       date,
       note: note.trim() || undefined,
     };
-    savePayment(p);
+    persistLedger(applyPaymentToInvoice(data, p));
     onSaved();
     setShowForm(false);
     setInvoiceId("");

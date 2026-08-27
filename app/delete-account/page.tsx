@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { useAuth } from "@/lib/auth-provider";
+import { BrandLogo } from "@/components/BrandLogo";
 import Link from "next/link";
 
 export default function DeleteAccountPage() {
@@ -88,6 +89,9 @@ export default function DeleteAccountPage() {
   return (
     <main className="container-page py-16 md:py-24">
       <div className="mx-auto max-w-2xl">
+        <div className="mb-8">
+          <BrandLogo size={32} />
+        </div>
         <h1 className="mb-8 text-4xl font-normal text-starlight">
           Account &amp; Data Deletion
         </h1>

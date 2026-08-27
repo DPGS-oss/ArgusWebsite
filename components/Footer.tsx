@@ -1,4 +1,3 @@
-import Image from "next/image";
 import Link from "next/link";
 import { Reveal, Stagger, StaggerItem } from "./Reveal";
 
@@ -10,9 +9,9 @@ export function Footer() {
       <div className="container-page">
         <Stagger className="grid gap-10 md:grid-cols-2 lg:grid-cols-4" stagger={0.1}>
           <StaggerItem>
-            <Image src="/logo.svg" alt="Argus Logo" width={40} height={40} className="mb-4" />
+            <h3 className="mb-4 text-lg font-bold text-ink">Argus</h3>
             <p className="text-sm text-slate">
-              GST billing made simple for Indian businesses.
+              Accounting, GST, and collections for Indian shops — phone and web.
             </p>
           </StaggerItem>
           <StaggerItem>
@@ -20,7 +19,11 @@ export function Footer() {
             <div className="flex flex-col gap-2 text-sm text-slate">
               <a href="#features">Features</a>
               <a href="#pricing">Pricing</a>
+              <Link href="/gst-billing-software-india/">GST billing software</Link>
+              <Link href="/gstr-1-filing-tool/">GSTR-1 summaries</Link>
+              <Link href="/guide/">User Guide</Link>
               <a href="#download">Download</a>
+              <Link href="/app/">Launch Web App</Link>
             </div>
           </StaggerItem>
           <StaggerItem>

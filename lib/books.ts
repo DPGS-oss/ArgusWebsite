@@ -73,6 +73,25 @@ export function postInvoiceLedger(data: AppData, invoice: Invoice): AppData {
   return { ...data, khataEntries: next };
 }
 
+export function applyPaymentToInvoice(data: AppData, payment: Payment): AppData {
+  const invoices = data.invoices.map((inv) => {
+    if (inv.id !== payment.invoiceId) return inv;
+    const paid = (inv.paidAmount || 0) + payment.amount;
+    const balance = Math.max(0, inv.grandTotal - paid);
+    return {
+      ...inv,
+      paidAmount: paid,
+      balanceDue: balance,
+      status: balance <= 0.009 ? "paid" : inv.status === "draft" ? "unpaid" : inv.status,
+      paymentMode: payment.method,
+    };
+  });
+  const inv = invoices.find((i) => i.id === payment.invoiceId);
+  let next = { ...data, invoices, payments: [...(data.payments || []), payment] };
+  if (inv) next = postPaymentLedger(next, payment, inv.partyName, inv.partyId);
+  return next;
+}
+
 export function postPaymentLedger(data: AppData, payment: Payment, partyName: string, partyId: string): AppData {
   const existing = (data.khataEntries || []).filter((e) => e.sourceId !== payment.id);
   const acct = methodAccount(payment.method);
@@ -108,14 +127,29 @@ export function postPaymentLedger(data: AppData, payment: Payment, partyName: st
 
 export function postPurchaseLedger(data: AppData, purchase: Purchase): AppData {
   const existing = (data.khataEntries || []).filter((e) => e.sourceId !== purchase.id);
-  return {
-    ...data,
-    khataEntries: [
-      ...existing,
+  const paid = Math.min(purchase.paidAmount || 0, purchase.totalAmount);
+  const due = Math.max(0, round2(purchase.totalAmount - paid));
+  const next = [...existing];
+
+  next.push(
+    line({
+      customerId: "",
+      customerName: "Purchases",
+      amount: purchase.totalAmount,
+      description: `Purchase ${purchase.purchaseNumber}`,
+      isCredit: false,
+      accountType: "purchase",
+      sourceType: "purchase",
+      sourceId: purchase.id,
+    }),
+  );
+
+  if (due > 0) {
+    next.push(
       line({
         customerId: purchase.supplierId || "",
         customerName: purchase.supplierName,
-        amount: purchase.totalAmount,
+        amount: due,
         description: `Purchase ${purchase.purchaseNumber}`,
         isCredit: true,
         accountType: "party",
@@ -123,8 +157,27 @@ export function postPurchaseLedger(data: AppData, purchase: Purchase): AppData {
         sourceType: "purchase",
         sourceId: purchase.id,
       }),
-    ],
-  };
+    );
+  }
+
+  if (paid > 0) {
+    const acct = methodAccount(purchase.paymentMethod);
+    next.push(
+      line({
+        customerId: "",
+        customerName: acct === "bank" ? "Bank" : "Cash",
+        amount: paid,
+        description: `Paid ${purchase.purchaseNumber} (${purchase.paymentMethod || "cash"})`,
+        isCredit: false,
+        accountType: acct,
+        paymentMethod: purchase.paymentMethod,
+        sourceType: "purchase",
+        sourceId: purchase.id,
+      }),
+    );
+  }
+
+  return { ...data, khataEntries: next };
 }
 
 export function postExpenseLedger(data: AppData, expense: Expense): AppData {
@@ -196,6 +249,50 @@ export function profitAndLoss(data: AppData) {
 
 function round2(n: number) {
   return Math.round(n * 100) / 100;
+}
+
+export function postManualLedger(
+  data: AppData,
+  opts: {
+    accountType: "party" | "cash" | "bank";
+    name: string;
+    amount: number;
+    isCredit: boolean;
+    description: string;
+    partyKind?: "customer" | "supplier";
+    counterpart?: "cash" | "bank";
+  },
+): AppData {
+  const sourceId = generateId();
+  const entries = [...(data.khataEntries || [])];
+  entries.push(
+    line({
+      customerId: "",
+      customerName: opts.name,
+      amount: opts.amount,
+      description: opts.description,
+      isCredit: opts.isCredit,
+      accountType: opts.accountType,
+      partyKind: opts.partyKind,
+      sourceType: "manual",
+      sourceId,
+    }),
+  );
+  if (opts.counterpart && opts.accountType === "party") {
+    entries.push(
+      line({
+        customerId: "",
+        customerName: opts.counterpart === "bank" ? "Bank" : "Cash",
+        amount: opts.amount,
+        description: opts.description,
+        isCredit: !opts.isCredit,
+        accountType: opts.counterpart,
+        sourceType: "manual",
+        sourceId,
+      }),
+    );
+  }
+  return { ...data, khataEntries: entries };
 }
 
 export function persistLedger(next: AppData) {

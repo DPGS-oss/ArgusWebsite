@@ -1,57 +1,63 @@
 import {
   BarChart3,
-  Bot,
+  BookOpen,
   FileText,
   IndianRupee,
-  Lock,
-  MessageCircle,
-  Mic,
-  Smartphone,
+  Package,
+  Users,
+  Wallet,
+  Workflow,
 } from "lucide-react";
 import { Reveal, Stagger, StaggerItem } from "./Reveal";
 
 const features = [
   {
-    icon: Smartphone,
-    title: "100% Offline-First",
+    icon: BookOpen,
+    title: "Complete shop books",
     description:
-      "Works without internet. Create invoices anywhere, anytime. Sync when you're online.",
-  },
-  {
-    icon: Lock,
-    title: "End-to-End Encryption",
-    description:
-      "Share data securely with your accountant using military-grade encryption.",
+      "Sales, purchases, expenses, credit notes, and challans stay in one ledger — not scattered across notebooks and WhatsApp.",
   },
   {
     icon: FileText,
-    title: "GSTR Reports",
-    description: "Generate GSTR-1, GSTR-2B, GSTR-3B, and GSTR-4 reports instantly.",
-  },
-  {
-    icon: Bot,
-    title: "AI HSN Suggestions",
-    description: "Auto-suggest HSN codes using AI. Save time and ensure compliance.",
-  },
-  {
-    icon: MessageCircle,
-    title: "WhatsApp Integration",
-    description: "Share invoices via WhatsApp deep links (Business API coming soon).",
-  },
-  {
-    icon: Mic,
-    title: "Voice Input",
-    description: "Create invoices using voice. Faster than typing, hands-free operation.",
+    title: "GST-compliant billing",
+    description:
+      "Professional tax invoices with auto CGST/SGST/IGST, HSN, and round-off. Ready for everyday B2B and B2C work.",
   },
   {
     icon: BarChart3,
-    title: "Multi-GST Support",
-    description: "Manage multiple GSTINs for your businesses. Up to 5 per account.",
+    title: "Filing-ready GST views",
+    description:
+      "Turn daily invoices into GSTR-1, GSTR-2B, and GSTR-3B style summaries so month-end is review, not reconstruction.",
+  },
+  {
+    icon: Package,
+    title: "Inventory that follows sales",
+    description:
+      "Stock moves when you bill. Know what is low before a customer walks out empty-handed.",
+  },
+  {
+    icon: Wallet,
+    title: "Khata & collections",
+    description:
+      "Track who owes you, record payments, and keep party balances clear without a separate notebook.",
+  },
+  {
+    icon: Users,
+    title: "CA collaboration",
+    description:
+      "Invite your accountant to a free read-only portal. They see books; you keep control of billing.",
+  },
+  {
+    icon: Workflow,
+    title: "Quotes to cash",
+    description:
+      "Quotations, recurring invoices, delivery challans, and UPI collection links — one path from estimate to paid.",
   },
   {
     icon: IndianRupee,
-    title: "Affordable Pricing",
-    description: "One-time purchase or subscription. No hidden fees, no ads.",
+    title: "Fair pricing that scales",
+    description:
+      "Start free on the phone. Unlock the full web suite from ₹500/month — no ads, no surprise seats.",
   },
 ];
 
@@ -61,8 +67,10 @@ export function Features() {
       <div className="container-page">
         <Reveal>
           <div className="section-header">
-            <h2>Powerful Features</h2>
-            <p>Everything you need to manage your billing efficiently</p>
+            <h2>Everything a shop needs</h2>
+            <p>
+              Argus is a full accounting workspace — billing is just the first step
+            </p>
           </div>
         </Reveal>
         <Stagger className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4" stagger={0.08}>

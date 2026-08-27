@@ -27,6 +27,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   defaultTerms: "Goods once sold will not be taken back.",
   roundOff: true,
   folderName: DEFAULT_INVOICE_DIR,
+  cloudSharing: undefined,
 };
 
 export function getDefaultData(): AppData {
@@ -54,36 +55,206 @@ type DirHandle = FileSystemDirectoryHandle & {
   queryPermission?: (opts: { mode: string }) => Promise<"granted" | "denied">;
 };
 
+const IDB_NAME = "argus-web";
+const IDB_VERSION = 1;
+const IDB_STORE = "kv";
+const BOOKS_FILENAME = "argus-books.json";
+
 let dirHandle: DirHandle | null = null;
 let useFileSystem = false;
+let memoryCache: AppData | null = null;
+let storageReady = false;
+let initPromise: Promise<void> | null = null;
+let persistTimer: ReturnType<typeof setTimeout> | null = null;
+
+function openIdb(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_NAME, IDB_VERSION);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(IDB_STORE)) {
+        db.createObjectStore(IDB_STORE);
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error ?? new Error("IndexedDB open failed"));
+  });
+}
+
+async function idbGet<T>(key: string): Promise<T | undefined> {
+  const db = await openIdb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, "readonly");
+    const req = tx.objectStore(IDB_STORE).get(key);
+    req.onsuccess = () => resolve(req.result as T | undefined);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function idbSet(key: string, value: unknown): Promise<void> {
+  const db = await openIdb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, "readwrite");
+    tx.objectStore(IDB_STORE).put(value, key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+function readLegacyLocalStorage(): AppData | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<AppData>;
+    return { ...getDefaultData(), ...parsed };
+  } catch {
+    return null;
+  }
+}
+
+/** Call once on web app boot before relying on loadData/saveData. */
+export async function initStorage(): Promise<AppData> {
+  if (typeof window === "undefined") return getDefaultData();
+  if (storageReady && memoryCache) return memoryCache;
+  if (initPromise) {
+    await initPromise;
+    return memoryCache ?? getDefaultData();
+  }
+
+  initPromise = (async () => {
+    let data: AppData | null = null;
+    try {
+      const fromIdb = await idbGet<AppData>("appData");
+      if (fromIdb && typeof fromIdb === "object") {
+        data = { ...getDefaultData(), ...fromIdb };
+      }
+    } catch {
+      // IndexedDB unavailable
+    }
+
+    if (!data) {
+      data = readLegacyLocalStorage() ?? getDefaultData();
+      try {
+        await idbSet("appData", data);
+      } catch {
+        // ignore
+      }
+    }
+
+    memoryCache = data;
+
+    try {
+      const handle = await idbGet<DirHandle>("dirHandle");
+      if (handle) {
+        dirHandle = handle;
+        useFileSystem = true;
+        const ok = await verifyFolderPermission();
+        if (!ok) {
+          useFileSystem = false;
+        } else {
+          const folderData = await readBooksFromFolder();
+          if (folderData) {
+            memoryCache = { ...getDefaultData(), ...folderData };
+            await idbSet("appData", memoryCache);
+          }
+        }
+      }
+    } catch {
+      // handle restore optional
+    }
+
+    storageReady = true;
+  })();
+
+  await initPromise;
+  return memoryCache ?? getDefaultData();
+}
+
+export function isStorageReady(): boolean {
+  return storageReady;
+}
 
 export function isFileSystemSupported(): boolean {
   return typeof window !== "undefined" && "showDirectoryPicker" in window;
 }
 
+async function ensureDirPermission(handle: DirHandle): Promise<boolean> {
+  try {
+    const perm = await handle.queryPermission?.({ mode: "readwrite" });
+    if (perm === "granted") return true;
+    const requested = await handle.requestPermission?.({ mode: "readwrite" });
+    return requested === "granted";
+  } catch {
+    return true;
+  }
+}
+
+async function writeBooksToFolder(data: AppData): Promise<void> {
+  if (!useFileSystem || !dirHandle) return;
+  try {
+    await writeFileToDir(dirHandle, BOOKS_FILENAME, JSON.stringify(data, null, 2));
+  } catch {
+    // folder may be revoked
+  }
+}
+
+async function readBooksFromFolder(): Promise<AppData | null> {
+  if (!dirHandle) return null;
+  try {
+    const fileHandle = await dirHandle.getFileHandle(BOOKS_FILENAME);
+    const file = await fileHandle.getFile();
+    const text = await file.text();
+    const parsed = JSON.parse(text) as Partial<AppData>;
+    if (!parsed || typeof parsed !== "object") return null;
+    return { ...getDefaultData(), ...parsed };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Prompt the user to choose a folder. Books are stored as argus-books.json
+ * in that folder; invoices still go under business/date subfolders.
+ */
 export async function pickFolder(): Promise<string | null> {
   if (!isFileSystemSupported()) return null;
 
   try {
     const picker = window.showDirectoryPicker;
     if (!picker) return null;
-    const handle = await picker({
+    const handle = (await picker({
       mode: "readwrite",
       id: DIR_HANDLE_KEY,
-      startIn: "desktop",
-    }) as DirHandle;
+      startIn: "documents",
+    })) as DirHandle;
+
+    if (!(await ensureDirPermission(handle))) {
+      return null;
+    }
 
     dirHandle = handle;
     useFileSystem = true;
 
     try {
-      const perm = await handle.requestPermission?.({ mode: "readwrite" });
-      if (perm === "denied") {
-        useFileSystem = false;
-        return null;
-      }
+      await idbSet("dirHandle", handle);
     } catch {
-      // permission request may not be supported, continue
+      // Chrome may still keep the in-memory handle for this session
+    }
+
+    const existing = await readBooksFromFolder();
+    if (existing) {
+      memoryCache = existing;
+      await idbSet("appData", existing);
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(existing));
+      } catch {
+        // ignore
+      }
+    } else {
+      const current = loadData();
+      current.settings.folderName = handle.name;
+      memoryCache = current;
+      await persistNow(current);
     }
 
     const settings = getSettings();
@@ -98,14 +269,7 @@ export async function pickFolder(): Promise<string | null> {
 
 export async function verifyFolderPermission(): Promise<boolean> {
   if (!dirHandle) return false;
-  try {
-    const perm = await dirHandle.queryPermission?.({ mode: "readwrite" });
-    if (perm === "granted") return true;
-    const requested = await dirHandle.requestPermission?.({ mode: "readwrite" });
-    return requested === "granted";
-  } catch {
-    return false;
-  }
+  return ensureDirPermission(dirHandle);
 }
 
 export function getFolderName(): string {
@@ -114,6 +278,25 @@ export function getFolderName(): string {
 
 export function isUsingFileSystem(): boolean {
   return useFileSystem && dirHandle !== null;
+}
+
+export async function disconnectFolder(): Promise<void> {
+  dirHandle = null;
+  useFileSystem = false;
+  try {
+    const db = await openIdb();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, "readwrite");
+      tx.objectStore(IDB_STORE).delete("dirHandle");
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch {
+    // ignore
+  }
+  const data = loadData();
+  data.settings.folderName = DEFAULT_INVOICE_DIR;
+  saveData(data);
 }
 
 async function getOrCreateSubDir(name: string): Promise<DirHandle | null> {
@@ -238,23 +421,38 @@ function triggerDownload(blob: Blob, filename: string): void {
 
 export function loadData(): AppData {
   if (typeof window === "undefined") return getDefaultData();
+  if (memoryCache) return memoryCache;
+  const legacy = readLegacyLocalStorage();
+  memoryCache = legacy ?? getDefaultData();
+  return memoryCache;
+}
+
+async function persistNow(data: AppData): Promise<void> {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return getDefaultData();
-    const parsed = JSON.parse(raw) as Partial<AppData>;
-    return { ...getDefaultData(), ...parsed };
+    await idbSet("appData", data);
   } catch {
-    return getDefaultData();
+    // IndexedDB may be blocked
   }
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  } catch {
+    // storage full
+  }
+  await writeBooksToFolder(data);
 }
 
 export function saveData(data: AppData): void {
   if (typeof window === "undefined") return;
+  memoryCache = data;
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   } catch {
-    // storage full or unavailable
+    // ignore
   }
+  if (persistTimer) clearTimeout(persistTimer);
+  persistTimer = setTimeout(() => {
+    void persistNow(data);
+  }, 200);
 }
 
 export function getSettings(): AppSettings {
@@ -461,6 +659,7 @@ export function savePurchase(purchase: Purchase): void {
 export function deletePurchase(id: string): void {
   const data = loadData();
   data.purchases = data.purchases.filter((p) => p.id !== id);
+  data.khataEntries = (data.khataEntries || []).filter((e) => e.sourceId !== id);
   saveData(data);
 }
 

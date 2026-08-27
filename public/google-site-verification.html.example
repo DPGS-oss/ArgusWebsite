@@ -1,0 +1,7 @@
+<!--
+  Optional: if Google Search Console asks for an HTML file verification,
+  download their file and place it in /public/, then rebuild + redeploy.
+
+  Or prefer meta-tag verification via NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION
+  in Firebase Hosting env / build env (see app/layout.tsx).
+-->
