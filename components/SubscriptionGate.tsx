@@ -19,7 +19,9 @@ export function SubscriptionGate() {
     setLoading(planKey);
     setError("");
     try {
-      await startRazorpayCheckout(planKey, token, user, referralCode.trim() || undefined);
+      await startRazorpayCheckout(planKey, token, user, {
+        referralCode: referralCode.trim() || undefined,
+      });
       await refreshProfile();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unable to start payment";

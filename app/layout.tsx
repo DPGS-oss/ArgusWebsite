@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth-provider";
+import { HashScroll } from "@/components/HashScroll";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -20,6 +21,14 @@ export const metadata: Metadata = {
   title: "Argus - GST Billing App | B&L Softwares and Logistics",
   description:
     "Argus - The best GST billing and invoicing app for Indian businesses. Offline-first, secure, and accountant-ready.",
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/favicon.png", type: "image/png" },
+    ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180" }],
+    shortcut: "/favicon.ico",
+  },
 };
 
 export default function RootLayout({
@@ -30,7 +39,10 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.variable} ${jakarta.variable}`}>
       <body className="font-sans antialiased">
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <HashScroll />
+          {children}
+        </AuthProvider>
       </body>
     </html>
   );

@@ -21,6 +21,7 @@ export function Footer() {
               <a href="#features">Features</a>
               <a href="#pricing">Pricing</a>
               <a href="#download">Download</a>
+              <Link href="/guide/">User Guide</Link>
             </div>
           </StaggerItem>
           <StaggerItem>

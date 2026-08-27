@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useId, useRef, useState } from "react";
+import { X } from "lucide-react";
 import { useAuth } from "@/lib/auth-provider";
 
 type Tab = "login" | "register";
@@ -10,6 +11,29 @@ export function AuthModal() {
   const [tab, setTab] = useState<Tab>("login");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const closeBtnRef = useRef<HTMLButtonElement>(null);
+  const titleId = useId();
+
+  useEffect(() => {
+    if (!showAuthModal) return;
+
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setShowAuthModal(false);
+      }
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    const focusTimer = window.setTimeout(() => closeBtnRef.current?.focus(), 0);
+
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      window.clearTimeout(focusTimer);
+      opener?.focus();
+    };
+  }, [showAuthModal, setShowAuthModal]);
 
   if (!showAuthModal) return null;
 
@@ -66,10 +90,25 @@ export function AuthModal() {
       onClick={() => setShowAuthModal(false)}
     >
       <div
-        className="w-full max-w-md rounded-card border border-bone bg-white p-6 shadow-subtle"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="relative w-full max-w-md rounded-card border border-bone bg-white p-6 shadow-subtle"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="mb-6 flex gap-2 rounded-full bg-plaster p-1">
+        <h2 id={titleId} className="sr-only">
+          {tab === "login" ? "Sign In" : "Create Account"}
+        </h2>
+        <button
+          ref={closeBtnRef}
+          type="button"
+          aria-label="Close"
+          className="absolute right-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded-full text-ink transition hover:bg-plaster"
+          onClick={() => setShowAuthModal(false)}
+        >
+          <X className="h-5 w-5" strokeWidth={2.25} aria-hidden="true" />
+        </button>
+        <div className="mb-6 flex gap-2 rounded-full bg-plaster p-1 pr-10">
           {(["login", "register"] as Tab[]).map((value) => (
             <button
               key={value}
