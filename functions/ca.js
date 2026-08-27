@@ -1,10 +1,21 @@
 /**
  * CA portal: hashed invite tokens + read-only client books from owner app_data.
  * CAs do not pay. Owner generates a token; CA signs in and redeems.
+ * GSTR-1 JSON and Tally XML are generated here from Firestore invoices (shop
+ * phone may be offline). Argus is not a GSP — files are for GSTN offline tool
+ * / TallyPrime import only.
  */
 const crypto = require('crypto');
 const { verifyToken, getUser, updateUser, getDb } = require('./_shared/firebase-admin');
 const { checkRateLimit } = require('./_shared/rate-limit');
+const {
+  buildGstr1Json,
+  buildTallyXml,
+  sellerGstinFromAppData,
+  companyNameFromAppData,
+  parseMonthParam,
+  monthBounds,
+} = require('./_shared/ca-exports');
 
 const SCOPES = [
   'read:invoices',
@@ -173,18 +184,71 @@ async function handleClients(req, res, decoded) {
   return res.status(200).json({ clients, count: clients.length });
 }
 
+async function loadOwnerAppData(ownerId) {
+  const doc = await getDb().collection('users').doc(ownerId).collection('app_data').doc('main').get();
+  return {
+    appData: doc.exists ? (doc.data().appData || {}) : {},
+    updated_at: doc.exists ? doc.data().updated_at : null,
+  };
+}
+
+function sendAttachment(res, { body, contentType, filename }) {
+  res.set('Content-Type', contentType);
+  res.set('Content-Disposition', `attachment; filename="${filename}"`);
+  res.set('Cache-Control', 'no-store');
+  res.set('Access-Control-Expose-Headers', 'Content-Disposition');
+  return res.status(200).send(body);
+}
+
 async function handleBooks(req, res, decoded, ownerId) {
   const uid = decoded.uid;
   const db = getDb();
   const link = await findLink(db, uid, ownerId);
   if (!link) return res.status(403).json({ error: 'Not linked to this business' });
-  const doc = await db.collection('users').doc(ownerId).collection('app_data').doc('main').get();
-  const appData = doc.exists ? (doc.data().appData || {}) : {};
+  const { appData, updated_at } = await loadOwnerAppData(ownerId);
   return res.status(200).json({
     owner_id: ownerId,
     ...booksFromAppData(appData),
-    updated_at: doc.exists ? doc.data().updated_at : null,
+    updated_at,
     scopes: link.scopes || SCOPES,
+  });
+}
+
+async function handleGstr1Download(req, res, decoded, ownerId) {
+  const uid = decoded.uid;
+  const link = await findLink(getDb(), uid, ownerId);
+  if (!link) return res.status(403).json({ error: 'Not linked to this business' });
+  const { appData } = await loadOwnerAppData(ownerId);
+  const month = parseMonthParam(req.query && req.query.month);
+  const json = buildGstr1Json({
+    gstin: sellerGstinFromAppData(appData),
+    month,
+    invoices: appData.invoices || [],
+  });
+  const { fp } = monthBounds(month);
+  return sendAttachment(res, {
+    body: JSON.stringify(json, null, 2),
+    contentType: 'application/json; charset=utf-8',
+    filename: `GSTR1_${fp}.json`,
+  });
+}
+
+async function handleTallyDownload(req, res, decoded, ownerId) {
+  const uid = decoded.uid;
+  const link = await findLink(getDb(), uid, ownerId);
+  if (!link) return res.status(403).json({ error: 'Not linked to this business' });
+  const { appData } = await loadOwnerAppData(ownerId);
+  const month = parseMonthParam(req.query && req.query.month);
+  const xml = buildTallyXml({
+    companyName: companyNameFromAppData(appData),
+    month,
+    invoices: appData.invoices || [],
+  });
+  const { fp } = monthBounds(month);
+  return sendAttachment(res, {
+    body: xml,
+    contentType: 'application/xml; charset=utf-8',
+    filename: `Tally_${fp}.xml`,
   });
 }
 
@@ -219,6 +283,7 @@ exports.apiCa = require('firebase-functions/v2/https').onRequest(
     res.set('Access-Control-Allow-Origin', req.get('origin') || '*');
     res.set('Access-Control-Allow-Headers', 'Authorization, Content-Type');
     res.set('Access-Control-Allow-Methods', 'GET,POST,DELETE,OPTIONS');
+    res.set('Access-Control-Expose-Headers', 'Content-Disposition');
     if (req.method === 'OPTIONS') return res.status(204).send('');
 
     const decoded = await requireUser(req, res);
@@ -245,6 +310,14 @@ exports.apiCa = require('firebase-functions/v2/https').onRequest(
     const booksMatch = path.match(/\/ca\/clients\/([^/]+)\/books$/);
     if (req.method === 'GET' && booksMatch) {
       return handleBooks(req, res, decoded, decodeURIComponent(booksMatch[1]));
+    }
+    const gstr1Match = path.match(/\/ca\/clients\/([^/]+)\/gstr1$/);
+    if (req.method === 'GET' && gstr1Match) {
+      return handleGstr1Download(req, res, decoded, decodeURIComponent(gstr1Match[1]));
+    }
+    const tallyMatch = path.match(/\/ca\/clients\/([^/]+)\/tally$/);
+    if (req.method === 'GET' && tallyMatch) {
+      return handleTallyDownload(req, res, decoded, decodeURIComponent(tallyMatch[1]));
     }
     if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method) && /\/ca\/clients\//.test(path)) {
       return res.status(403).json({ error: 'CA portal is read-only' });

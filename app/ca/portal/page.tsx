@@ -13,9 +13,14 @@ type Books = {
   party_outstanding?: number;
 };
 
-function inr(n: unknown) {
-  const v = typeof n === "number" ? n : Number(n || 0);
-  return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(v);
+function currentMonthYm() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function filenameFromDisposition(header: string | null, fallback: string) {
+  const match = (header || "").match(/filename="([^"]+)"/i);
+  return match?.[1] || fallback;
 }
 
 export default function CaPortalPage() {
@@ -25,6 +30,8 @@ export default function CaPortalPage() {
   const [books, setBooks] = useState<Books | null>(null);
   const [tab, setTab] = useState<"invoices" | "purchases" | "expenses" | "khata" | "gst">("invoices");
   const [error, setError] = useState("");
+  const [month, setMonth] = useState(currentMonthYm);
+  const [downloading, setDownloading] = useState<"" | "gstr1" | "tally">("");
 
   useEffect(() => {
     if (!token) return;
@@ -67,6 +74,34 @@ export default function CaPortalPage() {
     );
     return [header, ...lines].join("\n");
   }, [books]);
+
+  async function downloadHandoff(kind: "gstr1" | "tally") {
+    if (!token || !ownerId) return;
+    setDownloading(kind);
+    setError("");
+    try {
+      const path = kind === "gstr1" ? "gstr1" : "tally";
+      const r = await fetch(
+        `/api/ca/clients/${encodeURIComponent(ownerId)}/${path}?month=${encodeURIComponent(month)}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({}));
+        throw new Error((d as { error?: string }).error || `Download failed (${r.status})`);
+      }
+      const blob = await r.blob();
+      const fallback = kind === "gstr1" ? `GSTR1_${month}.json` : `Tally_${month}.xml`;
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = filenameFromDisposition(r.headers.get("Content-Disposition"), fallback);
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setDownloading("");
+    }
+  }
 
   if (!authReady) return <div className="p-10 text-center text-slate">Loading…</div>;
   if (!user) {
@@ -133,7 +168,37 @@ export default function CaPortalPage() {
             <p className="text-slate">Select a client to load books.</p>
           ) : tab === "gst" ? (
             <div>
-              <p className="mb-3 text-sm text-slate">GSTR-1 CSV for this owner (not the CA uid).</p>
+              <p className="mb-3 text-sm text-slate">
+                Download GSTN offline-tool JSON and TallyPrime XML for this month, generated from the
+                owner’s invoices in the cloud (works if the shop phone is offline). Argus does not file
+                GSTR or push to Tally.
+              </p>
+              <label className="mb-4 flex items-center gap-2 text-sm text-ink">
+                Month
+                <input
+                  type="month"
+                  className="rounded-full border border-bone bg-white px-3 py-1.5"
+                  value={month}
+                  onChange={(e) => setMonth(e.target.value)}
+                />
+              </label>
+              <div className="mb-4 flex flex-wrap gap-2">
+                <button
+                  className="btn-primary"
+                  disabled={!ownerId || downloading === "gstr1"}
+                  onClick={() => downloadHandoff("gstr1")}
+                >
+                  {downloading === "gstr1" ? "Preparing…" : "Download GSTR-1 JSON (this month)"}
+                </button>
+                <button
+                  className="btn-outline"
+                  disabled={!ownerId || downloading === "tally"}
+                  onClick={() => downloadHandoff("tally")}
+                >
+                  {downloading === "tally" ? "Preparing…" : "Download Tally XML (this month)"}
+                </button>
+              </div>
+              <p className="mb-2 text-xs text-slate">Optional spreadsheet of all invoices (not GSTN JSON):</p>
               <button
                 className="btn-outline"
                 onClick={() => {
