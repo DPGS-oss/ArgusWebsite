@@ -39,6 +39,12 @@ export function stateCodeFromGstin(gstin: string | undefined | null): string | n
   return /^\d{2}$/.test(code) ? code : null;
 }
 
+export function isRegisteredGstin(value: string | undefined | null): boolean {
+  const trimmed = (value || "").trim().toUpperCase();
+  if (!trimmed || trimmed === "URP") return false;
+  return validateGstin(trimmed).ok;
+}
+
 export function isValidGstin(value: string | undefined | null): boolean {
   return validateGstin(value).ok;
 }

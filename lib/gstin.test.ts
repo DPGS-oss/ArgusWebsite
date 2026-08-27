@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { gstinCheckDigit, isValidGstin, normalizeGstin, validateGstin } from "./gstin";
+import { gstinCheckDigit, isRegisteredGstin, isValidGstin, normalizeGstin, validateGstin } from "./gstin";
 
 describe("GSTIN checksum", () => {
   it("accepts URP for unregistered persons (any case)", () => {
@@ -35,5 +35,12 @@ describe("GSTIN checksum", () => {
     expect(generated).toHaveLength(15);
     expect(isValidGstin(generated)).toBe(true);
     expect(validateGstin("27aapfu0939f1zv").ok).toBe(true);
+  });
+
+  it("does not treat URP or invalid GSTIN as registered for B2B", () => {
+    expect(isRegisteredGstin("URP")).toBe(false);
+    expect(isRegisteredGstin("")).toBe(false);
+    expect(isRegisteredGstin("27AAPFU0939F1ZV")).toBe(true);
+    expect(isRegisteredGstin("27AAPFU0939F1Z0")).toBe(false);
   });
 });

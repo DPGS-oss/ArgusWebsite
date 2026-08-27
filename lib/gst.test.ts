@@ -5,13 +5,15 @@ import {
   calculateItem,
   defaultGstRateForNew,
   documentTypeFromInvoiceType,
+  generateGSTRReport,
   gstRatePickerOptions,
   isInterState,
   openHistoricalInvoice,
   resolvePlaceOfSupply,
   resolveShipTo,
+  stateCodeFromPlaceOfSupply,
 } from "./gst";
-import { normalizeGstin } from "./gstin";
+import { isRegisteredGstin, normalizeGstin } from "./gstin";
 import type { Invoice, InvoiceItem } from "./types";
 
 const MH = "27";
@@ -254,8 +256,9 @@ describe("historical invoices", () => {
     expect(opened.items[0].gstRate).toBe(12);
     expect(opened.items[0].cgst).toBe(60);
     expect(opened.items[0].sgst).toBe(60);
-    expect(opened.placeOfSupply).toBe("Maharashtra");
-    expect(opened).toEqual(historical);
+    expect(opened.items[0].igst).toBe(0);
+    expect(stateCodeFromPlaceOfSupply(opened.placeOfSupply)).toBe(MH);
+    expect(opened.placeOfSupply === "Maharashtra" || opened.placeOfSupply === MH).toBe(true);
     expect(gstRatePickerOptions(opened.items[0].gstRate)).toContain(12);
 
     const rebuilt = buildInvoiceDocument({
@@ -271,7 +274,9 @@ describe("historical invoices", () => {
       partyGstin: historical.partyGstin,
       partyPhone: historical.partyPhone,
       partyAddress: "Pune",
-      partyStateCode: MH,
+      // Bill-to state that does not match named POS — must not steal place of supply or flip tax.
+      partyStateCode: KA,
+      placeOfSupply: historical.placeOfSupply,
       date: historical.date,
       dueDate: historical.dueDate,
       items: historical.items,
@@ -288,6 +293,84 @@ describe("historical invoices", () => {
     expect(rebuilt.items[0].cgst).toBe(60);
     expect(rebuilt.items[0].sgst).toBe(60);
     expect(rebuilt.items[0].igst).toBe(0);
+    expect(rebuilt.totalCgst).toBe(60);
+    expect(rebuilt.totalSgst).toBe(60);
+    expect(rebuilt.totalIgst).toBe(0);
+    expect(stateCodeFromPlaceOfSupply(rebuilt.placeOfSupply)).toBe(MH);
+    expect(rebuilt.isInterState).toBe(false);
+  });
+
+  it("maps common place-of-supply name aliases to GST state codes", () => {
+    expect(stateCodeFromPlaceOfSupply("Maharashtra")).toBe("27");
+    expect(stateCodeFromPlaceOfSupply("MH")).toBe("27");
+    expect(stateCodeFromPlaceOfSupply("27")).toBe("27");
+    expect(stateCodeFromPlaceOfSupply("NCT of Delhi")).toBe("07");
+    expect(stateCodeFromPlaceOfSupply("New Delhi")).toBe("07");
+    expect(stateCodeFromPlaceOfSupply("Orissa")).toBe("21");
+    expect(stateCodeFromPlaceOfSupply("Pondicherry")).toBe("34");
+    expect(stateCodeFromPlaceOfSupply("Jammu & Kashmir")).toBe("01");
+  });
+});
+
+describe("GSTR-1 B2B vs B2C", () => {
+  function gstrInvoice(id: string, partyGstin: string): Invoice {
+    return {
+      id,
+      invoiceNumber: `INV-${id}`,
+      type: "tax_invoice",
+      status: "paid",
+      businessId: "biz-1",
+      partyId: id,
+      partyName: id,
+      partyGstin,
+      partyPhone: "",
+      date: "2026-04-10",
+      dueDate: "2026-04-25",
+      items: [],
+      subtotal: 100,
+      totalDiscount: 0,
+      totalTaxable: 100,
+      totalCgst: 9,
+      totalSgst: 9,
+      totalIgst: 0,
+      totalTax: 18,
+      roundOff: 0,
+      grandTotal: 118,
+      paidAmount: 118,
+      balanceDue: 0,
+      paymentMode: "Cash",
+      notes: "",
+      terms: "",
+      placeOfSupply: MH,
+      isInterState: false,
+      isTotalMode: true,
+      createdAt: "2026-04-10T00:00:00.000Z",
+      updatedAt: "2026-04-10T00:00:00.000Z",
+    };
+  }
+
+  it("sends URP and blank GSTIN to B2C, and a valid 15-char GSTIN to B2B", () => {
+    expect(isRegisteredGstin("URP")).toBe(false);
+    expect(isRegisteredGstin("")).toBe(false);
+    expect(isRegisteredGstin("   ")).toBe(false);
+    expect(isRegisteredGstin(MH_GSTIN)).toBe(true);
+    expect(isRegisteredGstin("ABC")).toBe(false);
+
+    const report = generateGSTRReport(
+      [
+        gstrInvoice("urp", "URP"),
+        gstrInvoice("blank", ""),
+        gstrInvoice("registered", MH_GSTIN),
+        gstrInvoice("invalid", "27AAAAA0000A1Z0"),
+      ],
+      "gstr1",
+      "2026-04-01",
+      "2026-04-30"
+    );
+    const b2b = report.sections.find((s) => s.section === "B2B");
+    const b2c = report.sections.find((s) => s.section === "B2C");
+    expect(b2b?.invoices.map((i) => i.id)).toEqual(["registered"]);
+    expect(b2c?.invoices.map((i) => i.id).sort()).toEqual(["blank", "invalid", "urp"]);
   });
 });
 

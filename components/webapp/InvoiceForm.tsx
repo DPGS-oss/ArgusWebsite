@@ -20,6 +20,7 @@ import {
   formatPartyAddress,
   buildInvoiceDocument,
   openHistoricalInvoice,
+  stateCodeFromPlaceOfSupply,
 } from "@/lib/gst";
 import { generateId, generateInvoiceNumber } from "@/lib/storage";
 import { BarcodeScannerModal } from "./BarcodeScannerModal";
@@ -103,9 +104,7 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
   const [shipToGstin, setShipToGstin] = useState(openedInvoice?.shipToGstin || "");
   const [shipToAddress, setShipToAddress] = useState(openedInvoice?.shipToAddress || "");
   const [shipToStateCode, setShipToStateCode] = useState(
-    openedInvoice?.placeOfSupply && /^\d{2}$/.test(openedInvoice.placeOfSupply)
-      ? openedInvoice.placeOfSupply
-      : ""
+    stateCodeFromPlaceOfSupply(openedInvoice?.placeOfSupply) || ""
   );
   const [reverseCharge, setReverseCharge] = useState(!!openedInvoice?.reverseCharge);
   const [gstinError, setGstinError] = useState("");
@@ -124,7 +123,11 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
     shipToAddress,
     shipToStateCode,
   });
-  const placeOfSupply = resolvePlaceOfSupply(resolvedShip.shipToStateCode, partyStateCode);
+  const userSetShipTo = !!(shipToGstin.trim() || shipToAddress.trim() || shipToStateCode.trim());
+  const placeOfSupply = userSetShipTo
+    ? resolvePlaceOfSupply(resolvedShip.shipToStateCode, partyStateCode)
+    : stateCodeFromPlaceOfSupply(openedInvoice?.placeOfSupply) ||
+      resolvePlaceOfSupply(resolvedShip.shipToStateCode, partyStateCode);
   const interState = isInterState(businessStateCode, placeOfSupply);
 
   const totals = useMemo(() => {
@@ -365,6 +368,7 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
       shipToGstin,
       shipToAddress,
       shipToStateCode,
+      placeOfSupply: openedInvoice?.placeOfSupply,
       date,
       dueDate: dueDateVal,
       items: invoiceItems,
