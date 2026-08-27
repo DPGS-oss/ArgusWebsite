@@ -1,7 +1,30 @@
 /** Subscription plans — must match Flutter / Play Store (₹500 / ₹5,000).
  *  Lifetime (₹18,000) is website-only; never sold in the mobile app.
+ *
+ *  Vyapar model: Free Android billing is unlimited. Web books, GSTR JSON,
+ *  CA portal, and Tally XML stay on Business. Do not add a ₹299 SKU.
  */
 const LIFETIME_EXPIRY_ISO = '2099-12-31T00:00:00.000Z';
+
+const FREE_ENTITLEMENTS = {
+  android_billing: true,
+  android_invoice_limit: null,
+  web_invoicing: false,
+  web_books: false,
+  ca_portal: false,
+  gstr_json: false,
+  tally_xml: false,
+};
+
+const BUSINESS_ENTITLEMENTS = {
+  android_billing: true,
+  android_invoice_limit: null,
+  web_invoicing: true,
+  web_books: true,
+  ca_portal: true,
+  gstr_json: true,
+  tally_xml: true,
+};
 
 const PLANS = {
   business: {
@@ -36,6 +59,30 @@ const PLANS = {
   },
 };
 
+const BUSINESS_PLAN_KEYS = new Set([
+  'business',
+  'business_monthly',
+  'business_yearly',
+  'business_lifetime',
+  'business_plus',
+]);
+
+function normalizePlanKey(planId) {
+  return String(planId || '').trim().toLowerCase().replace(/\s+/g, '_');
+}
+
+function isBusinessPlan(planId) {
+  const key = normalizePlanKey(planId);
+  if (!key) return false;
+  if (BUSINESS_PLAN_KEYS.has(key)) return true;
+  return key.startsWith('business_');
+}
+
+function getEntitlements(planId) {
+  if (isBusinessPlan(planId)) return { ...BUSINESS_ENTITLEMENTS };
+  return { ...FREE_ENTITLEMENTS };
+}
+
 function getPlan(planId) {
   return PLANS[planId] || null;
 }
@@ -62,4 +109,14 @@ function getExpiryIsoForPlan(planConfig, overrideMonths) {
   return expiryDate.toISOString();
 }
 
-module.exports = { PLANS, LIFETIME_EXPIRY_ISO, getPlan, getAllPlans, getExpiryIsoForPlan };
+module.exports = {
+  PLANS,
+  LIFETIME_EXPIRY_ISO,
+  FREE_ENTITLEMENTS,
+  BUSINESS_ENTITLEMENTS,
+  getPlan,
+  getAllPlans,
+  getExpiryIsoForPlan,
+  getEntitlements,
+  isBusinessPlan,
+};

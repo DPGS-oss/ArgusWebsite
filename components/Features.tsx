@@ -26,7 +26,8 @@ const features = [
   {
     icon: FileText,
     title: "GSTR Reports",
-    description: "Generate GSTR-1, GSTR-2B, GSTR-3B, and GSTR-4 reports instantly.",
+    description:
+      "GSTR-1 JSON, 2B and 3B summaries on Business — including CA portal downloads. Not on the Free Android tier.",
   },
   {
     icon: Bot,

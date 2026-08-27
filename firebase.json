@@ -1,25 +1,46 @@
 {
-  "hosting": {
-    "public": "out",
-    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
-    "rewrites": [
-      { "source": "/api/config", "function": "apiConfig" },
-      { "source": "/api/auth/sync", "function": "apiAuthSync" },
-      { "source": "/api/auth/plans", "function": "apiAuthPlans" },
-      { "source": "/api/user/profile", "function": "apiUserProfile" },
-      { "source": "/api/payment/create-order", "function": "apiPaymentCreateOrder" },
-      { "source": "/api/payment/verify", "function": "apiPaymentVerify" },
-      { "source": "/api/promo/validate", "function": "apiPromoValidate" },
-      { "source": "/api/promo/seed", "function": "apiPromoSeed" },
-      { "source": "/api/promo/self-test", "function": "apiPromoSelfTest" },
-      { "source": "/api/account/delete", "function": "apiAccountDelete" },
-      { "source": "/api/data/load", "function": "apiDataLoad" },
-      { "source": "/api/data/save", "function": "apiDataSave" },
-      { "source": "/api/data/scan-result", "function": "apiDataScanResult" },
-      { "source": "/api/ca/**", "function": "apiCa" }
-    ],
-    "cleanUrls": true
-  },
+  "hosting": [
+    {
+      "site": "argus-invocing",
+      "public": "out",
+      "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+      "rewrites": [
+        { "source": "/api/config", "function": "apiConfig" },
+        { "source": "/api/auth/sync", "function": "apiAuthSync" },
+        { "source": "/api/auth/plans", "function": "apiAuthPlans" },
+        { "source": "/api/user/profile", "function": "apiUserProfile" },
+        { "source": "/api/payment/create-order", "function": "apiPaymentCreateOrder" },
+        { "source": "/api/payment/verify", "function": "apiPaymentVerify" },
+        { "source": "/api/promo/validate", "function": "apiPromoValidate" },
+        { "source": "/api/promo/seed", "function": "apiPromoSeed" },
+        { "source": "/api/promo/self-test", "function": "apiPromoSelfTest" },
+        { "source": "/api/account/delete", "function": "apiAccountDelete" },
+        { "source": "/api/data/load", "function": "apiDataLoad" },
+        { "source": "/api/data/save", "function": "apiDataSave" },
+        { "source": "/api/data/scan-result", "function": "apiDataScanResult" },
+        { "source": "/api/ca/**", "function": "apiCa" }
+      ],
+      "cleanUrls": true
+    },
+    {
+      "site": "argusinvoicing-www",
+      "public": "hosting/www-redirect",
+      "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+      "cleanUrls": true,
+      "redirects": [
+        {
+          "source": "/",
+          "destination": "https://argusinvoicing.com/",
+          "type": 301
+        },
+        {
+          "source": "/:path*",
+          "destination": "https://argusinvoicing.com/:path",
+          "type": 301
+        }
+      ]
+    }
+  ],
   "functions": {
     "source": "functions",
     "runtime": "nodejs20"

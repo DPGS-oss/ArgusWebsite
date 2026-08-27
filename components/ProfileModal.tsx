@@ -83,7 +83,7 @@ export function ProfileModal() {
             {user.subscription?.plan || "Free Plan"}
           </div>
           <p className="mb-4 text-sm text-slate">
-            {user.subscription?.details || "50 invoices/month"}
+            {user.subscription?.details || "Unlimited Android billing. Business required for web books, GSTR JSON, and Tally XML."}
           </p>
           <button
             className="btn-primary"

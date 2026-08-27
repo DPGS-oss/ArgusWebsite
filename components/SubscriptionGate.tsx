@@ -33,10 +33,10 @@ export function SubscriptionGate() {
   const hasValidPlan = currentPlan && ALLOWED_PLANS.includes(currentPlan);
 
   const planKey = yearly ? "business_yearly" : "business";
-  const priceLabel = yearly ? "₹6,600 / year" : "₹600 / month";
+  const priceLabel = yearly ? "₹5,000 / year" : "₹500 / month";
 
   const freeFeatures = [
-    "Billing & invoices",
+    "Unlimited invoices (Android app)",
     "Customers",
     "Voice & photo entry (mobile app)",
     "Collect UPI (your VPA)",
@@ -47,6 +47,7 @@ export function SubscriptionGate() {
     "Everything in Free",
     "Purchases & input tax credit",
     "GSTR-1, 2B, 3B summaries",
+    "GSTR-1 JSON & Tally XML (CA portal)",
     "E-way bill credentials",
     "Full inventory with barcode & CSV import",
     "Sales & profit reports",
@@ -114,7 +115,7 @@ export function SubscriptionGate() {
             }`}
           >
             Yearly
-            <span className="ml-1 text-xs text-emerald-500">Save ~8%</span>
+            <span className="ml-1 text-xs text-emerald-500">Save ₹1,000</span>
           </button>
         </div>
 
@@ -146,7 +147,9 @@ export function SubscriptionGate() {
         {/* Free plan info */}
         <div className="mt-6 w-full max-w-md rounded-card border border-bone bg-white p-6">
           <h3 className="mb-2 text-lg font-semibold text-ink">Free Plan</h3>
-          <p className="mb-3 text-sm text-slate">Available in the Argus mobile app:</p>
+          <p className="mb-3 text-sm text-slate">
+            Unlimited Android billing is free. Web books, GSTR JSON, CA portal, and Tally XML stay on Business.
+          </p>
           <ul className="space-y-2 text-sm text-slate">
             {freeFeatures.map((feature) => (
               <li key={feature}>✓ {feature}</li>
