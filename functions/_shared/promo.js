@@ -42,6 +42,7 @@ function codesRef() {
 }
 
 function paymentsRef() {
+  // Collection name is not in git history; index.js only passes razorpay_payment_id as the doc id.
   return getDb().collection('payments');
 }
 
@@ -64,7 +65,7 @@ async function validateCodeForUser(code, uid, user) {
     return { valid: false, error: 'Enter an offer code' };
   }
 
-  if (user?.promo_offer_used && user?.promo_code_used && user.promo_code_used !== normalized) {
+  if (user?.promo_offer_used && user?.promo_code_used !== normalized) {
     return { valid: false, error: 'You have already used a beta offer' };
   }
 
