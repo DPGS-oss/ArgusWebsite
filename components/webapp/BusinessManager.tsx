@@ -5,6 +5,7 @@ import { Plus, Edit2, Trash2, Building2, Check } from "lucide-react";
 import type { AppData, BusinessProfile } from "@/lib/types";
 import { INDIAN_STATES } from "@/lib/types";
 import { generateId, saveBusiness, setActiveBusiness, saveData } from "@/lib/storage";
+import { validateGstin } from "@/lib/gstin";
 
 type BusinessManagerProps = {
   data: AppData;
@@ -50,7 +51,12 @@ export function BusinessManager({ data, onSaved }: BusinessManagerProps) {
       alert("Business name is required");
       return;
     }
-    saveBusiness(editing);
+    const gstinCheck = validateGstin(editing.gstin);
+    if (!gstinCheck.ok) {
+      alert(gstinCheck.error);
+      return;
+    }
+    saveBusiness({ ...editing, gstin: (editing.gstin || "").trim().toUpperCase() });
     if (isNew) setActiveBusiness(editing.id);
     setEditing(null);
     onSaved();
@@ -104,7 +110,7 @@ export function BusinessManager({ data, onSaved }: BusinessManagerProps) {
           <h2 className="text-lg text-starlight">Business Details</h2>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Business Name *" value={editing.name} onChange={(v) => updateField("name", v)} />
-            <Field label="GSTIN" value={editing.gstin} onChange={(v) => updateField("gstin", v)} />
+            <Field label="GSTIN" value={editing.gstin} onChange={(v) => updateField("gstin", v.toUpperCase())} />
             <Field label="PAN" value={editing.pan} onChange={(v) => updateField("pan", v)} />
             <Field label="Email" value={editing.email} onChange={(v) => updateField("email", v)} />
             <Field label="Phone" value={editing.phone} onChange={(v) => updateField("phone", v)} />

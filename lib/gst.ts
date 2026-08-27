@@ -1,4 +1,114 @@
-import type { GSTRate, HSNCode, Invoice, InvoiceItem, GSTRReport, GSTRSection, GSTRReportType } from "./types";
+import type { GSTRate, HSNCode, Invoice, InvoiceItem, InvoiceStatus, InvoiceType, GSTRReport, GSTRSection, GSTRReportType, GstDocumentType } from "./types";
+import { GST_2_0_RATES } from "./types";
+import { normalizeGstin, stateCodeFromGstin } from "./gstin";
+
+export { GST_2_0_RATES };
+export type { GstDocumentType };
+
+export function gstRatePickerOptions(existingRate?: number): GSTRate[] {
+  const rates: GSTRate[] = [...GST_2_0_RATES];
+  if (existingRate != null && !(rates as number[]).includes(existingRate)) {
+    rates.push(existingRate as GSTRate);
+    rates.sort((a, b) => a - b);
+  }
+  return rates;
+}
+
+export function defaultGstRateForNew(rate: number): GSTRate {
+  return (GST_2_0_RATES as number[]).includes(rate) ? (rate as GSTRate) : 18;
+}
+
+export function gstRateLabel(rate: number): string {
+  if (rate === 0.25) return "0.25% (rough diamonds)";
+  if (rate === 3) return "3% (gold / precious metals)";
+  return `${rate}%`;
+}
+
+export function documentTypeFromInvoiceType(
+  type: InvoiceType | "delivery_challan"
+): GstDocumentType {
+  if (type === "credit_note") return "CRN";
+  if (type === "delivery_challan") return "CHL";
+  return "INV";
+}
+
+export function formatPartyAddress(party: {
+  address?: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
+}): string {
+  return [party.address, party.city, party.state, party.pincode].filter(Boolean).join(", ");
+}
+
+export function resolveShipTo(input: {
+  billToGstin: string;
+  billToAddress: string;
+  billToStateCode: string;
+  shipToGstin?: string;
+  shipToAddress?: string;
+  shipToStateCode?: string;
+}): { shipToGstin: string; shipToAddress: string; shipToStateCode: string } {
+  const shipGstinRaw = (input.shipToGstin || "").trim();
+  const shipAddrRaw = (input.shipToAddress || "").trim();
+  const shipStateRaw = (input.shipToStateCode || "").trim();
+  const billGstin = normalizeGstin(input.billToGstin);
+
+  if (!shipGstinRaw && !shipAddrRaw && !shipStateRaw) {
+    return {
+      shipToGstin: billGstin,
+      shipToAddress: input.billToAddress || "",
+      shipToStateCode: input.billToStateCode || "",
+    };
+  }
+
+  const shipToGstin = shipGstinRaw ? normalizeGstin(shipGstinRaw) : billGstin;
+  return {
+    shipToGstin,
+    shipToAddress: shipAddrRaw || input.billToAddress || "",
+    shipToStateCode: shipStateRaw || stateCodeFromGstin(shipToGstin) || input.billToStateCode || "",
+  };
+}
+
+export function resolvePlaceOfSupply(shipToStateCode: string, billToStateCode: string): string {
+  return (shipToStateCode || "").trim() || (billToStateCode || "").trim();
+}
+
+export function openHistoricalInvoice(invoice: Invoice): Invoice {
+  return JSON.parse(JSON.stringify(invoice)) as Invoice;
+}
+
+export type BuildInvoiceInput = {
+  id: string;
+  invoiceNumber: string;
+  type: InvoiceType;
+  status: InvoiceStatus;
+  businessId: string;
+  sellerGstin: string;
+  sellerStateCode: string;
+  partyId: string;
+  partyName: string;
+  partyGstin: string;
+  partyPhone: string;
+  partyAddress: string;
+  partyStateCode: string;
+  shipToGstin?: string;
+  shipToAddress?: string;
+  shipToStateCode?: string;
+  date: string;
+  dueDate: string;
+  items: InvoiceItem[];
+  roundOffEnabled: boolean;
+  paidAmount: number;
+  paymentMode: string;
+  notes: string;
+  terms: string;
+  reverseCharge: boolean;
+  isTotalMode: boolean;
+  createdAt: string;
+  documentType?: GstDocumentType;
+};
+
 
 export const HSN_DATABASE: HSNCode[] = [
   { code: "0101", description: "Live animals (bovine)", gstRate: 0, category: "Agriculture" },
@@ -290,9 +400,11 @@ export function calculateItem(item: {
   quantity: number;
   rate: number;
   discount: number;
-  gstRate: GSTRate;
+  gstRate: number;
   isInterState: boolean;
-}): Omit<InvoiceItem, "id" | "description" | "hsn" | "unit"> {
+  cessRate?: number;
+  cess?: number;
+}): Omit<InvoiceItem, "id" | "description" | "hsn" | "unit" | "uqc" | "stockItemId"> {
   const grossAmount = item.quantity * item.rate;
   const discountAmount = (grossAmount * item.discount) / 100;
   const taxableAmount = grossAmount - discountAmount;
@@ -309,17 +421,22 @@ export function calculateItem(item: {
     sgst = taxAmount / 2;
   }
 
-  const total = taxableAmount + taxAmount;
+  const cess =
+    item.cessRate != null
+      ? (taxableAmount * item.cessRate) / 100
+      : item.cess ?? 0;
+  const total = taxableAmount + taxAmount + cess;
 
   return {
     quantity: item.quantity,
     rate: item.rate,
     discount: item.discount,
-    gstRate: item.gstRate,
+    gstRate: item.gstRate as GSTRate,
     taxableAmount: round2(taxableAmount),
     cgst: round2(cgst),
     sgst: round2(sgst),
     igst: round2(igst),
+    cess: round2(cess),
     total: round2(total),
   };
 }
@@ -334,7 +451,8 @@ export function calculateInvoiceTotals(items: InvoiceItem[], roundOffEnabled: bo
   const totalCgst = items.reduce((sum, i) => sum + i.cgst, 0);
   const totalSgst = items.reduce((sum, i) => sum + i.sgst, 0);
   const totalIgst = items.reduce((sum, i) => sum + i.igst, 0);
-  const totalTax = totalCgst + totalSgst + totalIgst;
+  const totalCess = items.reduce((sum, i) => sum + (i.cess ?? 0), 0);
+  const totalTax = totalCgst + totalSgst + totalIgst + totalCess;
   const rawTotal = totalTaxable + totalTax;
 
   let roundOff = 0;
@@ -352,6 +470,7 @@ export function calculateInvoiceTotals(items: InvoiceItem[], roundOffEnabled: bo
     totalCgst: round2(totalCgst),
     totalSgst: round2(totalSgst),
     totalIgst: round2(totalIgst),
+    totalCess: round2(totalCess),
     totalTax: round2(totalTax),
     roundOff: round2(roundOff),
     grandTotal: round2(grandTotal),
@@ -385,8 +504,92 @@ export function round2(num: number): number {
   return Math.round(num * 100) / 100;
 }
 
-export function isInterState(businessStateCode: string, partyStateCode: string): boolean {
-  return businessStateCode !== partyStateCode;
+export function isInterState(sellerStateCode: string, placeOfSupplyStateCode: string): boolean {
+  const seller = (sellerStateCode || "").trim();
+  const pos = (placeOfSupplyStateCode || "").trim();
+  if (!seller || !pos) return false;
+  return seller !== pos;
+}
+
+export function buildInvoiceDocument(input: BuildInvoiceInput): Invoice {
+  const ship = resolveShipTo({
+    billToGstin: input.partyGstin,
+    billToAddress: input.partyAddress,
+    billToStateCode: input.partyStateCode,
+    shipToGstin: input.shipToGstin,
+    shipToAddress: input.shipToAddress,
+    shipToStateCode: input.shipToStateCode,
+  });
+  const placeOfSupply = resolvePlaceOfSupply(ship.shipToStateCode, input.partyStateCode);
+  const interState = isInterState(input.sellerStateCode, placeOfSupply);
+
+  const items = input.items.map((item) => {
+    const calc = calculateItem({
+      quantity: item.quantity,
+      rate: item.rate,
+      discount: item.discount,
+      gstRate: item.gstRate,
+      isInterState: interState,
+      cess: item.cess ?? 0,
+    });
+    return {
+      ...item,
+      quantity: calc.quantity,
+      rate: calc.rate,
+      discount: calc.discount,
+      gstRate: calc.gstRate,
+      taxableAmount: calc.taxableAmount,
+      cgst: calc.cgst,
+      sgst: calc.sgst,
+      igst: calc.igst,
+      cess: calc.cess,
+      total: calc.total,
+      uqc: item.uqc || item.unit,
+    };
+  });
+
+  const totals = calculateInvoiceTotals(items, input.roundOffEnabled);
+  const paidAmount = input.paidAmount || 0;
+
+  return {
+    id: input.id,
+    invoiceNumber: input.invoiceNumber,
+    type: input.type,
+    status: input.status,
+    businessId: input.businessId,
+    partyId: input.partyId,
+    partyName: input.partyName,
+    partyGstin: normalizeGstin(input.partyGstin),
+    partyPhone: input.partyPhone,
+    date: input.date,
+    dueDate: input.dueDate,
+    items,
+    subtotal: totals.subtotal,
+    totalDiscount: totals.totalDiscount,
+    totalTaxable: totals.totalTaxable,
+    totalCgst: totals.totalCgst,
+    totalSgst: totals.totalSgst,
+    totalIgst: totals.totalIgst,
+    totalTax: totals.totalTax,
+    roundOff: totals.roundOff,
+    grandTotal: totals.grandTotal,
+    paidAmount,
+    balanceDue: round2(totals.grandTotal - paidAmount),
+    paymentMode: input.paymentMode,
+    notes: input.notes,
+    terms: input.terms,
+    placeOfSupply,
+    isInterState: interState,
+    isTotalMode: input.isTotalMode,
+    createdAt: input.createdAt,
+    updatedAt: new Date().toISOString(),
+    sellerGstin: (input.sellerGstin || "").trim().toUpperCase(),
+    shipToGstin: ship.shipToGstin,
+    shipToAddress: ship.shipToAddress,
+    documentType: input.documentType || documentTypeFromInvoiceType(input.type),
+    reverseCharge: input.reverseCharge,
+    totalCess: totals.totalCess,
+  };
 }
 
 export function generateGSTRReport(
@@ -490,7 +693,7 @@ export function generateInvoiceHTML(invoice: Invoice, business: {
     <tr>
       <td>${item.description}</td>
       <td style="text-align:center">${item.hsn}</td>
-      <td style="text-align:right">${item.quantity} ${item.unit}</td>
+      <td style="text-align:right">${item.quantity} ${item.uqc || item.unit}</td>
       <td style="text-align:right">${formatCurrency(item.rate)}</td>
       <td style="text-align:right">${item.discount}%</td>
       <td style="text-align:right">${formatCurrency(item.taxableAmount)}</td>
@@ -504,6 +707,11 @@ export function generateInvoiceHTML(invoice: Invoice, business: {
     </tr>`
     )
     .join("");
+
+  const billToGstin = invoice.partyGstin || "URP";
+  const shipToGstin = invoice.shipToGstin || billToGstin;
+  const shipToAddress = invoice.shipToAddress || "";
+  const showShipTo = shipToAddress || (shipToGstin && shipToGstin !== billToGstin);
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -565,8 +773,12 @@ export function generateInvoiceHTML(invoice: Invoice, business: {
   <div class="parties">
     <div class="party-box">
       <h4>Bill To</h4>
-      <p><strong>${invoice.partyName || "—"}</strong>${invoice.partyPhone ? `<br>Phone: ${invoice.partyPhone}` : ""}<br>GSTIN: ${invoice.partyGstin || "Unregistered"}<br>Place of Supply: ${invoice.placeOfSupply}</p>
+      <p><strong>${invoice.partyName || "—"}</strong>${invoice.partyPhone ? `<br>Phone: ${invoice.partyPhone}` : ""}<br>GSTIN: ${billToGstin === "URP" ? "URP (Unregistered)" : billToGstin}<br>Place of Supply: ${invoice.placeOfSupply}${invoice.reverseCharge ? "<br>Reverse Charge: Yes" : ""}${invoice.documentType ? `<br>Document: ${invoice.documentType}` : ""}</p>
     </div>
+    ${showShipTo ? `<div class="party-box">
+      <h4>Ship To</h4>
+      <p>${shipToAddress ? `${shipToAddress}<br>` : ""}GSTIN: ${shipToGstin === "URP" ? "URP (Unregistered)" : shipToGstin}</p>
+    </div>` : ""}
   </div>
   <table>
     <thead>
@@ -594,6 +806,7 @@ export function generateInvoiceHTML(invoice: Invoice, business: {
       ${invoice.totalCgst > 0 ? `<tr><td>CGST</td><td style="text-align:right">${formatCurrency(invoice.totalCgst)}</td></tr>` : ""}
       ${invoice.totalSgst > 0 ? `<tr><td>SGST</td><td style="text-align:right">${formatCurrency(invoice.totalSgst)}</td></tr>` : ""}
       ${invoice.totalIgst > 0 ? `<tr><td>IGST</td><td style="text-align:right">${formatCurrency(invoice.totalIgst)}</td></tr>` : ""}
+      ${(invoice.totalCess || 0) > 0 ? `<tr><td>Cess</td><td style="text-align:right">${formatCurrency(invoice.totalCess || 0)}</td></tr>` : ""}
       ${invoice.roundOff !== 0 ? `<tr><td>Round Off</td><td style="text-align:right">${formatCurrency(invoice.roundOff)}</td></tr>` : ""}
       <tr class="grand-total"><td>Grand Total</td><td style="text-align:right">${formatCurrency(invoice.grandTotal)}</td></tr>
       ${invoice.paidAmount > 0 ? `<tr><td>Paid</td><td style="text-align:right">${formatCurrency(invoice.paidAmount)}</td></tr>` : ""}

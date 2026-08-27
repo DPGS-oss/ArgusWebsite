@@ -6,3 +6,4 @@ out/
 .firebase/
 .DS_Store
 *.log
+tsconfig.tsbuildinfo

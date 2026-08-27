@@ -169,7 +169,7 @@ _This invoice was generated using Argus GST Billing App_`;
           </div>
           <div className="text-right">
             <h3 className="text-xl font-bold text-[#5266eb]">{invoice.invoiceNumber}</h3>
-            <p className="text-sm text-gray-600">Type: {invoice.type.replace(/_/g, " ").toUpperCase()}</p>
+            <p className="text-sm text-gray-600">Type: {invoice.type.replace(/_/g, " ").toUpperCase()}{invoice.documentType ? ` (${invoice.documentType})` : ""}</p>
             <p className="text-sm text-gray-600">Date: {formatDate(invoice.date)}</p>
             <p className="text-sm text-gray-600">Due: {formatDate(invoice.dueDate)}</p>
             <span className={`mt-1 inline-block rounded-full px-3 py-0.5 text-xs font-bold uppercase ${
@@ -182,12 +182,23 @@ _This invoice was generated using Argus GST Billing App_`;
           </div>
         </div>
 
-        <div className="mb-6">
-          <h4 className="mb-1 text-xs uppercase text-gray-400">Bill To</h4>
-          <p className="font-semibold">{invoice.partyName || "—"}</p>
-          {invoice.partyPhone && <p className="text-sm text-gray-600">Phone: {invoice.partyPhone}</p>}
-          <p className="text-sm text-gray-600">GSTIN: {invoice.partyGstin || "Unregistered"}</p>
-          <p className="text-sm text-gray-600">Place of Supply: {invoice.placeOfSupply}</p>
+        <div className="mb-6 grid gap-6 sm:grid-cols-2">
+          <div>
+            <h4 className="mb-1 text-xs uppercase text-gray-400">Bill To</h4>
+            <p className="font-semibold">{invoice.partyName || "—"}</p>
+            {invoice.partyPhone && <p className="text-sm text-gray-600">Phone: {invoice.partyPhone}</p>}
+            <p className="text-sm text-gray-600">GSTIN: {invoice.partyGstin === "URP" || !invoice.partyGstin ? "URP (Unregistered)" : invoice.partyGstin}</p>
+            <p className="text-sm text-gray-600">Place of Supply: {invoice.placeOfSupply}</p>
+            {invoice.documentType && <p className="text-sm text-gray-600">Document: {invoice.documentType}</p>}
+            {invoice.reverseCharge && <p className="text-sm text-gray-600">Reverse Charge: Yes</p>}
+          </div>
+          {(invoice.shipToAddress || (invoice.shipToGstin && invoice.shipToGstin !== invoice.partyGstin)) && (
+            <div>
+              <h4 className="mb-1 text-xs uppercase text-gray-400">Ship To</h4>
+              {invoice.shipToAddress && <p className="text-sm text-gray-600">{invoice.shipToAddress}</p>}
+              <p className="text-sm text-gray-600">GSTIN: {invoice.shipToGstin === "URP" ? "URP (Unregistered)" : (invoice.shipToGstin || invoice.partyGstin)}</p>
+            </div>
+          )}
         </div>
 
         <table className="mb-6 w-full text-sm">
@@ -216,7 +227,7 @@ _This invoice was generated using Argus GST Billing App_`;
               <tr key={item.id} className="border-b border-gray-100">
                 <td className="p-2">{item.description}</td>
                 <td className="p-2 text-center">{item.hsn}</td>
-                <td className="p-2 text-right">{item.quantity} {item.unit}</td>
+                <td className="p-2 text-right">{item.quantity} {item.uqc || item.unit}</td>
                 <td className="p-2 text-right">{formatCurrency(item.rate)}</td>
                 <td className="p-2 text-right">{item.discount}%</td>
                 <td className="p-2 text-right">{formatCurrency(item.taxableAmount)}</td>
@@ -251,6 +262,9 @@ _This invoice was generated using Argus GST Billing App_`;
               )}
               {invoice.totalIgst > 0 && (
                 <tr><td className="py-1 text-gray-600">IGST</td><td className="py-1 text-right">{formatCurrency(invoice.totalIgst)}</td></tr>
+              )}
+              {(invoice.totalCess || 0) > 0 && (
+                <tr><td className="py-1 text-gray-600">Cess</td><td className="py-1 text-right">{formatCurrency(invoice.totalCess || 0)}</td></tr>
               )}
               {invoice.roundOff !== 0 && (
                 <tr><td className="py-1 text-gray-600">Round Off</td><td className="py-1 text-right">{formatCurrency(invoice.roundOff)}</td></tr>

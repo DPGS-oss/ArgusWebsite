@@ -2,11 +2,28 @@
 
 import { useState, useMemo } from "react";
 import { Plus, Trash2, Sparkles, ArrowLeft, Save, ScanLine, Package, X } from "lucide-react";
-import type { AppData, BusinessProfile, Invoice, InvoiceItem, InvoiceType, InvoiceStatus, Party, GSTRate, StockItem } from "@/lib/types";
-import { UNITS, PAYMENT_MODES } from "@/lib/types";
-import { calculateItem, calculateInvoiceTotals, formatCurrency, searchHSN, suggestHSN, isInterState, round2 } from "@/lib/gst";
+import type { AppData, BusinessProfile, Invoice, InvoiceItem, InvoiceType, InvoiceStatus, GSTRate, StockItem } from "@/lib/types";
+import { UNITS, PAYMENT_MODES, INDIAN_STATES } from "@/lib/types";
+import {
+  calculateItem,
+  calculateInvoiceTotals,
+  formatCurrency,
+  searchHSN,
+  suggestHSN,
+  isInterState,
+  round2,
+  gstRatePickerOptions,
+  gstRateLabel,
+  defaultGstRateForNew,
+  resolvePlaceOfSupply,
+  resolveShipTo,
+  formatPartyAddress,
+  buildInvoiceDocument,
+  openHistoricalInvoice,
+} from "@/lib/gst";
 import { generateId, generateInvoiceNumber } from "@/lib/storage";
 import { BarcodeScannerModal } from "./BarcodeScannerModal";
+import { validateGstin } from "@/lib/gstin";
 
 type InvoiceFormProps = {
   data: AppData;
@@ -16,7 +33,6 @@ type InvoiceFormProps = {
   onBack: () => void;
 };
 
-const GST_RATES: GSTRate[] = [0, 3, 5, 12, 18, 28];
 const INVOICE_TYPES: { value: InvoiceType; label: string }[] = [
   { value: "tax_invoice", label: "Tax Invoice" },
   { value: "bill_of_supply", label: "Bill of Supply" },
@@ -38,6 +54,7 @@ function emptyItem(businessStateCode: string, partyStateCode: string, defaultGst
     hsn: "",
     quantity: 1,
     unit: "NOS",
+    uqc: "NOS",
     rate: 0,
     discount: 0,
     gstRate: defaultGstRate,
@@ -45,6 +62,7 @@ function emptyItem(businessStateCode: string, partyStateCode: string, defaultGst
     cgst: calc.cgst,
     sgst: calc.sgst,
     igst: calc.igst,
+    cess: calc.cess ?? 0,
     total: calc.total,
   };
 }
@@ -52,39 +70,62 @@ function emptyItem(businessStateCode: string, partyStateCode: string, defaultGst
 export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: InvoiceFormProps) {
   const today = new Date().toISOString().split("T")[0];
   const dueDate = new Date(Date.now() + 15 * 86400000).toISOString().split("T")[0];
+  const openedInvoice = editingInvoice ? openHistoricalInvoice(editingInvoice) : null;
 
   const parties = data.parties;
+  const newInvoiceGstRate = defaultGstRateForNew(data.settings.defaultGstRate);
 
-  const [invoiceType, setInvoiceType] = useState<InvoiceType>(editingInvoice?.type || "tax_invoice");
-  const [status, setStatus] = useState<InvoiceStatus>(editingInvoice?.status || "draft");
-  const [partyId, setPartyId] = useState(editingInvoice?.partyId || "");
-  const [date, setDate] = useState(editingInvoice?.date || today);
-  const [dueDateVal, setDueDateVal] = useState(editingInvoice?.dueDate || dueDate);
+  const [invoiceType, setInvoiceType] = useState<InvoiceType>(openedInvoice?.type || "tax_invoice");
+  const [status, setStatus] = useState<InvoiceStatus>(openedInvoice?.status || "draft");
+  const [partyId, setPartyId] = useState(openedInvoice?.partyId || "");
+  const [date, setDate] = useState(openedInvoice?.date || today);
+  const [dueDateVal, setDueDateVal] = useState(openedInvoice?.dueDate || dueDate);
   const [items, setItems] = useState<InvoiceItem[]>(
-    editingInvoice?.items || [emptyItem(business?.stateCode || "", "", data.settings.defaultGstRate)]
+    openedInvoice?.items || [emptyItem(business?.stateCode || "", "", newInvoiceGstRate)]
   );
-  const [paymentMode, setPaymentMode] = useState(editingInvoice?.paymentMode || "");
-  const [notes, setNotes] = useState(editingInvoice?.notes || data.settings.defaultNotes);
-  const [terms, setTerms] = useState(editingInvoice?.terms || data.settings.defaultTerms);
-  const [paidAmount, setPaidAmount] = useState(editingInvoice?.paidAmount || 0);
+  const [paymentMode, setPaymentMode] = useState(openedInvoice?.paymentMode || "");
+  const [notes, setNotes] = useState(openedInvoice?.notes || data.settings.defaultNotes);
+  const [terms, setTerms] = useState(openedInvoice?.terms || data.settings.defaultTerms);
+  const [paidAmount, setPaidAmount] = useState(openedInvoice?.paidAmount || 0);
   const [hsnSearch, setHsnSearch] = useState<string | null>(null);
   const [hsnItemIdx, setHsnItemIdx] = useState<number | null>(null);
   const [aiSuggestions, setAiSuggestions] = useState<{ idx: number; suggestions: { code: string; description: string; gstRate: GSTRate }[] } | null>(null);
-  const [isTotalMode, setIsTotalMode] = useState(editingInvoice?.isTotalMode ?? true);
-  const [totalAmount, setTotalAmount] = useState(editingInvoice?.isTotalMode ? editingInvoice.grandTotal : 0);
-  const [totalGstRate, setTotalGstRate] = useState<GSTRate>(editingInvoice?.isTotalMode ? (editingInvoice.items[0]?.gstRate || data.settings.defaultGstRate) : data.settings.defaultGstRate);
-  const [totalDescription, setTotalDescription] = useState(editingInvoice?.isTotalMode ? (editingInvoice.items[0]?.description || "") : "");
-  const [totalDiscount, setTotalDiscount] = useState(editingInvoice?.isTotalMode ? (editingInvoice.items[0]?.discount || 0) : 0);
-  const [totalStockItemId, setTotalStockItemId] = useState<string | undefined>(editingInvoice?.isTotalMode ? editingInvoice.items[0]?.stockItemId : undefined);
-  const [inlinePartyName, setInlinePartyName] = useState(editingInvoice && !editingInvoice.partyId ? editingInvoice.partyName : "");
-  const [inlinePartyPhone, setInlinePartyPhone] = useState(editingInvoice?.partyPhone || "");
+  const [isTotalMode, setIsTotalMode] = useState(openedInvoice?.isTotalMode ?? true);
+  const [totalAmount, setTotalAmount] = useState(openedInvoice?.isTotalMode ? openedInvoice.grandTotal : 0);
+  const [totalGstRate, setTotalGstRate] = useState<GSTRate>(openedInvoice?.isTotalMode ? (openedInvoice.items[0]?.gstRate || newInvoiceGstRate) : newInvoiceGstRate);
+  const [totalDescription, setTotalDescription] = useState(openedInvoice?.isTotalMode ? (openedInvoice.items[0]?.description || "") : "");
+  const [totalDiscount, setTotalDiscount] = useState(openedInvoice?.isTotalMode ? (openedInvoice.items[0]?.discount || 0) : 0);
+  const [totalStockItemId, setTotalStockItemId] = useState<string | undefined>(openedInvoice?.isTotalMode ? openedInvoice.items[0]?.stockItemId : undefined);
+  const [inlinePartyName, setInlinePartyName] = useState(openedInvoice && !openedInvoice.partyId ? openedInvoice.partyName : "");
+  const [inlinePartyPhone, setInlinePartyPhone] = useState(openedInvoice?.partyPhone || "");
   const [showStockPicker, setShowStockPicker] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
+  const [shipToGstin, setShipToGstin] = useState(openedInvoice?.shipToGstin || "");
+  const [shipToAddress, setShipToAddress] = useState(openedInvoice?.shipToAddress || "");
+  const [shipToStateCode, setShipToStateCode] = useState(
+    openedInvoice?.placeOfSupply && /^\d{2}$/.test(openedInvoice.placeOfSupply)
+      ? openedInvoice.placeOfSupply
+      : ""
+  );
+  const [reverseCharge, setReverseCharge] = useState(!!openedInvoice?.reverseCharge);
+  const [gstinError, setGstinError] = useState("");
 
   const selectedParty = parties.find((p) => p.id === partyId);
   const businessStateCode = business?.stateCode || "";
-  const partyStateCode = selectedParty?.stateCode || "";
-  const interState = isInterState(businessStateCode, partyStateCode);
+  const partyStateCode = selectedParty?.stateCode || businessStateCode;
+  const partyAddress = selectedParty
+    ? formatPartyAddress(selectedParty)
+    : "";
+  const resolvedShip = resolveShipTo({
+    billToGstin: selectedParty?.gstin || "",
+    billToAddress: partyAddress,
+    billToStateCode: partyStateCode,
+    shipToGstin,
+    shipToAddress,
+    shipToStateCode,
+  });
+  const placeOfSupply = resolvePlaceOfSupply(resolvedShip.shipToStateCode, partyStateCode);
+  const interState = isInterState(businessStateCode, placeOfSupply);
 
   const totals = useMemo(() => {
     if (isTotalMode) {
@@ -103,6 +144,7 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
         totalCgst: cgst,
         totalSgst: sgst,
         totalIgst: igst,
+        totalCess: 0,
         totalTax: tax,
         roundOff,
         grandTotal: round2(grandTotal),
@@ -128,6 +170,8 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
         cgst: calc.cgst,
         sgst: calc.sgst,
         igst: calc.igst,
+        cess: calc.cess ?? 0,
+        uqc: item.uqc || item.unit,
         total: calc.total,
       };
       return next;
@@ -135,7 +179,7 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
   }
 
   function addItem() {
-    setItems((prev) => [...prev, emptyItem(businessStateCode, partyStateCode, data.settings.defaultGstRate)]);
+    setItems((prev) => [...prev, emptyItem(businessStateCode, placeOfSupply, newInvoiceGstRate)]);
   }
 
   function removeItem(idx: number) {
@@ -185,6 +229,7 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
       hsn: stock.hsn,
       quantity: 1,
       unit: stock.unit,
+      uqc: stock.unit,
       rate: stock.rate,
       discount: 0,
       gstRate: stock.gstRate,
@@ -192,6 +237,7 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
       cgst: calc.cgst,
       sgst: calc.sgst,
       igst: calc.igst,
+      cess: calc.cess ?? 0,
       total: calc.total,
       stockItemId: stock.id,
     };
@@ -206,6 +252,29 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
     setShowScanner(true);
   }
 
+  function applyPartyShipTo(nextPartyId: string) {
+    setPartyId(nextPartyId);
+    const p = parties.find((x) => x.id === nextPartyId);
+    if (!p) {
+      setShipToGstin("");
+      setShipToAddress("");
+      setShipToStateCode("");
+      return;
+    }
+    const ship = resolveShipTo({
+      billToGstin: p.gstin,
+      billToAddress: formatPartyAddress(p),
+      billToStateCode: p.stateCode,
+      shipToGstin: p.shipToGstin,
+      shipToAddress: p.shipToAddress,
+      shipToStateCode: p.shipToStateCode,
+    });
+    const partyHasShipTo = !!(p.shipToGstin || p.shipToAddress || p.shipToStateCode);
+    setShipToGstin(partyHasShipTo ? ship.shipToGstin : "");
+    setShipToAddress(partyHasShipTo ? ship.shipToAddress : "");
+    setShipToStateCode(partyHasShipTo ? ship.shipToStateCode : "");
+  }
+
   function handleSave() {
     if (!business) {
       alert("Please set up your business profile first in Settings.");
@@ -213,6 +282,20 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
     }
 
     const party = partyId ? parties.find((p) => p.id === partyId) : null;
+    const billToGstin = party?.gstin || "";
+    const billCheck = validateGstin(billToGstin);
+    if (!billCheck.ok) {
+      setGstinError(billCheck.error);
+      alert(billCheck.error);
+      return;
+    }
+    const shipCheck = validateGstin(shipToGstin);
+    if (!shipCheck.ok) {
+      setGstinError(shipCheck.error);
+      alert(shipCheck.error);
+      return;
+    }
+    setGstinError("");
 
     if (isTotalMode) {
       if (totalAmount <= 0) {
@@ -232,8 +315,6 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
       data.settings.invoiceSuffix
     );
 
-    const balanceDue = totals.grandTotal - paidAmount;
-
     let invoiceItems: InvoiceItem[];
     if (isTotalMode) {
       const afterDiscount = round2(totalAmount * (1 - totalDiscount / 100));
@@ -247,6 +328,7 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
         hsn: "",
         quantity: 1,
         unit: "NOS",
+        uqc: "NOS",
         rate: totalAmount,
         discount: totalDiscount,
         gstRate: totalGstRate,
@@ -254,46 +336,47 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
         cgst,
         sgst,
         igst,
+        cess: 0,
         total: round2(afterDiscount),
         stockItemId: totalStockItemId,
       }];
     } else {
-      invoiceItems = items.filter((i) => i.description);
+      invoiceItems = items.filter((i) => i.description).map((i) => ({
+        ...i,
+        uqc: i.uqc || i.unit,
+        cess: i.cess ?? 0,
+      }));
     }
 
-    const invoice: Invoice = {
+    const invoice = buildInvoiceDocument({
       id: editingInvoice?.id || generateId(),
       invoiceNumber,
       type: invoiceType,
       status,
       businessId: business.id,
+      sellerGstin: business.gstin || "",
+      sellerStateCode: business.stateCode || "",
       partyId: party?.id || "",
       partyName: party?.name || inlinePartyName || "",
-      partyGstin: party?.gstin || "",
+      partyGstin: billToGstin,
       partyPhone: party?.phone || inlinePartyPhone || "",
+      partyAddress: party ? formatPartyAddress(party) : "",
+      partyStateCode: party?.stateCode || business.stateCode || "",
+      shipToGstin,
+      shipToAddress,
+      shipToStateCode,
       date,
       dueDate: dueDateVal,
       items: invoiceItems,
-      subtotal: totals.subtotal,
-      totalDiscount: totals.totalDiscount,
-      totalTaxable: totals.totalTaxable,
-      totalCgst: totals.totalCgst,
-      totalSgst: totals.totalSgst,
-      totalIgst: totals.totalIgst,
-      totalTax: totals.totalTax,
-      roundOff: totals.roundOff,
-      grandTotal: totals.grandTotal,
+      roundOffEnabled: data.settings.roundOff,
       paidAmount,
-      balanceDue,
       paymentMode,
       notes,
       terms,
-      placeOfSupply: party?.state || business.state || "",
-      isInterState: interState,
+      reverseCharge,
       isTotalMode,
       createdAt: editingInvoice?.createdAt || new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
+    });
 
     onSave(invoice);
   }
@@ -371,7 +454,7 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
             <h2 className="mb-4 text-lg text-starlight">Bill To</h2>
             <select
               value={partyId}
-              onChange={(e) => setPartyId(e.target.value)}
+              onChange={(e) => applyPartyShipTo(e.target.value)}
               className="w-full rounded-btn border border-lead/30 bg-graphite px-4 py-2.5 text-starlight outline-none focus:border-mercury-blue"
             >
               <option value="">No Party (Walk-in customer)</option>
@@ -386,9 +469,9 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
                 <p className="text-starlight">{selectedParty.name}</p>
                 <p>{selectedParty.address}</p>
                 <p>{selectedParty.city}, {selectedParty.state} - {selectedParty.pincode}</p>
-                <p>GSTIN: {selectedParty.gstin || "Unregistered"}</p>
+                <p>GSTIN: {selectedParty.gstin || "URP (Unregistered)"}</p>
                 <p className="mt-1 text-xs text-mercury-blue">
-                  {interState ? "Inter-state (IGST applies)" : "Intra-state (CGST + SGST applies)"}
+                  Place of supply: {placeOfSupply || "—"} · {interState ? "Inter-state (IGST applies)" : "Intra-state (CGST + SGST applies)"}
                 </p>
               </div>
             ) : (
@@ -415,6 +498,59 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
                 </label>
               </div>
             )}
+            {gstinError ? <p className="mt-2 text-xs text-red-400">{gstinError}</p> : null}
+          </div>
+
+          <div className="rounded-lg border border-lead/20 bg-midnight p-5">
+            <h2 className="mb-1 text-lg text-starlight">Ship To</h2>
+            <p className="mb-4 text-xs text-silver">Optional. Leave blank to copy bill-to. Use URP if the ship-to party is unregistered.</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="block text-sm text-silver">
+                Ship-to GSTIN
+                <input
+                  type="text"
+                  value={shipToGstin}
+                  onChange={(e) => setShipToGstin(e.target.value.toUpperCase())}
+                  placeholder="Same as bill-to, or URP"
+                  className="mt-1 w-full rounded-btn border border-lead/30 bg-graphite px-4 py-2.5 text-sm text-starlight outline-none focus:border-mercury-blue"
+                />
+              </label>
+              <label className="block text-sm text-silver">
+                Ship-to state (place of supply)
+                <select
+                  value={shipToStateCode}
+                  onChange={(e) => setShipToStateCode(e.target.value)}
+                  className="mt-1 w-full rounded-btn border border-lead/30 bg-graphite px-4 py-2.5 text-sm text-starlight outline-none focus:border-mercury-blue"
+                >
+                  <option value="">Same as bill-to</option>
+                  {INDIAN_STATES.map((s) => (
+                    <option key={s.code} value={s.code}>{s.name} ({s.code})</option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-sm text-silver sm:col-span-2">
+                Ship-to address
+                <input
+                  type="text"
+                  value={shipToAddress}
+                  onChange={(e) => setShipToAddress(e.target.value)}
+                  placeholder="Leave blank to copy bill-to address"
+                  className="mt-1 w-full rounded-btn border border-lead/30 bg-graphite px-4 py-2.5 text-sm text-starlight outline-none focus:border-mercury-blue"
+                />
+              </label>
+            </div>
+            <p className="mt-3 text-xs text-mercury-blue">
+              {interState ? "Inter-state (IGST)" : "Intra-state (CGST + SGST)"} · POS {placeOfSupply || "—"}
+              {resolvedShip.shipToGstin ? ` · Ship-to GSTIN ${resolvedShip.shipToGstin}` : ""}
+            </p>
+            <label className="mt-3 flex items-center gap-2 text-sm text-silver">
+              <input
+                type="checkbox"
+                checked={reverseCharge}
+                onChange={(e) => setReverseCharge(e.target.checked)}
+              />
+              Reverse charge
+            </label>
           </div>
 
           <div className="rounded-lg border border-lead/20 bg-midnight p-5">
@@ -471,7 +607,7 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
                       onChange={(e) => setTotalGstRate(parseFloat(e.target.value) as GSTRate)}
                       className="mt-1 w-full rounded-btn border border-lead/30 bg-abyss px-2 py-2 text-sm text-starlight outline-none focus:border-mercury-blue"
                     >
-                      {GST_RATES.map((r) => <option key={r} value={r}>{r}%</option>)}
+                      {gstRatePickerOptions(totalGstRate).map((r) => <option key={r} value={r}>{gstRateLabel(r)}</option>)}
                     </select>
                   </div>
                   <div>
@@ -598,7 +734,7 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
                         onChange={(e) => updateItem(idx, { gstRate: parseFloat(e.target.value) as GSTRate })}
                         className="mt-1 w-full rounded-btn border border-lead/30 bg-abyss px-2 py-2 text-sm text-starlight outline-none focus:border-mercury-blue"
                       >
-                        {GST_RATES.map((r) => <option key={r} value={r}>{r}</option>)}
+                        {gstRatePickerOptions(item.gstRate).map((r) => <option key={r} value={r}>{gstRateLabel(r)}</option>)}
                       </select>
                     </div>
                   </div>
@@ -705,6 +841,12 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
                 <div className="flex justify-between text-silver">
                   <span>IGST</span>
                   <span>{formatCurrency(totals.totalIgst)}</span>
+                </div>
+              )}
+              {totals.totalCess > 0 && (
+                <div className="flex justify-between text-silver">
+                  <span>Cess</span>
+                  <span>{formatCurrency(totals.totalCess)}</span>
                 </div>
               )}
               {totals.roundOff !== 0 && (

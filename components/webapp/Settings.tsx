@@ -6,13 +6,13 @@ import type { AppData, AppSettings, GSTRate } from "@/lib/types";
 import { saveSettings, exportAllData, importAllData, pickFolder, isUsingFileSystem, getFolderName } from "@/lib/storage";
 import { useAuth, hasValidSubscription } from "@/lib/auth-provider";
 import { syncFromCloud, syncToCloud, getLastSyncTime } from "@/lib/cloud-sync";
+import { gstRatePickerOptions, gstRateLabel } from "@/lib/gst";
 
 type SettingsProps = {
   data: AppData;
   onSaved: () => void;
 };
 
-const GST_RATES: GSTRate[] = [0, 3, 5, 12, 18, 28];
 
 export function Settings({ data, onSaved }: SettingsProps) {
   const { user, token } = useAuth();
@@ -173,7 +173,7 @@ export function Settings({ data, onSaved }: SettingsProps) {
               onChange={(e) => update("defaultGstRate", parseFloat(e.target.value) as GSTRate)}
               className="mt-1 w-full rounded-btn border border-lead/30 bg-graphite px-4 py-2.5 text-starlight outline-none focus:border-mercury-blue"
             >
-              {GST_RATES.map((r) => <option key={r} value={r}>{r}%</option>)}
+              {gstRatePickerOptions(settings.defaultGstRate).map((r) => <option key={r} value={r}>{gstRateLabel(r)}</option>)}
             </select>
           </label>
           <label className="block text-sm text-silver">

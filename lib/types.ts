@@ -1,8 +1,14 @@
-export type GSTRate = 0 | 3 | 5 | 12 | 18 | 28;
+export type GSTRate = 0 | 0.25 | 3 | 5 | 12 | 18 | 28 | 40;
+
+/** GST 2.0 slabs offered on new invoices. 12% and 28% are legacy-only. */
+export const GST_2_0_RATES: GSTRate[] = [0, 0.25, 3, 5, 18, 40];
 
 export type InvoiceStatus = "draft" | "paid" | "unpaid" | "cancelled";
 
 export type InvoiceType = "tax_invoice" | "bill_of_supply" | "credit_note" | "debit_note";
+
+/** GSTR/Tally document type. Keep in lockstep with Flutter. */
+export type GstDocumentType = "INV" | "CRN" | "CHL";
 
 export interface BusinessProfile {
   id: string;
@@ -38,6 +44,11 @@ export interface Party {
   pincode: string;
   type: "customer" | "supplier";
   createdAt: string;
+  /** Optional ship-to. Blank means ship-to = bill-to. Unregistered → `URP`. */
+  shipToGstin?: string;
+  shipToAddress?: string;
+  shipToState?: string;
+  shipToStateCode?: string;
 }
 
 export interface InvoiceItem {
@@ -46,6 +57,8 @@ export interface InvoiceItem {
   hsn: string;
   quantity: number;
   unit: string;
+  /** Unit Quantity Code (GST). Defaults to `unit` when omitted on historical docs. */
+  uqc?: string;
   rate: number;
   discount: number;
   gstRate: GSTRate;
@@ -53,6 +66,7 @@ export interface InvoiceItem {
   cgst: number;
   sgst: number;
   igst: number;
+  cess?: number;
   total: number;
   stockItemId?: string;
 }
@@ -89,6 +103,14 @@ export interface Invoice {
   isTotalMode: boolean;
   createdAt: string;
   updatedAt: string;
+  /** Seller GSTIN snapshot. Shared with Flutter invoice docs. */
+  sellerGstin?: string;
+  /** Ship-to GSTIN. Blank ship-to copies bill-to; unregistered is `URP`. */
+  shipToGstin?: string;
+  shipToAddress?: string;
+  documentType?: GstDocumentType;
+  reverseCharge?: boolean;
+  totalCess?: number;
 }
 
 export interface HSNCode {

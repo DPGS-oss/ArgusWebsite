@@ -1,0 +1,392 @@
+import { describe, expect, it } from "vitest";
+import {
+  GST_2_0_RATES,
+  buildInvoiceDocument,
+  calculateItem,
+  defaultGstRateForNew,
+  documentTypeFromInvoiceType,
+  gstRatePickerOptions,
+  isInterState,
+  openHistoricalInvoice,
+  resolvePlaceOfSupply,
+  resolveShipTo,
+} from "./gst";
+import { normalizeGstin } from "./gstin";
+import type { Invoice, InvoiceItem } from "./types";
+
+const MH = "27";
+const KA = "29";
+const MH_GSTIN = "27AAPFU0939F1ZV";
+const DL_GSTIN = "07AABCU9603R1ZP";
+
+function line(partial: Partial<InvoiceItem> & { gstRate: number; isInterState: boolean }): InvoiceItem {
+  const calc = calculateItem({
+    quantity: partial.quantity ?? 1,
+    rate: partial.rate ?? 1000,
+    discount: partial.discount ?? 0,
+    gstRate: partial.gstRate,
+    isInterState: partial.isInterState,
+    cessRate: partial.cess ?? 0,
+  });
+  return {
+    id: partial.id ?? "item-1",
+    description: partial.description ?? "Goods",
+    hsn: partial.hsn ?? "7108",
+    quantity: calc.quantity,
+    unit: partial.unit ?? "NOS",
+    uqc: partial.uqc ?? partial.unit ?? "NOS",
+    rate: calc.rate,
+    discount: calc.discount,
+    gstRate: calc.gstRate,
+    taxableAmount: calc.taxableAmount,
+    cgst: calc.cgst,
+    sgst: calc.sgst,
+    igst: calc.igst,
+    cess: calc.cess,
+    total: calc.total,
+  };
+}
+
+describe("GST 2.0 rate table", () => {
+  it("defaults new invoices to 0 / 0.25 / 3 / 5 / 18 / 40", () => {
+    expect(GST_2_0_RATES).toEqual([0, 0.25, 3, 5, 18, 40]);
+    const picker = gstRatePickerOptions();
+    expect(picker).toEqual([0, 0.25, 3, 5, 18, 40]);
+    expect(picker).not.toContain(12);
+    expect(picker).not.toContain(28);
+  });
+
+  it("does not default-offer 12% or 28% on the new rate picker", () => {
+    expect(gstRatePickerOptions(18)).not.toContain(12);
+    expect(gstRatePickerOptions(18)).not.toContain(28);
+    expect(gstRatePickerOptions(undefined)).not.toContain(12);
+    expect(gstRatePickerOptions(undefined)).not.toContain(28);
+  });
+
+  it("keeps a historical 12% or 28% rate visible when that invoice is open", () => {
+    expect(gstRatePickerOptions(12)).toContain(12);
+    expect(gstRatePickerOptions(12)).toContain(18);
+    expect(gstRatePickerOptions(28)).toContain(28);
+    expect(gstRatePickerOptions(28)).not.toEqual(expect.arrayContaining([12]));
+  });
+
+  it("does not use a stored 12%/28% default for new invoices", () => {
+    expect(defaultGstRateForNew(12)).toBe(18);
+    expect(defaultGstRateForNew(28)).toBe(18);
+    expect(defaultGstRateForNew(18)).toBe(18);
+    expect(defaultGstRateForNew(5)).toBe(5);
+    expect(defaultGstRateForNew(0.25)).toBe(0.25);
+  });
+});
+
+describe("place of supply tax split", () => {
+  it("intra-state bill-to/ship-to same → CGST + SGST", () => {
+    const ship = resolveShipTo({
+      billToGstin: MH_GSTIN,
+      billToAddress: "Pune",
+      billToStateCode: MH,
+    });
+    const pos = resolvePlaceOfSupply(ship.shipToStateCode, MH);
+    expect(pos).toBe(MH);
+    expect(isInterState(MH, pos)).toBe(false);
+
+    const item = calculateItem({
+      quantity: 2,
+      rate: 100,
+      discount: 0,
+      gstRate: 18,
+      isInterState: isInterState(MH, pos),
+    });
+    expect(item.taxableAmount).toBe(200);
+    expect(item.cgst).toBe(18);
+    expect(item.sgst).toBe(18);
+    expect(item.igst).toBe(0);
+  });
+
+  it("inter-state → IGST", () => {
+    const pos = resolvePlaceOfSupply(KA, MH);
+    expect(pos).toBe(KA);
+    expect(isInterState(MH, pos)).toBe(true);
+
+    const item = calculateItem({
+      quantity: 1,
+      rate: 1000,
+      discount: 0,
+      gstRate: 18,
+      isInterState: isInterState(MH, pos),
+    });
+    expect(item.cgst).toBe(0);
+    expect(item.sgst).toBe(0);
+    expect(item.igst).toBe(180);
+  });
+
+  it("bill-to registered / ship-to URP uses ship-to state as place of supply", () => {
+    const ship = resolveShipTo({
+      billToGstin: MH_GSTIN,
+      billToAddress: "Pune, Maharashtra",
+      billToStateCode: MH,
+      shipToGstin: "URP",
+      shipToAddress: "Bengaluru warehouse",
+      shipToStateCode: KA,
+    });
+    expect(ship.shipToGstin).toBe("URP");
+    expect(ship.shipToAddress).toBe("Bengaluru warehouse");
+    expect(ship.shipToStateCode).toBe(KA);
+
+    const invoice = buildInvoiceDocument({
+      id: "inv-urp",
+      invoiceNumber: "INV-2026-0001",
+      type: "tax_invoice",
+      status: "unpaid",
+      businessId: "biz-1",
+      sellerGstin: MH_GSTIN,
+      sellerStateCode: MH,
+      partyId: "party-1",
+      partyName: "Registered Buyer",
+      partyGstin: MH_GSTIN,
+      partyPhone: "",
+      partyAddress: "Pune, Maharashtra",
+      partyStateCode: MH,
+      shipToGstin: "URP",
+      shipToAddress: "Bengaluru warehouse",
+      shipToStateCode: KA,
+      date: "2026-04-01",
+      dueDate: "2026-04-16",
+      items: [
+        line({ gstRate: 18, isInterState: true, rate: 1000, hsn: "8471", unit: "NOS" }),
+      ],
+      roundOffEnabled: false,
+      paidAmount: 0,
+      paymentMode: "",
+      notes: "",
+      terms: "",
+      reverseCharge: false,
+      isTotalMode: false,
+      createdAt: "2026-04-01T00:00:00.000Z",
+    });
+
+    expect(invoice.partyGstin).toBe(MH_GSTIN);
+    expect(invoice.shipToGstin).toBe("URP");
+    expect(invoice.placeOfSupply).toBe(KA);
+    expect(invoice.isInterState).toBe(true);
+    expect(invoice.totalIgst).toBeGreaterThan(0);
+    expect(invoice.totalCgst).toBe(0);
+    expect(invoice.totalSgst).toBe(0);
+  });
+
+  it("blank ship-to copies bill-to, including URP for unregistered bill-to", () => {
+    const ship = resolveShipTo({
+      billToGstin: "",
+      billToAddress: "Walk-in counter",
+      billToStateCode: MH,
+    });
+    expect(ship.shipToGstin).toBe("URP");
+    expect(ship.shipToAddress).toBe("Walk-in counter");
+    expect(ship.shipToStateCode).toBe(MH);
+  });
+
+  it("derives ship-to state code from a registered ship-to GSTIN when state is omitted", () => {
+    const ship = resolveShipTo({
+      billToGstin: MH_GSTIN,
+      billToAddress: "Pune",
+      billToStateCode: MH,
+      shipToGstin: DL_GSTIN,
+      shipToAddress: "Delhi depot",
+    });
+    expect(ship.shipToGstin).toBe(DL_GSTIN);
+    expect(ship.shipToStateCode).toBe("07");
+  });
+});
+
+describe("historical invoices", () => {
+  it("opens a historical 12% invoice without rewriting GST rates or tax split", () => {
+    const historical: Invoice = {
+      id: "old-12",
+      invoiceNumber: "INV-2024-0099",
+      type: "tax_invoice",
+      status: "paid",
+      businessId: "biz-1",
+      partyId: "party-1",
+      partyName: "Old Customer",
+      partyGstin: MH_GSTIN,
+      partyPhone: "",
+      date: "2024-06-01",
+      dueDate: "2024-06-16",
+      items: [
+        {
+          id: "i1",
+          description: "Pharma",
+          hsn: "3004",
+          quantity: 1,
+          unit: "NOS",
+          rate: 1000,
+          discount: 0,
+          gstRate: 12,
+          taxableAmount: 1000,
+          cgst: 60,
+          sgst: 60,
+          igst: 0,
+          total: 1120,
+        },
+      ],
+      subtotal: 1000,
+      totalDiscount: 0,
+      totalTaxable: 1000,
+      totalCgst: 60,
+      totalSgst: 60,
+      totalIgst: 0,
+      totalTax: 120,
+      roundOff: 0,
+      grandTotal: 1120,
+      paidAmount: 1120,
+      balanceDue: 0,
+      paymentMode: "Cash",
+      notes: "",
+      terms: "",
+      placeOfSupply: "Maharashtra",
+      isInterState: false,
+      isTotalMode: false,
+      createdAt: "2024-06-01T00:00:00.000Z",
+      updatedAt: "2024-06-01T00:00:00.000Z",
+    };
+
+    const opened = openHistoricalInvoice(historical);
+    expect(opened.items[0].gstRate).toBe(12);
+    expect(opened.items[0].cgst).toBe(60);
+    expect(opened.items[0].sgst).toBe(60);
+    expect(opened.placeOfSupply).toBe("Maharashtra");
+    expect(opened).toEqual(historical);
+    expect(gstRatePickerOptions(opened.items[0].gstRate)).toContain(12);
+
+    const rebuilt = buildInvoiceDocument({
+      id: historical.id,
+      invoiceNumber: historical.invoiceNumber,
+      type: historical.type,
+      status: historical.status,
+      businessId: historical.businessId,
+      sellerGstin: MH_GSTIN,
+      sellerStateCode: MH,
+      partyId: historical.partyId,
+      partyName: historical.partyName,
+      partyGstin: historical.partyGstin,
+      partyPhone: historical.partyPhone,
+      partyAddress: "Pune",
+      partyStateCode: MH,
+      date: historical.date,
+      dueDate: historical.dueDate,
+      items: historical.items,
+      roundOffEnabled: false,
+      paidAmount: historical.paidAmount,
+      paymentMode: historical.paymentMode,
+      notes: historical.notes,
+      terms: historical.terms,
+      reverseCharge: false,
+      isTotalMode: false,
+      createdAt: historical.createdAt,
+    });
+    expect(rebuilt.items[0].gstRate).toBe(12);
+    expect(rebuilt.items[0].cgst).toBe(60);
+    expect(rebuilt.items[0].sgst).toBe(60);
+    expect(rebuilt.items[0].igst).toBe(0);
+  });
+});
+
+describe("invoice document shape", () => {
+  it("stores seller, bill-to, ship-to, POS, HSN, UQC, cess, reverse charge, and INV/CRN/CHL", () => {
+    const invoice = buildInvoiceDocument({
+      id: "inv-shape",
+      invoiceNumber: "INV-2026-0002",
+      type: "tax_invoice",
+      status: "unpaid",
+      businessId: "biz-1",
+      sellerGstin: MH_GSTIN,
+      sellerStateCode: MH,
+      partyId: "party-1",
+      partyName: "Buyer",
+      partyGstin: MH_GSTIN,
+      partyPhone: "9999999999",
+      partyAddress: "Pune",
+      partyStateCode: MH,
+      date: "2026-04-01",
+      dueDate: "2026-04-16",
+      items: [
+        line({
+          gstRate: 3,
+          isInterState: false,
+          rate: 50000,
+          quantity: 1,
+          hsn: "7108",
+          unit: "GM",
+          cess: 0,
+        }),
+      ],
+      roundOffEnabled: true,
+      paidAmount: 0,
+      paymentMode: "",
+      notes: "",
+      terms: "",
+      reverseCharge: false,
+      isTotalMode: false,
+      createdAt: "2026-04-01T00:00:00.000Z",
+    });
+
+    expect(invoice.sellerGstin).toBe(MH_GSTIN);
+    expect(invoice.partyGstin).toBe(MH_GSTIN);
+    expect(invoice.shipToGstin).toBe(MH_GSTIN);
+    expect(invoice.shipToAddress).toBe("Pune");
+    expect(invoice.placeOfSupply).toBe(MH);
+    expect(invoice.documentType).toBe("INV");
+    expect(invoice.reverseCharge).toBe(false);
+    expect(invoice.totalCess).toBe(0);
+    expect(invoice.roundOff).toBeTypeOf("number");
+    expect(invoice.items[0].hsn).toBe("7108");
+    expect(invoice.items[0].quantity).toBe(1);
+    expect(invoice.items[0].rate).toBe(50000);
+    expect(invoice.items[0].taxableAmount).toBe(50000);
+    expect(invoice.items[0].cgst).toBeGreaterThan(0);
+    expect(invoice.items[0].sgst).toBeGreaterThan(0);
+    expect(invoice.items[0].igst).toBe(0);
+    expect(invoice.items[0].cess).toBe(0);
+    expect(invoice.items[0].uqc).toBe("GM");
+  });
+
+  it("maps credit notes to CRN and delivery challans to CHL", () => {
+    expect(documentTypeFromInvoiceType("credit_note")).toBe("CRN");
+    expect(documentTypeFromInvoiceType("tax_invoice")).toBe("INV");
+    expect(documentTypeFromInvoiceType("bill_of_supply")).toBe("INV");
+    expect(documentTypeFromInvoiceType("debit_note")).toBe("INV");
+    expect(documentTypeFromInvoiceType("delivery_challan")).toBe("CHL");
+  });
+
+  it("normalizes blank party GSTIN to URP on the document", () => {
+    expect(normalizeGstin("")).toBe("URP");
+    const invoice = buildInvoiceDocument({
+      id: "inv-walkin",
+      invoiceNumber: "INV-2026-0003",
+      type: "tax_invoice",
+      status: "draft",
+      businessId: "biz-1",
+      sellerGstin: MH_GSTIN,
+      sellerStateCode: MH,
+      partyId: "",
+      partyName: "Walk-in",
+      partyGstin: "",
+      partyPhone: "",
+      partyAddress: "Counter",
+      partyStateCode: MH,
+      date: "2026-04-01",
+      dueDate: "2026-04-16",
+      items: [line({ gstRate: 5, isInterState: false, rate: 100 })],
+      roundOffEnabled: false,
+      paidAmount: 0,
+      paymentMode: "",
+      notes: "",
+      terms: "",
+      reverseCharge: false,
+      isTotalMode: false,
+      createdAt: "2026-04-01T00:00:00.000Z",
+    });
+    expect(invoice.partyGstin).toBe("URP");
+    expect(invoice.shipToGstin).toBe("URP");
+  });
+});
