@@ -2,15 +2,18 @@
 
 import { useState } from "react";
 import { Search, Plus, Eye, Edit, Trash2, FileText } from "lucide-react";
-import type { AppData, Invoice, InvoiceStatus } from "@/lib/types";
+import type { AppData, BusinessProfile, Invoice, InvoiceStatus } from "@/lib/types";
 import { formatCurrency, formatDate } from "@/lib/gst";
+import { InvoiceShareActions } from "./InvoiceShareActions";
 
 type InvoiceListProps = {
   data: AppData;
+  business: BusinessProfile | null;
   onNew: () => void;
   onEdit: (invoice: Invoice) => void;
   onPreview: (invoice: Invoice) => void;
   onDelete: (id: string) => void;
+  onAddUpi?: () => void;
 };
 
 const statusFilters: { value: InvoiceStatus | "all"; label: string }[] = [
@@ -21,7 +24,7 @@ const statusFilters: { value: InvoiceStatus | "all"; label: string }[] = [
   { value: "cancelled", label: "Cancelled" },
 ];
 
-export function InvoiceList({ data, onNew, onEdit, onPreview, onDelete }: InvoiceListProps) {
+export function InvoiceList({ data, business, onNew, onEdit, onPreview, onDelete, onAddUpi }: InvoiceListProps) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<InvoiceStatus | "all">("all");
 
@@ -106,6 +109,12 @@ export function InvoiceList({ data, onNew, onEdit, onPreview, onDelete }: Invoic
                   <span className="font-bold text-starlight">{formatCurrency(inv.grandTotal)}</span>
                 </div>
                 <div className="flex gap-2">
+                  <InvoiceShareActions
+                    invoice={inv}
+                    business={business}
+                    onAddUpi={onAddUpi}
+                    compact
+                  />
                   <button
                     onClick={() => onPreview(inv)}
                     className="flex-1 rounded-btn bg-graphite py-2 text-xs text-silver hover:text-mercury-blue"
@@ -170,6 +179,12 @@ export function InvoiceList({ data, onNew, onEdit, onPreview, onDelete }: Invoic
                     </td>
                     <td className="p-4">
                       <div className="flex justify-end gap-2">
+                        <InvoiceShareActions
+                          invoice={inv}
+                          business={business}
+                          onAddUpi={onAddUpi}
+                          compact
+                        />
                         <button
                           onClick={() => onPreview(inv)}
                           className="rounded p-1.5 text-silver hover:bg-graphite hover:text-mercury-blue"

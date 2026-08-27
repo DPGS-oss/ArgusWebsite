@@ -219,10 +219,12 @@ export default function AppPage() {
         return (
           <InvoiceList
             data={d}
+            business={activeBusiness}
             onNew={handleNewInvoice}
             onPreview={handlePreviewInvoice}
             onEdit={handleEditInvoice}
             onDelete={handleDeleteInvoice}
+            onAddUpi={() => navigate("business")}
           />
         );
 
@@ -244,6 +246,7 @@ export default function AppPage() {
             business={activeBusiness}
             onBack={() => navigate("invoices")}
             onEdit={handleEditInvoice}
+            onAddUpi={() => navigate("business")}
           />
         ) : (
           <div className="text-slate">No invoice selected.</div>

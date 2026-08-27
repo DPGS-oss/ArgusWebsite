@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Menu } from "lucide-react";
+import { ArrowRight, Menu, MessageCircle } from "lucide-react";
 import { ShinyText } from "./ShinyText";
 import { getInitials, useAuth } from "@/lib/auth-provider";
 
@@ -131,6 +131,13 @@ export function Hero() {
           >
             Get Started Free
             <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
+          </a>
+          <a
+            href="#whatsapp"
+            className="group mt-4 inline-flex items-center gap-2 rounded-full border border-white/40 px-6 py-3 text-sm text-white transition hover:bg-white/10 md:px-8 md:py-4 md:text-base"
+          >
+            <MessageCircle className="h-4 w-4" />
+            WhatsApp invoices
           </a>
         </div>
       </div>

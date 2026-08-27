@@ -140,7 +140,19 @@ export function BusinessManager({ data, onSaved }: BusinessManagerProps) {
             <Field label="Account Number" value={editing.bankAccount} onChange={(v) => updateField("bankAccount", v)} />
             <Field label="IFSC Code" value={editing.bankIfsc} onChange={(v) => updateField("bankIfsc", v)} />
             <Field label="Branch" value={editing.bankBranch} onChange={(v) => updateField("bankBranch", v)} />
-            <Field label="UPI ID" value={editing.upiId} onChange={(v) => updateField("upiId", v)} />
+            <label className="block text-sm text-silver">
+              UPI ID
+              <input
+                type="text"
+                value={editing.upiId}
+                onChange={(e) => updateField("upiId", e.target.value)}
+                placeholder="shop@okaxis"
+                className="mt-1 w-full rounded-btn border border-lead/30 bg-graphite px-4 py-2.5 text-starlight outline-none focus:border-mercury-blue"
+              />
+              <span className="mt-1 block text-xs text-lead">
+                Your VPA. Collect UPI builds upi://pay?pa=… — Argus is not a payment gateway.
+              </span>
+            </label>
           </div>
         </div>
       </div>

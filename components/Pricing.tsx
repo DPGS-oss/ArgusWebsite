@@ -17,7 +17,7 @@ const plans = [
       "✓ Up to 5 invoices (mobile app)",
       "✓ Basic billing & customers",
       "✓ Works fully offline (mobile)",
-      "✓ UPI payment links",
+      "✓ Collect UPI (your VPA)",
     ],
     cta: "Get Started",
     buttonClass: "btn-outline w-full",

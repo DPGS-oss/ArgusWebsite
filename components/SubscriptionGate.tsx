@@ -39,7 +39,7 @@ export function SubscriptionGate() {
     "Billing & invoices",
     "Customers",
     "Voice & photo entry (mobile app)",
-    "UPI payment links",
+    "Collect UPI (your VPA)",
     "Works fully offline (mobile app)",
   ];
 

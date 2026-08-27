@@ -35,8 +35,9 @@ const features = [
   },
   {
     icon: MessageCircle,
-    title: "WhatsApp Integration",
-    description: "Share invoices via WhatsApp deep links (Business API coming soon).",
+    title: "WhatsApp invoices",
+    description:
+      "Send the invoice from your own WhatsApp — PDF plus a UPI collect line. No Business API, no Twilio.",
   },
   {
     icon: Mic,

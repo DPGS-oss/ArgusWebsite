@@ -1,19 +1,21 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowLeft, FileJson, FileText, Edit, FileDown, MessageCircle } from "lucide-react";
-import type { AppData, BusinessProfile, Invoice } from "@/lib/types";
+import { ArrowLeft, FileJson, FileText, Edit, FileDown } from "lucide-react";
+import type { BusinessProfile, Invoice } from "@/lib/types";
 import { formatCurrency, formatDate, generateInvoiceHTML } from "@/lib/gst";
 import { saveInvoiceToFile, saveInvoiceAsHTML, saveInvoiceAsPDF, downloadInvoiceFile, downloadInvoiceHTML, downloadInvoicePDF, isUsingFileSystem } from "@/lib/storage";
+import { InvoiceShareActions } from "./InvoiceShareActions";
 
 type InvoicePreviewProps = {
   invoice: Invoice;
   business: BusinessProfile | null;
   onBack: () => void;
   onEdit: (invoice: Invoice) => void;
+  onAddUpi?: () => void;
 };
 
-export function InvoicePreview({ invoice, business, onBack, onEdit }: InvoicePreviewProps) {
+export function InvoicePreview({ invoice, business, onBack, onEdit, onAddUpi }: InvoicePreviewProps) {
   const [savingPDF, setSavingPDF] = useState(false);
 
   async function handleSaveJSON() {
@@ -56,51 +58,6 @@ export function InvoicePreview({ invoice, business, onBack, onEdit }: InvoicePre
     }
   }
 
-  async function handleWhatsAppShare() {
-    if (!business) return;
-    const itemSummary = invoice.items.map((i) => `• ${i.description} - ${i.quantity} ${i.unit} @ ${formatCurrency(i.rate)}`).join("\n");
-    const message = `*Invoice ${invoice.invoiceNumber}*
-*From:* ${business.name}
-*Date:* ${formatDate(invoice.date)}
-*Due:* ${formatDate(invoice.dueDate)}
-
-*Items:*
-${itemSummary}
-
-*Subtotal:* ${formatCurrency(invoice.subtotal)}
-${invoice.totalDiscount > 0 ? `*Discount:* -${formatCurrency(invoice.totalDiscount)}\n` : ""}*Taxable:* ${formatCurrency(invoice.totalTaxable)}
-${invoice.totalCgst > 0 ? `*CGST:* ${formatCurrency(invoice.totalCgst)}\n` : ""}${invoice.totalSgst > 0 ? `*SGST:* ${formatCurrency(invoice.totalSgst)}\n` : ""}${invoice.totalIgst > 0 ? `*IGST:* ${formatCurrency(invoice.totalIgst)}\n` : ""}*Grand Total:* ${formatCurrency(invoice.grandTotal)}
-${invoice.balanceDue > 0 ? `*Balance Due:* ${formatCurrency(invoice.balanceDue)}` : ""}
-
-_This invoice was generated using Argus GST Billing App_`;
-
-    // Try Web Share API with PDF file attached (works on mobile)
-    if (navigator.canShare && navigator.canShare({ files: [new File([""], "test.pdf", { type: "application/pdf" })] })) {
-      try {
-        setSavingPDF(true);
-        const pdfBlob = await generatePDFBlob(invoice, business);
-        const file = new File([pdfBlob], `${invoice.invoiceNumber}.pdf`, { type: "application/pdf" });
-        await navigator.share({
-          title: `Invoice ${invoice.invoiceNumber}`,
-          text: message,
-          files: [file],
-        });
-        return;
-      } catch (err) {
-        // User cancelled or share failed; fall through to URL method
-        console.log("Web Share failed, falling back to URL:", err);
-      } finally {
-        setSavingPDF(false);
-      }
-    }
-
-    // Fallback: open WhatsApp with text message
-    const encodedMsg = encodeURIComponent(message);
-    const phone = invoice.partyPhone ? invoice.partyPhone.replace(/[^0-9]/g, "") : "";
-    const url = phone ? `https://wa.me/${phone}?text=${encodedMsg}` : `https://web.whatsapp.com/send?text=${encodedMsg}`;
-    window.open(url, "_blank");
-  }
-
   async function generatePDFBlob(inv: Invoice, biz: BusinessProfile): Promise<Blob> {
     const html = generateInvoiceHTML(inv, biz);
     const container = document.createElement("div");
@@ -133,20 +90,38 @@ _This invoice was generated using Argus GST Billing App_`;
           <h1 className="text-2xl text-starlight">{invoice.invoiceNumber}</h1>
         </div>
         <div className="flex flex-wrap gap-2">
+          <InvoiceShareActions
+            invoice={invoice}
+            business={business}
+            onAddUpi={onAddUpi}
+            preparingPdf={savingPDF}
+            onPreparePdf={
+              business
+                ? async () => {
+                    setSavingPDF(true);
+                    try {
+                      const pdfBlob = await generatePDFBlob(invoice, business);
+                      return new File([pdfBlob], `${invoice.invoiceNumber}.pdf`, {
+                        type: "application/pdf",
+                      });
+                    } finally {
+                      setSavingPDF(false);
+                    }
+                  }
+                : undefined
+            }
+          />
           <button onClick={() => onEdit(invoice)} className="btn-secondary !py-2">
             <Edit className="mr-1 h-4 w-4" /> Edit
           </button>
-          <button onClick={handleWhatsAppShare} disabled={savingPDF} className="btn-secondary !py-2 !bg-green-600 !text-white hover:!bg-green-700 disabled:opacity-50">
-            <MessageCircle className="mr-1 h-4 w-4" /> {savingPDF ? "Preparing..." : "WhatsApp"}
+          <button onClick={handleSavePDF} disabled={savingPDF} className="btn-secondary !py-2 disabled:opacity-50">
+            <FileDown className="mr-1 h-4 w-4" /> {savingPDF ? "Generating..." : "PDF"}
           </button>
           <button onClick={handleSaveJSON} className="btn-secondary !py-2">
             <FileJson className="mr-1 h-4 w-4" /> JSON
           </button>
           <button onClick={handleSaveHTML} className="btn-secondary !py-2">
             <FileText className="mr-1 h-4 w-4" /> HTML
-          </button>
-          <button onClick={handleSavePDF} disabled={savingPDF} className="btn-primary !py-2 disabled:opacity-50">
-            <FileDown className="mr-1 h-4 w-4" /> {savingPDF ? "Generating..." : "Save PDF"}
           </button>
         </div>
       </div>
