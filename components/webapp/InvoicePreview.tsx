@@ -1,10 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowLeft, FileJson, FileText, Edit, FileDown, MessageCircle } from "lucide-react";
+import { ArrowLeft, FileJson, FileText, Edit, FileDown } from "lucide-react";
+import { useAuth } from "@/lib/auth-provider";
 import type { BusinessProfile, Invoice, StockItem } from "@/lib/types";
 import { formatCurrency, formatDate, generateInvoiceHTML } from "@/lib/gst";
 import { saveInvoiceToFile, saveInvoiceAsHTML, saveInvoiceAsPDF, downloadInvoiceFile, downloadInvoiceHTML, downloadInvoicePDF, isUsingFileSystem } from "@/lib/storage";
+import { InvoiceShareActions } from "./InvoiceShareActions";
 
 type InvoicePreviewProps = {
   invoice: Invoice;
@@ -13,10 +15,41 @@ type InvoicePreviewProps = {
   onBack: () => void;
   onEdit: (invoice: Invoice) => void;
   onMarkPaid?: () => void;
+  onAddUpi?: () => void;
 };
 
-export function InvoicePreview({ invoice, business, stock = [], onBack, onEdit, onMarkPaid }: InvoicePreviewProps) {
+export function InvoicePreview({ invoice, business, stock = [], onBack, onEdit, onMarkPaid, onAddUpi }: InvoicePreviewProps) {
+  const { token, firebaseUser } = useAuth();
   const [savingPDF, setSavingPDF] = useState(false);
+  const [savingEinvoice, setSavingEinvoice] = useState(false);
+
+  async function handleDownloadEinvoice() {
+    if (!token || !firebaseUser) {
+      alert("Sign in with a Business account to download NIC e-invoice JSON.");
+      return;
+    }
+    setSavingEinvoice(true);
+    try {
+      const r = await fetch(
+        `/api/ca/clients/${encodeURIComponent(firebaseUser.uid)}/einvoice?invoice=${encodeURIComponent(invoice.invoiceNumber)}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({}));
+        throw new Error((d as { error?: string }).error || `Download failed (${r.status})`);
+      }
+      const blob = await r.blob();
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `EInvoice_${invoice.invoiceNumber}.json`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Could not download e-invoice JSON.");
+    } finally {
+      setSavingEinvoice(false);
+    }
+  }
 
   async function handleSaveJSON() {
     if (!business) return;
@@ -58,51 +91,6 @@ export function InvoicePreview({ invoice, business, stock = [], onBack, onEdit, 
     }
   }
 
-  async function handleWhatsAppShare() {
-    if (!business) return;
-    const itemSummary = invoice.items.map((i) => `• ${i.description} - ${i.quantity} ${i.unit} @ ${formatCurrency(i.rate)}`).join("\n");
-    const message = `*Invoice ${invoice.invoiceNumber}*
-*From:* ${business.name}
-*Date:* ${formatDate(invoice.date)}
-*Due:* ${formatDate(invoice.dueDate)}
-
-*Items:*
-${itemSummary}
-
-*Subtotal:* ${formatCurrency(invoice.subtotal)}
-${invoice.totalDiscount > 0 ? `*Discount:* -${formatCurrency(invoice.totalDiscount)}\n` : ""}*Taxable:* ${formatCurrency(invoice.totalTaxable)}
-${invoice.totalCgst > 0 ? `*CGST:* ${formatCurrency(invoice.totalCgst)}\n` : ""}${invoice.totalSgst > 0 ? `*SGST:* ${formatCurrency(invoice.totalSgst)}\n` : ""}${invoice.totalIgst > 0 ? `*IGST:* ${formatCurrency(invoice.totalIgst)}\n` : ""}*Grand Total:* ${formatCurrency(invoice.grandTotal)}
-${invoice.balanceDue > 0 ? `*Balance Due:* ${formatCurrency(invoice.balanceDue)}` : ""}
-
-_This invoice was generated using Argus GST Billing App_`;
-
-    // Try Web Share API with PDF file attached (works on mobile)
-    if (navigator.canShare && navigator.canShare({ files: [new File([""], "test.pdf", { type: "application/pdf" })] })) {
-      try {
-        setSavingPDF(true);
-        const pdfBlob = await generatePDFBlob(invoice, business);
-        const file = new File([pdfBlob], `${invoice.invoiceNumber}.pdf`, { type: "application/pdf" });
-        await navigator.share({
-          title: `Invoice ${invoice.invoiceNumber}`,
-          text: message,
-          files: [file],
-        });
-        return;
-      } catch (err) {
-        // User cancelled or share failed; fall through to URL method
-        console.log("Web Share failed, falling back to URL:", err);
-      } finally {
-        setSavingPDF(false);
-      }
-    }
-
-    // Fallback: open WhatsApp with text message
-    const encodedMsg = encodeURIComponent(message);
-    const phone = invoice.partyPhone ? invoice.partyPhone.replace(/[^0-9]/g, "") : "";
-    const url = phone ? `https://wa.me/${phone}?text=${encodedMsg}` : `https://web.whatsapp.com/send?text=${encodedMsg}`;
-    window.open(url, "_blank");
-  }
-
   async function generatePDFBlob(inv: Invoice, biz: BusinessProfile): Promise<Blob> {
     const html = generateInvoiceHTML(inv, biz);
     const container = document.createElement("div");
@@ -140,20 +128,41 @@ _This invoice was generated using Argus GST Billing App_`;
               I got it
             </button>
           ) : null}
+          <InvoiceShareActions
+            invoice={invoice}
+            business={business}
+            onAddUpi={onAddUpi}
+            preparingPdf={savingPDF}
+            onPreparePdf={
+              business
+                ? async () => {
+                    setSavingPDF(true);
+                    try {
+                      const pdfBlob = await generatePDFBlob(invoice, business);
+                      return new File([pdfBlob], `${invoice.invoiceNumber}.pdf`, {
+                        type: "application/pdf",
+                      });
+                    } finally {
+                      setSavingPDF(false);
+                    }
+                  }
+                : undefined
+            }
+          />
           <button onClick={() => onEdit(invoice)} className="btn-secondary !py-2">
             <Edit className="mr-1 h-4 w-4" /> Edit
           </button>
-          <button onClick={handleWhatsAppShare} disabled={savingPDF} className="btn-secondary !py-2 !bg-green-600 !text-white hover:!bg-green-700 disabled:opacity-50">
-            <MessageCircle className="mr-1 h-4 w-4" /> {savingPDF ? "Preparing..." : "WhatsApp"}
+          <button onClick={handleSavePDF} disabled={savingPDF} className="btn-secondary !py-2 disabled:opacity-50">
+            <FileDown className="mr-1 h-4 w-4" /> {savingPDF ? "Generating..." : "PDF"}
+          </button>
+          <button onClick={handleDownloadEinvoice} disabled={savingEinvoice} className="btn-secondary !py-2 disabled:opacity-50">
+            <FileJson className="mr-1 h-4 w-4" /> {savingEinvoice ? "Preparing..." : "Download e-invoice JSON"}
           </button>
           <button onClick={handleSaveJSON} className="btn-secondary !py-2">
             <FileJson className="mr-1 h-4 w-4" /> JSON
           </button>
           <button onClick={handleSaveHTML} className="btn-secondary !py-2">
             <FileText className="mr-1 h-4 w-4" /> HTML
-          </button>
-          <button onClick={handleSavePDF} disabled={savingPDF} className="btn-primary !py-2 disabled:opacity-50">
-            <FileDown className="mr-1 h-4 w-4" /> {savingPDF ? "Generating..." : "Save PDF"}
           </button>
         </div>
       </div>
@@ -176,7 +185,7 @@ _This invoice was generated using Argus GST Billing App_`;
           </div>
           <div className="text-right">
             <h3 className="text-xl font-bold text-[#5266eb]">{invoice.invoiceNumber}</h3>
-            <p className="text-sm text-gray-600">Type: {invoice.type.replace(/_/g, " ").toUpperCase()}</p>
+            <p className="text-sm text-gray-600">Type: {invoice.type.replace(/_/g, " ").toUpperCase()}{invoice.documentType ? ` (${invoice.documentType})` : ""}</p>
             <p className="text-sm text-gray-600">Date: {formatDate(invoice.date)}</p>
             <p className="text-sm text-gray-600">Due: {formatDate(invoice.dueDate)}</p>
             <span className={`mt-1 inline-block rounded-full px-3 py-0.5 text-xs font-bold uppercase ${
@@ -189,12 +198,23 @@ _This invoice was generated using Argus GST Billing App_`;
           </div>
         </div>
 
-        <div className="mb-6">
-          <h4 className="mb-1 text-xs uppercase text-gray-400">Bill To</h4>
-          <p className="font-semibold">{invoice.partyName || "—"}</p>
-          {invoice.partyPhone && <p className="text-sm text-gray-600">Phone: {invoice.partyPhone}</p>}
-          <p className="text-sm text-gray-600">GSTIN: {invoice.partyGstin || "Unregistered"}</p>
-          <p className="text-sm text-gray-600">Place of Supply: {invoice.placeOfSupply}</p>
+        <div className="mb-6 grid gap-6 sm:grid-cols-2">
+          <div>
+            <h4 className="mb-1 text-xs uppercase text-gray-400">Bill To</h4>
+            <p className="font-semibold">{invoice.partyName || "—"}</p>
+            {invoice.partyPhone && <p className="text-sm text-gray-600">Phone: {invoice.partyPhone}</p>}
+            <p className="text-sm text-gray-600">GSTIN: {invoice.partyGstin === "URP" || !invoice.partyGstin ? "URP (Unregistered)" : invoice.partyGstin}</p>
+            <p className="text-sm text-gray-600">Place of Supply: {invoice.placeOfSupply}</p>
+            {invoice.documentType && <p className="text-sm text-gray-600">Document: {invoice.documentType}</p>}
+            {invoice.reverseCharge && <p className="text-sm text-gray-600">Reverse Charge: Yes</p>}
+          </div>
+          {(invoice.shipToAddress || (invoice.shipToGstin && invoice.shipToGstin !== invoice.partyGstin)) && (
+            <div>
+              <h4 className="mb-1 text-xs uppercase text-gray-400">Ship To</h4>
+              {invoice.shipToAddress && <p className="text-sm text-gray-600">{invoice.shipToAddress}</p>}
+              <p className="text-sm text-gray-600">GSTIN: {invoice.shipToGstin === "URP" ? "URP (Unregistered)" : (invoice.shipToGstin || invoice.partyGstin)}</p>
+            </div>
+          )}
         </div>
 
         <table className="mb-6 w-full text-sm">
@@ -228,7 +248,7 @@ _This invoice was generated using Argus GST Billing App_`;
                   ) : null}
                 </td>
                 <td className="p-2 text-center">{item.hsn}</td>
-                <td className="p-2 text-right">{item.quantity} {item.unit}</td>
+                <td className="p-2 text-right">{item.quantity} {item.uqc || item.unit}</td>
                 <td className="p-2 text-right">{formatCurrency(item.rate)}</td>
                 <td className="p-2 text-right">{item.discount}%</td>
                 <td className="p-2 text-right">{formatCurrency(item.taxableAmount)}</td>
@@ -263,6 +283,9 @@ _This invoice was generated using Argus GST Billing App_`;
               )}
               {invoice.totalIgst > 0 && (
                 <tr><td className="py-1 text-gray-600">IGST</td><td className="py-1 text-right">{formatCurrency(invoice.totalIgst)}</td></tr>
+              )}
+              {(invoice.totalCess || 0) > 0 && (
+                <tr><td className="py-1 text-gray-600">Cess</td><td className="py-1 text-right">{formatCurrency(invoice.totalCess || 0)}</td></tr>
               )}
               {invoice.roundOff !== 0 && (
                 <tr><td className="py-1 text-gray-600">Round Off</td><td className="py-1 text-right">{formatCurrency(invoice.roundOff)}</td></tr>

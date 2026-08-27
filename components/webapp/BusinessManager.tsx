@@ -5,6 +5,7 @@ import { Plus, Edit2, Trash2, Building2, Check } from "lucide-react";
 import type { AppData, BusinessProfile } from "@/lib/types";
 import { INDIAN_STATES } from "@/lib/types";
 import { generateId, saveBusiness, setActiveBusiness, saveData } from "@/lib/storage";
+import { validateGstin } from "@/lib/gstin";
 
 type BusinessManagerProps = {
   data: AppData;
@@ -50,7 +51,12 @@ export function BusinessManager({ data, onSaved }: BusinessManagerProps) {
       alert("Business name is required");
       return;
     }
-    saveBusiness(editing);
+    const gstinCheck = validateGstin(editing.gstin);
+    if (!gstinCheck.ok) {
+      alert(gstinCheck.error);
+      return;
+    }
+    saveBusiness({ ...editing, gstin: (editing.gstin || "").trim().toUpperCase() });
     if (isNew) setActiveBusiness(editing.id);
     setEditing(null);
     onSaved();
@@ -104,7 +110,7 @@ export function BusinessManager({ data, onSaved }: BusinessManagerProps) {
           <h2 className="text-lg text-starlight">Business Details</h2>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Business Name *" value={editing.name} onChange={(v) => updateField("name", v)} />
-            <Field label="GSTIN" value={editing.gstin} onChange={(v) => updateField("gstin", v)} />
+            <Field label="GSTIN" value={editing.gstin} onChange={(v) => updateField("gstin", v.toUpperCase())} />
             <Field label="PAN" value={editing.pan} onChange={(v) => updateField("pan", v)} />
             <Field label="Email" value={editing.email} onChange={(v) => updateField("email", v)} />
             <Field label="Phone" value={editing.phone} onChange={(v) => updateField("phone", v)} />
@@ -134,7 +140,19 @@ export function BusinessManager({ data, onSaved }: BusinessManagerProps) {
             <Field label="Account Number" value={editing.bankAccount} onChange={(v) => updateField("bankAccount", v)} />
             <Field label="IFSC Code" value={editing.bankIfsc} onChange={(v) => updateField("bankIfsc", v)} />
             <Field label="Branch" value={editing.bankBranch} onChange={(v) => updateField("bankBranch", v)} />
-            <Field label="UPI ID" value={editing.upiId} onChange={(v) => updateField("upiId", v)} />
+            <label className="block text-sm text-silver">
+              UPI ID
+              <input
+                type="text"
+                value={editing.upiId}
+                onChange={(e) => updateField("upiId", e.target.value)}
+                placeholder="shop@okaxis"
+                className="mt-1 w-full rounded-btn border border-lead/30 bg-graphite px-4 py-2.5 text-starlight outline-none focus:border-mercury-blue"
+              />
+              <span className="mt-1 block text-xs text-lead">
+                Your VPA. Collect UPI builds upi://pay?pa=… — Argus is not a payment gateway.
+              </span>
+            </label>
           </div>
           {(editing.upiQrPng || editing.upiId) && (
             <div className="mt-3">

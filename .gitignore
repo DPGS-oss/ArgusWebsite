@@ -11,3 +11,4 @@ functions/.env
 functions/scripts/promo-codes-*.csv
 **/secrets.json
 **/*service_account*.json
+tsconfig.tsbuildinfo

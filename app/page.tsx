@@ -1,6 +1,7 @@
 import { Hero } from "@/components/Hero";
 import { CapabilityProof } from "@/components/CapabilityProof";
 import { ProductShowcase } from "@/components/ProductShowcase";
+import { WhatsAppInvoice } from "@/components/WhatsAppInvoice";
 import { Features } from "@/components/Features";
 import { Pricing } from "@/components/Pricing";
 import { About } from "@/components/About";
@@ -17,6 +18,7 @@ export default function HomePage() {
         <Hero />
         <CapabilityProof />
         <ProductShowcase />
+        <WhatsAppInvoice />
         <Features />
         <Pricing />
         <About />

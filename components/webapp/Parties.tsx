@@ -5,6 +5,7 @@ import { Plus, Edit2, Trash2, Users, Search } from "lucide-react";
 import type { AppData, Party } from "@/lib/types";
 import { INDIAN_STATES } from "@/lib/types";
 import { generateId, saveParty, deleteParty } from "@/lib/storage";
+import { normalizeGstin, validateGstin } from "@/lib/gstin";
 
 type PartiesProps = {
   data: AppData;
@@ -25,6 +26,10 @@ const emptyParty = (): Party => ({
   pincode: "",
   type: "customer",
   createdAt: new Date().toISOString(),
+  shipToGstin: "",
+  shipToAddress: "",
+  shipToState: "",
+  shipToStateCode: "",
 });
 
 export function Parties({ data, onSaved }: PartiesProps) {
@@ -41,7 +46,29 @@ export function Parties({ data, onSaved }: PartiesProps) {
       alert("Party name is required");
       return;
     }
-    saveParty(editing);
+    const billCheck = validateGstin(editing.gstin);
+    if (!billCheck.ok) {
+      alert(billCheck.error);
+      return;
+    }
+    const shipCheck = validateGstin(editing.shipToGstin || "");
+    if (!shipCheck.ok) {
+      alert(shipCheck.error);
+      return;
+    }
+    const hasShipTo = !!(
+      (editing.shipToGstin || "").trim() ||
+      (editing.shipToAddress || "").trim() ||
+      (editing.shipToStateCode || "").trim()
+    );
+    const toSave: Party = {
+      ...editing,
+      gstin: (editing.gstin || "").trim() ? normalizeGstin(editing.gstin) : "URP",
+      shipToGstin: hasShipTo
+        ? ((editing.shipToGstin || "").trim() ? normalizeGstin(editing.shipToGstin) : "")
+        : "",
+    };
+    saveParty(toSave);
     setEditing(null);
     onSaved();
   }
@@ -61,6 +88,9 @@ export function Parties({ data, onSaved }: PartiesProps) {
     if (field === "state") {
       const state = INDIAN_STATES.find((s) => s.name === value);
       setEditing({ ...editing, state: value, stateCode: state?.code || "" });
+    } else if (field === "shipToState") {
+      const state = INDIAN_STATES.find((s) => s.name === value);
+      setEditing({ ...editing, shipToState: value, shipToStateCode: state?.code || "" });
     } else {
       setEditing({ ...editing, [field]: value });
     }
@@ -100,11 +130,12 @@ export function Parties({ data, onSaved }: PartiesProps) {
               </select>
             </label>
             <label className="block text-sm text-silver">
-              GSTIN
+              GSTIN (use URP if unregistered)
               <input
                 type="text"
                 value={editing.gstin}
-                onChange={(e) => updateField("gstin", e.target.value)}
+                onChange={(e) => updateField("gstin", e.target.value.toUpperCase())}
+                placeholder="15-character GSTIN or URP"
                 className="mt-1 w-full rounded-btn border border-lead/30 bg-graphite px-4 py-2.5 text-starlight outline-none focus:border-mercury-blue"
               />
             </label>
@@ -176,6 +207,45 @@ export function Parties({ data, onSaved }: PartiesProps) {
               className="mt-1 w-full rounded-btn border border-lead/30 bg-graphite px-4 py-2.5 text-starlight outline-none focus:border-mercury-blue"
             />
           </label>
+
+          <div className="border-t border-lead/20 pt-4">
+            <h2 className="mb-1 text-lg text-starlight">Ship To (optional)</h2>
+            <p className="mb-4 text-xs text-silver">Leave blank to use bill-to. Store URP if the delivery party is unregistered.</p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block text-sm text-silver">
+                Ship-to GSTIN
+                <input
+                  type="text"
+                  value={editing.shipToGstin || ""}
+                  onChange={(e) => updateField("shipToGstin", e.target.value.toUpperCase())}
+                  placeholder="Blank = same as bill-to, or URP"
+                  className="mt-1 w-full rounded-btn border border-lead/30 bg-graphite px-4 py-2.5 text-starlight outline-none focus:border-mercury-blue"
+                />
+              </label>
+              <label className="block text-sm text-silver">
+                Ship-to state
+                <select
+                  value={editing.shipToState || ""}
+                  onChange={(e) => updateField("shipToState", e.target.value)}
+                  className="mt-1 w-full rounded-btn border border-lead/30 bg-graphite px-4 py-2.5 text-starlight outline-none focus:border-mercury-blue"
+                >
+                  <option value="">Same as bill-to</option>
+                  {INDIAN_STATES.map((s) => (
+                    <option key={s.code} value={s.name}>{s.name} ({s.code})</option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-sm text-silver sm:col-span-2">
+                Ship-to address
+                <input
+                  type="text"
+                  value={editing.shipToAddress || ""}
+                  onChange={(e) => updateField("shipToAddress", e.target.value)}
+                  className="mt-1 w-full rounded-btn border border-lead/30 bg-graphite px-4 py-2.5 text-starlight outline-none focus:border-mercury-blue"
+                />
+              </label>
+            </div>
+          </div>
         </div>
       </div>
     );

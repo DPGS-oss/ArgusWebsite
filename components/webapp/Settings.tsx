@@ -7,13 +7,13 @@ import { saveSettings, exportAllData, importAllData, pickFolder, isUsingFileSyst
 import { useAuth, hasValidSubscription } from "@/lib/auth-provider";
 import { syncFromCloud, syncToCloud, getLastSyncTime } from "@/lib/cloud-sync";
 import { encryptBooksPayload, generateCaShareKey } from "@/lib/ca-crypto";
+import { gstRatePickerOptions, gstRateLabel } from "@/lib/gst";
 
 type SettingsProps = {
   data: AppData;
   onSaved: () => void;
 };
 
-const GST_RATES: GSTRate[] = [0, 3, 5, 12, 18, 28];
 const CA_INVITE_KEY = "argus_ca_invite_session";
 
 function loadStoredCaInvite() {
@@ -308,7 +308,7 @@ export function Settings({ data, onSaved }: SettingsProps) {
               onChange={(e) => update("defaultGstRate", parseFloat(e.target.value) as GSTRate)}
               className="mt-1 w-full rounded-btn border border-bone bg-mist px-4 py-2.5 text-ink outline-none focus:border-brand-violet"
             >
-              {GST_RATES.map((r) => <option key={r} value={r}>{r}%</option>)}
+              {gstRatePickerOptions(settings.defaultGstRate).map((r) => <option key={r} value={r}>{gstRateLabel(r)}</option>)}
             </select>
           </label>
           <label className="block text-sm text-slate">

@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "node --test functions/_shared/app_data.test.js functions/_shared/admin-dashboard.test.js functions/_shared/admin-stats.test.js functions/_shared/subscription-billing.test.js functions/_shared/trial.test.js functions/_shared/crypto-safe.test.js functions/ask.test.js test/website.test.js && node scripts/check-no-secrets.js"
+    "test": "vitest run && node --test functions/_shared/app_data.test.js functions/_shared/admin-dashboard.test.js functions/_shared/admin-stats.test.js functions/_shared/subscription-billing.test.js functions/_shared/trial.test.js functions/_shared/crypto-safe.test.js functions/ask.test.js test/website.test.js && node scripts/check-no-secrets.js",
+    "test:unit": "vitest run",
+    "test:node": "node --test functions/_shared/app_data.test.js functions/_shared/admin-dashboard.test.js functions/_shared/admin-stats.test.js functions/_shared/subscription-billing.test.js functions/_shared/trial.test.js functions/_shared/crypto-safe.test.js functions/ask.test.js test/website.test.js && node scripts/check-no-secrets.js"
   },
   "dependencies": {
     "@types/qrcode": "^1.5.6",
@@ -34,6 +36,7 @@
     "eslint-config-next": "^15.3.1",
     "postcss": "^8.5.3",
     "tailwindcss": "^3.4.17",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "vitest": "^4.1.11"
   }
 }

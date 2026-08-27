@@ -1,4 +1,221 @@
-import type { GSTRate, HSNCode, Invoice, InvoiceItem, GSTRReport, GSTRSection, GSTRReportType, Purchase } from "./types";
+import type { GSTRate, HSNCode, Invoice, InvoiceItem, InvoiceStatus, InvoiceType, GSTRReport, GSTRSection, GSTRReportType, GstDocumentType } from "./types";
+import { GST_2_0_RATES, INDIAN_STATES } from "./types";
+import { isRegisteredGstin, normalizeGstin, stateCodeFromGstin } from "./gstin";
+
+export { GST_2_0_RATES };
+export type { GstDocumentType };
+
+export function gstRatePickerOptions(existingRate?: number): GSTRate[] {
+  const rates: GSTRate[] = [...GST_2_0_RATES];
+  if (existingRate != null && !(rates as number[]).includes(existingRate)) {
+    rates.push(existingRate as GSTRate);
+    rates.sort((a, b) => a - b);
+  }
+  return rates;
+}
+
+export function defaultGstRateForNew(rate: number): GSTRate {
+  return (GST_2_0_RATES as number[]).includes(rate) ? (rate as GSTRate) : 18;
+}
+
+export function gstRateLabel(rate: number): string {
+  if (rate === 0.25) return "0.25% (rough diamonds)";
+  if (rate === 3) return "3% (gold / precious metals)";
+  return `${rate}%`;
+}
+
+export function documentTypeFromInvoiceType(
+  type: InvoiceType | "delivery_challan"
+): GstDocumentType {
+  if (type === "credit_note") return "CRN";
+  if (type === "delivery_challan") return "CHL";
+  return "INV";
+}
+
+export function formatPartyAddress(party: {
+  address?: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
+}): string {
+  return [party.address, party.city, party.state, party.pincode].filter(Boolean).join(", ");
+}
+
+export function resolveShipTo(input: {
+  billToGstin: string;
+  billToAddress: string;
+  billToStateCode: string;
+  shipToGstin?: string;
+  shipToAddress?: string;
+  shipToStateCode?: string;
+}): { shipToGstin: string; shipToAddress: string; shipToStateCode: string } {
+  const shipGstinRaw = (input.shipToGstin || "").trim();
+  const shipAddrRaw = (input.shipToAddress || "").trim();
+  const shipStateRaw = (input.shipToStateCode || "").trim();
+  const billGstin = normalizeGstin(input.billToGstin);
+
+  if (!shipGstinRaw && !shipAddrRaw && !shipStateRaw) {
+    return {
+      shipToGstin: billGstin,
+      shipToAddress: input.billToAddress || "",
+      shipToStateCode: input.billToStateCode || "",
+    };
+  }
+
+  const shipToGstin = shipGstinRaw ? normalizeGstin(shipGstinRaw) : billGstin;
+  return {
+    shipToGstin,
+    shipToAddress: shipAddrRaw || input.billToAddress || "",
+    shipToStateCode: shipStateRaw || stateCodeFromGstin(shipToGstin) || input.billToStateCode || "",
+  };
+}
+
+export function resolvePlaceOfSupply(shipToStateCode: string, billToStateCode: string): string {
+  return (
+    stateCodeFromPlaceOfSupply(shipToStateCode) ||
+    (shipToStateCode || "").trim() ||
+    stateCodeFromPlaceOfSupply(billToStateCode) ||
+    (billToStateCode || "").trim()
+  );
+}
+
+function normalizeStateKey(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+/** Common labels shops used before we stored GST state codes. */
+const STATE_ALIASES: Record<string, string> = {
+  mh: "27",
+  maha: "27",
+  maharastra: "27",
+  ka: "29",
+  kar: "29",
+  kn: "29",
+  dl: "07",
+  nctofdelhi: "07",
+  nctdelhi: "07",
+  newdelhi: "07",
+  ncr: "07",
+  or: "21",
+  orissa: "21",
+  od: "21",
+  py: "34",
+  pondicherry: "34",
+  pondichery: "34",
+  jk: "01",
+  uk: "05",
+  ua: "05",
+  uttaranchal: "05",
+  cg: "22",
+  chattisgarh: "22",
+  tn: "33",
+  tamilnadu: "33",
+  ts: "36",
+  telengana: "36",
+  up: "09",
+  wb: "19",
+  bengal: "19",
+  hp: "02",
+  mp: "23",
+  ap: "37",
+  gj: "24",
+  guj: "24",
+  rj: "08",
+  raj: "08",
+  pb: "03",
+  hr: "06",
+  br: "10",
+  as: "18",
+  kl: "32",
+  ker: "32",
+  ga: "30",
+  ch: "04",
+  an: "35",
+  andaman: "35",
+  dn: "26",
+  dd: "26",
+  dnh: "26",
+  daman: "26",
+  damananddiu: "26",
+  dadranagarhaveli: "26",
+  dadraandnagarhaveli: "26",
+  ld: "31",
+  la: "38",
+};
+
+let stateLookupCache: Map<string, string> | null = null;
+
+function stateLookup(): Map<string, string> {
+  if (stateLookupCache) return stateLookupCache;
+  const map = new Map<string, string>();
+  for (const state of INDIAN_STATES) {
+    map.set(normalizeStateKey(state.name), state.code);
+    map.set(state.code, state.code);
+  }
+  for (const [alias, code] of Object.entries(STATE_ALIASES)) {
+    if (!map.has(alias)) map.set(alias, code);
+  }
+  stateLookupCache = map;
+  return map;
+}
+
+export function stateCodeFromPlaceOfSupply(value: string | undefined | null): string | null {
+  const raw = (value || "").trim();
+  if (!raw) return null;
+  if (/^\d{2}$/.test(raw)) return raw;
+  return stateLookup().get(normalizeStateKey(raw)) || null;
+}
+
+export function openHistoricalInvoice(invoice: Invoice): Invoice {
+  const clone = JSON.parse(JSON.stringify(invoice)) as Invoice;
+  const code = stateCodeFromPlaceOfSupply(clone.placeOfSupply);
+  if (code) clone.placeOfSupply = code;
+  return clone;
+}
+
+export type BuildInvoiceInput = {
+  id: string;
+  invoiceNumber: string;
+  type: InvoiceType;
+  status: InvoiceStatus;
+  businessId: string;
+  sellerGstin: string;
+  sellerStateCode: string;
+  partyId: string;
+  partyName: string;
+  partyGstin: string;
+  partyPhone: string;
+  partyAddress: string;
+  partyStateCode: string;
+  shipToGstin?: string;
+  shipToAddress?: string;
+  shipToStateCode?: string;
+  date: string;
+  dueDate: string;
+  items: InvoiceItem[];
+  roundOffEnabled: boolean;
+  paidAmount: number;
+  paymentMode: string;
+  notes: string;
+  terms: string;
+  reverseCharge: boolean;
+  isTotalMode: boolean;
+  createdAt: string;
+  documentType?: GstDocumentType;
+  /** Historical named or coded POS. Used when ship-to is blank so bill-to cannot steal tax. */
+  placeOfSupply?: string;
+  /**
+   * Keep stored cgst/sgst/igst and isInterState unless qty/rate/discount/GST% changed.
+   * Used when reopening a historical invoice without the user editing POS / ship-to.
+   */
+  preserveStoredTax?: boolean;
+  storedIsInterState?: boolean;
+};
+
 
 export const HSN_DATABASE: HSNCode[] = [
   { code: "0101", description: "Live animals (bovine)", gstRate: 0, category: "Agriculture" },
@@ -290,9 +507,11 @@ export function calculateItem(item: {
   quantity: number;
   rate: number;
   discount: number;
-  gstRate: GSTRate;
+  gstRate: number;
   isInterState: boolean;
-}): Omit<InvoiceItem, "id" | "description" | "hsn" | "unit"> {
+  cessRate?: number;
+  cess?: number;
+}): Omit<InvoiceItem, "id" | "description" | "hsn" | "unit" | "uqc" | "stockItemId"> {
   const grossAmount = item.quantity * item.rate;
   const discountAmount = (grossAmount * item.discount) / 100;
   const taxableAmount = grossAmount - discountAmount;
@@ -309,17 +528,22 @@ export function calculateItem(item: {
     sgst = taxAmount / 2;
   }
 
-  const total = taxableAmount + taxAmount;
+  const cess =
+    item.cessRate != null
+      ? (taxableAmount * item.cessRate) / 100
+      : item.cess ?? 0;
+  const total = taxableAmount + taxAmount + cess;
 
   return {
     quantity: item.quantity,
     rate: item.rate,
     discount: item.discount,
-    gstRate: item.gstRate,
+    gstRate: item.gstRate as GSTRate,
     taxableAmount: round2(taxableAmount),
     cgst: round2(cgst),
     sgst: round2(sgst),
     igst: round2(igst),
+    cess: round2(cess),
     total: round2(total),
   };
 }
@@ -334,7 +558,8 @@ export function calculateInvoiceTotals(items: InvoiceItem[], roundOffEnabled: bo
   const totalCgst = items.reduce((sum, i) => sum + i.cgst, 0);
   const totalSgst = items.reduce((sum, i) => sum + i.sgst, 0);
   const totalIgst = items.reduce((sum, i) => sum + i.igst, 0);
-  const totalTax = totalCgst + totalSgst + totalIgst;
+  const totalCess = items.reduce((sum, i) => sum + (i.cess ?? 0), 0);
+  const totalTax = totalCgst + totalSgst + totalIgst + totalCess;
   const rawTotal = totalTaxable + totalTax;
 
   let roundOff = 0;
@@ -352,6 +577,7 @@ export function calculateInvoiceTotals(items: InvoiceItem[], roundOffEnabled: bo
     totalCgst: round2(totalCgst),
     totalSgst: round2(totalSgst),
     totalIgst: round2(totalIgst),
+    totalCess: round2(totalCess),
     totalTax: round2(totalTax),
     roundOff: round2(roundOff),
     grandTotal: round2(grandTotal),
@@ -385,52 +611,156 @@ export function round2(num: number): number {
   return Math.round(num * 100) / 100;
 }
 
-export function isInterState(businessStateCode: string, partyStateCode: string): boolean {
-  return businessStateCode !== partyStateCode;
+export function isInterState(sellerStateCode: string, placeOfSupplyStateCode: string): boolean {
+  const seller = stateCodeFromPlaceOfSupply(sellerStateCode) || (sellerStateCode || "").trim();
+  const pos = stateCodeFromPlaceOfSupply(placeOfSupplyStateCode) || (placeOfSupplyStateCode || "").trim();
+  if (!seller || !pos) return false;
+  return seller !== pos;
 }
 
-export function purchaseToInvoice(purchase: Purchase): Invoice {
-  const items = purchase.items || [];
-  const totalCgst = items.reduce((s, i) => s + (i.cgst || 0), 0);
-  const totalSgst = items.reduce((s, i) => s + (i.sgst || 0), 0);
-  const totalIgst = items.reduce((s, i) => s + (i.igst || 0), 0);
-  const totalTax = purchase.totalGstAmount || totalCgst + totalSgst + totalIgst;
-  const grandTotal = purchase.totalAmount || 0;
-  const totalTaxable =
-    items.reduce((s, i) => s + (i.taxableAmount || 0), 0) || Math.max(0, grandTotal - totalTax);
-  const date = String(purchase.createdAt || "").slice(0, 10);
+function lineLooksInterState(item: InvoiceItem): boolean {
+  return (item.igst || 0) > 0 && (item.cgst || 0) === 0 && (item.sgst || 0) === 0;
+}
+
+function hasStoredLineTax(item: InvoiceItem): boolean {
+  return (
+    (item.taxableAmount || 0) !== 0 ||
+    (item.cgst || 0) !== 0 ||
+    (item.sgst || 0) !== 0 ||
+    (item.igst || 0) !== 0 ||
+    (item.total || 0) !== 0
+  );
+}
+
+/** True when stored taxable + tax still match qty/rate/discount/GST%. */
+function lineAmountsMatchInputs(item: InvoiceItem): boolean {
+  const expectedTaxable = round2(item.quantity * item.rate * (1 - (item.discount || 0) / 100));
+  if (round2(item.taxableAmount || 0) !== expectedTaxable) return false;
+  const expectedTax = round2((expectedTaxable * (item.gstRate || 0)) / 100);
+  const storedTax = round2((item.cgst || 0) + (item.sgst || 0) + (item.igst || 0));
+  return storedTax === expectedTax;
+}
+
+function inferInterStateFromItems(items: InvoiceItem[]): boolean | undefined {
+  if (items.some(lineLooksInterState)) return true;
+  if (items.some((item) => (item.cgst || 0) > 0 || (item.sgst || 0) > 0)) return false;
+  return undefined;
+}
+
+function shouldPreserveLineTax(item: InvoiceItem, forceRecalc: boolean): boolean {
+  // Do not compare the new POS classifier to the stored split. Walk-ins stored
+  // IGST because empty party state was inter-state on main; mapping POS to the
+  // seller code would otherwise rewrite IGST → CGST+SGST on accidental save.
+  if (forceRecalc) return false;
+  if (!hasStoredLineTax(item)) return false;
+  return lineAmountsMatchInputs(item);
+}
+
+export function buildInvoiceDocument(input: BuildInvoiceInput): Invoice {
+  const userSetShipTo = !!(
+    (input.shipToGstin || "").trim() ||
+    (input.shipToAddress || "").trim() ||
+    (input.shipToStateCode || "").trim()
+  );
+  const billState = stateCodeFromPlaceOfSupply(input.partyStateCode) || input.partyStateCode || "";
+  const shipState = stateCodeFromPlaceOfSupply(input.shipToStateCode) || input.shipToStateCode || "";
+  const ship = resolveShipTo({
+    billToGstin: input.partyGstin,
+    billToAddress: input.partyAddress,
+    billToStateCode: billState,
+    shipToGstin: input.shipToGstin,
+    shipToAddress: input.shipToAddress,
+    shipToStateCode: shipState,
+  });
+  const historicalPos = stateCodeFromPlaceOfSupply(input.placeOfSupply);
+  const computedPlaceOfSupply = userSetShipTo
+    ? resolvePlaceOfSupply(ship.shipToStateCode, billState)
+    : historicalPos || resolvePlaceOfSupply(ship.shipToStateCode, billState);
+  // Map a named historical POS to a code, but do not replace it with the seller
+  // state when keeping stored tax — that fallback is what flipped walk-in IGST.
+  const keepStoredTax = input.preserveStoredTax !== false;
+  const placeOfSupply = keepStoredTax
+    ? historicalPos || (input.placeOfSupply || "").trim() || computedPlaceOfSupply
+    : computedPlaceOfSupply;
+  const sellerCode = stateCodeFromPlaceOfSupply(input.sellerStateCode) || input.sellerStateCode;
+  const computedInterState = isInterState(sellerCode, placeOfSupply);
+  const interState = keepStoredTax
+    ? (input.storedIsInterState ?? inferInterStateFromItems(input.items) ?? computedInterState)
+    : computedInterState;
+
+  const items = input.items.map((item) => {
+    if (shouldPreserveLineTax(item, !keepStoredTax)) {
+      return {
+        ...item,
+        uqc: item.uqc || item.unit,
+        cess: item.cess ?? 0,
+      };
+    }
+    const calc = calculateItem({
+      quantity: item.quantity,
+      rate: item.rate,
+      discount: item.discount,
+      gstRate: item.gstRate,
+      isInterState: interState,
+      cess: item.cess ?? 0,
+    });
+    return {
+      ...item,
+      quantity: calc.quantity,
+      rate: calc.rate,
+      discount: calc.discount,
+      gstRate: calc.gstRate,
+      taxableAmount: calc.taxableAmount,
+      cgst: calc.cgst,
+      sgst: calc.sgst,
+      igst: calc.igst,
+      cess: calc.cess,
+      total: calc.total,
+      uqc: item.uqc || item.unit,
+    };
+  });
+
+  const totals = calculateInvoiceTotals(items, input.roundOffEnabled);
+  const paidAmount = input.paidAmount || 0;
+
   return {
-    id: purchase.id,
-    invoiceNumber: purchase.purchaseNumber || purchase.id,
-    type: "tax_invoice",
-    status: "paid",
-    businessId: "",
-    partyId: purchase.supplierId || "",
-    partyName: purchase.supplierName || "",
-    partyGstin: purchase.supplierGstin || "",
-    partyPhone: "",
-    date,
-    dueDate: date,
+    id: input.id,
+    invoiceNumber: input.invoiceNumber,
+    type: input.type,
+    status: input.status,
+    businessId: input.businessId,
+    partyId: input.partyId,
+    partyName: input.partyName,
+    partyGstin: normalizeGstin(input.partyGstin),
+    partyPhone: input.partyPhone,
+    date: input.date,
+    dueDate: input.dueDate,
     items,
-    subtotal: totalTaxable,
-    totalDiscount: 0,
-    totalTaxable,
-    totalCgst,
-    totalSgst,
-    totalIgst,
-    totalTax,
-    roundOff: 0,
-    grandTotal,
-    paidAmount: purchase.paidAmount ?? grandTotal,
-    balanceDue: Math.max(0, grandTotal - (purchase.paidAmount ?? grandTotal)),
-    paymentMode: purchase.paymentMethod || "",
-    notes: "",
-    terms: "",
-    placeOfSupply: "",
-    isInterState: totalIgst > 0,
-    isTotalMode: false,
-    createdAt: purchase.createdAt || date,
-    updatedAt: purchase.createdAt || date,
+    subtotal: totals.subtotal,
+    totalDiscount: totals.totalDiscount,
+    totalTaxable: totals.totalTaxable,
+    totalCgst: totals.totalCgst,
+    totalSgst: totals.totalSgst,
+    totalIgst: totals.totalIgst,
+    totalTax: totals.totalTax,
+    roundOff: totals.roundOff,
+    grandTotal: totals.grandTotal,
+    paidAmount,
+    balanceDue: round2(totals.grandTotal - paidAmount),
+    paymentMode: input.paymentMode,
+    notes: input.notes,
+    terms: input.terms,
+    placeOfSupply,
+    isInterState: interState,
+    isTotalMode: input.isTotalMode,
+    createdAt: input.createdAt,
+    updatedAt: new Date().toISOString(),
+    sellerGstin: (input.sellerGstin || "").trim().toUpperCase(),
+    shipToGstin: ship.shipToGstin,
+    shipToAddress: ship.shipToAddress,
+    documentType: input.documentType || documentTypeFromInvoiceType(input.type),
+    reverseCharge: input.reverseCharge,
+    totalCess: totals.totalCess,
   };
 }
 
@@ -438,29 +768,20 @@ export function generateGSTRReport(
   invoices: Invoice[],
   type: GSTRReportType,
   fromDate: string,
-  toDate: string,
-  purchases: Purchase[] = []
+  toDate: string
 ): GSTRReport {
   const filtered = invoices.filter((inv) => {
     if (inv.status === "draft" || inv.status === "cancelled") return false;
-    const d = String(inv.date || inv.createdAt || "").slice(0, 10);
-    return d >= fromDate && d <= toDate;
+    return inv.date >= fromDate && inv.date <= toDate;
   });
-  const purchaseInvoices = purchases
-    .filter((p) => {
-      const d = String(p.createdAt || "").slice(0, 10);
-      return d >= fromDate && d <= toDate;
-    })
-    .map(purchaseToInvoice);
 
   const period = `${formatDate(fromDate)} - ${formatDate(toDate)}`;
 
   const sections: GSTRSection[] = [];
 
   if (type === "gstr1") {
-    const sales = filtered.filter((i) => i.type !== "credit_note");
-    const b2b = sales.filter((i) => i.partyGstin && i.partyGstin.length > 0);
-    const b2c = sales.filter((i) => !i.partyGstin || i.partyGstin.length === 0);
+    const b2b = filtered.filter((i) => isRegisteredGstin(i.partyGstin));
+    const b2c = filtered.filter((i) => !isRegisteredGstin(i.partyGstin));
     const creditNotes = filtered.filter((i) => i.type === "credit_note");
 
     sections.push(buildSection("B2B", "Business to Business Invoices", b2b));
@@ -474,27 +795,25 @@ export function generateGSTRReport(
 
     sections.push(buildSection("3.1(a)", "Outward taxable supplies (intra-state)", intraState));
     sections.push(buildSection("3.1(b)", "Outward taxable supplies (inter-state)", interState));
-    sections.push(buildSection("4(A)", "Eligible ITC (from purchases / GSTR-2)", purchaseInvoices));
   } else if (type === "gstr2b") {
-    sections.push(buildSection("ITC", "Input Tax Credit available (GSTR-2 / GSTR-2B)", purchaseInvoices));
+    sections.push(buildSection("ITC", "Input Tax Credit available", filtered));
   } else if (type === "gstr4") {
     sections.push(buildSection("4(a)", "Outward supplies", filtered));
   }
 
-  const source = type === "gstr2b" ? purchaseInvoices : filtered;
-  const totalTaxableValue = source.reduce((s, i) => s + i.totalTaxable, 0);
-  const totalCgst = source.reduce((s, i) => s + i.totalCgst, 0);
-  const totalSgst = source.reduce((s, i) => s + i.totalSgst, 0);
-  const totalIgst = source.reduce((s, i) => s + i.totalIgst, 0);
+  const totalTaxableValue = filtered.reduce((s, i) => s + i.totalTaxable, 0);
+  const totalCgst = filtered.reduce((s, i) => s + i.totalCgst, 0);
+  const totalSgst = filtered.reduce((s, i) => s + i.totalSgst, 0);
+  const totalIgst = filtered.reduce((s, i) => s + i.totalIgst, 0);
   const totalTax = totalCgst + totalSgst + totalIgst;
-  const totalInvoiceValue = source.reduce((s, i) => s + i.grandTotal, 0);
+  const totalInvoiceValue = filtered.reduce((s, i) => s + i.grandTotal, 0);
 
   return {
     type,
     period,
     fromDate,
     toDate,
-    totalInvoices: source.length,
+    totalInvoices: filtered.length,
     totalTaxableValue: round2(totalTaxableValue),
     totalCgst: round2(totalCgst),
     totalSgst: round2(totalSgst),
@@ -502,195 +821,6 @@ export function generateGSTRReport(
     totalTax: round2(totalTax),
     totalInvoiceValue: round2(totalInvoiceValue),
     sections,
-  };
-}
-
-function gstnItem(inv: Invoice) {
-  const rate = inv.items[0]?.gstRate ?? (inv.totalTaxable ? round2((inv.totalTax / inv.totalTaxable) * 100) : 0);
-  return {
-    num: 1,
-    itm_det: {
-      txval: round2(inv.totalTaxable),
-      rt: rate,
-      iamt: round2(inv.totalIgst),
-      camt: round2(inv.totalCgst),
-      samt: round2(inv.totalSgst),
-      csamt: 0,
-    },
-  };
-}
-
-function posCode(inv: Invoice) {
-  const raw = String(inv.placeOfSupply || "").trim();
-  if (/^\d{2}$/.test(raw)) return raw;
-  return "";
-}
-
-/** GSTN-shaped JSON a CA can upload (not a live GSP filing). */
-export function generateGstnJson(
-  invoices: Invoice[],
-  type: GSTRReportType,
-  fromDate: string,
-  toDate: string,
-  purchases: Purchase[] = [],
-  gstin = ""
-): Record<string, unknown> {
-  const filtered = invoices.filter((inv) => {
-    if (inv.status === "draft" || inv.status === "cancelled") return false;
-    const d = String(inv.date || inv.createdAt || "").slice(0, 10);
-    return d >= fromDate && d <= toDate;
-  });
-  const sales = filtered.filter((i) => i.type !== "credit_note");
-  const notes = filtered.filter((i) => i.type === "credit_note");
-  const fp = fromDate.slice(5, 7) + fromDate.slice(0, 4);
-  const inPeriodPurchases = purchases.filter((p) => {
-    const d = String(p.createdAt || "").slice(0, 10);
-    return d >= fromDate && d <= toDate;
-  });
-
-  if (type === "gstr2b") {
-    return {
-      gstin,
-      fp,
-      itc: inPeriodPurchases.map((p) => ({
-        ctin: p.supplierGstin || "",
-        inum: p.purchaseNumber,
-        idt: String(p.createdAt || "").slice(0, 10),
-        val: round2(p.totalAmount),
-        txval: round2(Math.max(0, p.totalAmount - p.totalGstAmount)),
-        iamt: 0,
-        camt: 0,
-        samt: 0,
-        supplier: p.supplierName,
-      })),
-    };
-  }
-
-  if (type === "gstr3b") {
-    const intra = sales.filter((i) => !i.isInterState);
-    const inter = sales.filter((i) => i.isInterState);
-    const sum = (rows: Invoice[], key: keyof Invoice) => round2(rows.reduce((s, i) => s + Number(i[key] || 0), 0));
-    return {
-      gstin,
-      fp,
-      "3.1": {
-        osup_det: {
-          txval: sum(intra, "totalTaxable"),
-          iamt: 0,
-          camt: sum(intra, "totalCgst"),
-          samt: sum(intra, "totalSgst"),
-        },
-        osup_zero: {
-          txval: sum(inter, "totalTaxable"),
-          iamt: sum(inter, "totalIgst"),
-          camt: 0,
-          samt: 0,
-        },
-      },
-      "4": {
-        itc_avl: inPeriodPurchases.map((p) => ({
-          ctin: p.supplierGstin || "",
-          txval: round2(Math.max(0, p.totalAmount - p.totalGstAmount)),
-          iamt: 0,
-          camt: 0,
-          samt: 0,
-        })),
-      },
-    };
-  }
-
-  const b2bSales = sales.filter((i) => i.partyGstin);
-  const b2cSales = sales.filter((i) => !i.partyGstin);
-  const b2cl = b2cSales.filter((i) => i.isInterState && i.grandTotal > 250000);
-  const b2cs = b2cSales.filter((i) => !(i.isInterState && i.grandTotal > 250000));
-
-  const b2bByCtin = new Map<string, Invoice[]>();
-  for (const inv of b2bSales) {
-    const list = b2bByCtin.get(inv.partyGstin) || [];
-    list.push(inv);
-    b2bByCtin.set(inv.partyGstin, list);
-  }
-
-  const hsnMap = new Map<string, { txval: number; iamt: number; camt: number; samt: number; qty: number; val: number }>();
-  for (const inv of sales) {
-    for (const item of inv.items || []) {
-      const key = item.hsn || "NA";
-      const cur = hsnMap.get(key) || { txval: 0, iamt: 0, camt: 0, samt: 0, qty: 0, val: 0 };
-      cur.txval += item.taxableAmount || 0;
-      cur.iamt += item.igst || 0;
-      cur.camt += item.cgst || 0;
-      cur.samt += item.sgst || 0;
-      cur.qty += item.quantity || 0;
-      cur.val += item.total || 0;
-      hsnMap.set(key, cur);
-    }
-  }
-
-  return {
-    gstin,
-    fp,
-    gt: 0,
-    cur_gt: 0,
-    b2b: Array.from(b2bByCtin.entries()).map(([ctin, invs]) => ({
-      ctin,
-      inv: invs.map((inv) => ({
-        inum: inv.invoiceNumber,
-        idt: String(inv.date || "").slice(0, 10),
-        val: round2(inv.grandTotal),
-        pos: posCode(inv),
-        rchrg: "N",
-        inv_typ: "R",
-        itms: [gstnItem(inv)],
-      })),
-    })),
-    b2cl: b2cl.map((inv) => ({
-      pos: posCode(inv),
-      inv: [
-        {
-          inum: inv.invoiceNumber,
-          idt: String(inv.date || "").slice(0, 10),
-          val: round2(inv.grandTotal),
-          itms: [gstnItem(inv)],
-        },
-      ],
-    })),
-    b2cs: b2cs.map((inv) => ({
-      sply_ty: inv.isInterState ? "INTER" : "INTRA",
-      pos: posCode(inv),
-      typ: "OE",
-      txval: round2(inv.totalTaxable),
-      rt: inv.items[0]?.gstRate ?? 0,
-      iamt: round2(inv.totalIgst),
-      camt: round2(inv.totalCgst),
-      samt: round2(inv.totalSgst),
-    })),
-    cdnr: notes.map((inv) => ({
-      ctin: inv.partyGstin || "",
-      nt: [
-        {
-          ntty: "C",
-          nt_num: inv.invoiceNumber,
-          nt_dt: String(inv.date || "").slice(0, 10),
-          val: round2(inv.grandTotal),
-          pos: posCode(inv),
-          itms: [gstnItem(inv)],
-        },
-      ],
-    })),
-    hsn: {
-      data: Array.from(hsnMap.entries()).map(([hsn, row], idx) => ({
-        num: idx + 1,
-        hsn_sc: hsn,
-        desc: "",
-        uqc: "NOS",
-        qty: round2(row.qty),
-        val: round2(row.val),
-        txval: round2(row.txval),
-        iamt: round2(row.iamt),
-        camt: round2(row.camt),
-        samt: round2(row.samt),
-      })),
-    },
   };
 }
 
@@ -735,7 +865,7 @@ export function generateInvoiceHTML(invoice: Invoice, business: {
     <tr>
       <td>${item.description}</td>
       <td style="text-align:center">${item.hsn}</td>
-      <td style="text-align:right">${item.quantity} ${item.unit}</td>
+      <td style="text-align:right">${item.quantity} ${item.uqc || item.unit}</td>
       <td style="text-align:right">${formatCurrency(item.rate)}</td>
       <td style="text-align:right">${item.discount}%</td>
       <td style="text-align:right">${formatCurrency(item.taxableAmount)}</td>
@@ -749,6 +879,11 @@ export function generateInvoiceHTML(invoice: Invoice, business: {
     </tr>`
     )
     .join("");
+
+  const billToGstin = invoice.partyGstin || "URP";
+  const shipToGstin = invoice.shipToGstin || billToGstin;
+  const shipToAddress = invoice.shipToAddress || "";
+  const showShipTo = shipToAddress || (shipToGstin && shipToGstin !== billToGstin);
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -810,8 +945,12 @@ export function generateInvoiceHTML(invoice: Invoice, business: {
   <div class="parties">
     <div class="party-box">
       <h4>Bill To</h4>
-      <p><strong>${invoice.partyName || "—"}</strong>${invoice.partyPhone ? `<br>Phone: ${invoice.partyPhone}` : ""}<br>GSTIN: ${invoice.partyGstin || "Unregistered"}<br>Place of Supply: ${invoice.placeOfSupply}</p>
+      <p><strong>${invoice.partyName || "—"}</strong>${invoice.partyPhone ? `<br>Phone: ${invoice.partyPhone}` : ""}<br>GSTIN: ${billToGstin === "URP" ? "URP (Unregistered)" : billToGstin}<br>Place of Supply: ${invoice.placeOfSupply}${invoice.reverseCharge ? "<br>Reverse Charge: Yes" : ""}${invoice.documentType ? `<br>Document: ${invoice.documentType}` : ""}</p>
     </div>
+    ${showShipTo ? `<div class="party-box">
+      <h4>Ship To</h4>
+      <p>${shipToAddress ? `${shipToAddress}<br>` : ""}GSTIN: ${shipToGstin === "URP" ? "URP (Unregistered)" : shipToGstin}</p>
+    </div>` : ""}
   </div>
   <table>
     <thead>
@@ -839,19 +978,16 @@ export function generateInvoiceHTML(invoice: Invoice, business: {
       ${invoice.totalCgst > 0 ? `<tr><td>CGST</td><td style="text-align:right">${formatCurrency(invoice.totalCgst)}</td></tr>` : ""}
       ${invoice.totalSgst > 0 ? `<tr><td>SGST</td><td style="text-align:right">${formatCurrency(invoice.totalSgst)}</td></tr>` : ""}
       ${invoice.totalIgst > 0 ? `<tr><td>IGST</td><td style="text-align:right">${formatCurrency(invoice.totalIgst)}</td></tr>` : ""}
+      ${(invoice.totalCess || 0) > 0 ? `<tr><td>Cess</td><td style="text-align:right">${formatCurrency(invoice.totalCess || 0)}</td></tr>` : ""}
       ${invoice.roundOff !== 0 ? `<tr><td>Round Off</td><td style="text-align:right">${formatCurrency(invoice.roundOff)}</td></tr>` : ""}
       <tr class="grand-total"><td>Grand Total</td><td style="text-align:right">${formatCurrency(invoice.grandTotal)}</td></tr>
       ${invoice.paidAmount > 0 ? `<tr><td>Paid</td><td style="text-align:right">${formatCurrency(invoice.paidAmount)}</td></tr>` : ""}
       ${invoice.balanceDue > 0 ? `<tr><td>Balance Due</td><td style="text-align:right">${formatCurrency(invoice.balanceDue)}</td></tr>` : ""}
     </table>
   </div>
-  ${business.bankName || business.upiId ? `<div class="bank-details">
-    ${business.bankName ? `<h4>Bank Details</h4>
-    <p>Bank: ${business.bankName} | Account: ${business.bankAccount} | IFSC: ${business.bankIfsc}</p>` : ""}
-    ${business.upiId ? `<h4 style="margin-top:10px">Pay via UPI</h4>
-    <p>${business.upiId} · ₹${invoice.grandTotal.toFixed(2)} · ${invoice.invoiceNumber}</p>
-    <img alt="UPI QR" width="140" height="140" src="https://api.qrserver.com/v1/create-qr-code/?size=140x140&amp;data=${encodeURIComponent(`upi://pay?pa=${business.upiId}&pn=${encodeURIComponent(business.name || "Argus")}&am=${invoice.grandTotal.toFixed(2)}&cu=INR&tn=${encodeURIComponent(invoice.invoiceNumber)}`)}" />
-    <p>upi://pay?pa=${business.upiId}&amp;am=${invoice.grandTotal.toFixed(2)}&amp;tn=${invoice.invoiceNumber}</p>` : ""}
+  ${business.bankName ? `<div class="bank-details">
+    <h4>Bank Details</h4>
+    <p>Bank: ${business.bankName} | Account: ${business.bankAccount} | IFSC: ${business.bankIfsc}<br>UPI: ${business.upiId || "N/A"}</p>
   </div>` : ""}
   ${invoice.notes ? `<div class="notes"><p><strong>Notes:</strong> ${invoice.notes}</p></div>` : ""}
   ${invoice.terms ? `<div class="notes"><p><strong>Terms:</strong> ${invoice.terms}</p></div>` : ""}

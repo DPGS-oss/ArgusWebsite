@@ -4,12 +4,11 @@ import { useState, useRef, useEffect } from "react";
 import { Plus, Trash2, Upload, Barcode as BarcodeIcon, X, Edit, ScanLine } from "lucide-react";
 import type { AppData, StockItem, GSTRate } from "@/lib/types";
 import { UNITS } from "@/lib/types";
-import { formatCurrency } from "@/lib/gst";
+import { formatCurrency, gstRatePickerOptions, gstRateLabel } from "@/lib/gst";
 import { saveStockItem, deleteStockItem, bulkSaveStockItems, generateId } from "@/lib/storage";
 import { BarcodeScannerModal } from "./BarcodeScannerModal";
 import JsBarcode from "jsbarcode";
 
-const GST_RATES: GSTRate[] = [0, 3, 5, 12, 18, 28];
 
 type InventoryProps = {
   data: AppData;
@@ -407,7 +406,7 @@ function StockItemForm({
               onChange={(e) => update({ gstRate: parseFloat(e.target.value) as GSTRate })}
               className="mt-1 w-full rounded-btn border border-lead/30 bg-graphite px-4 py-2.5 text-sm text-starlight outline-none focus:border-mercury-blue"
             >
-              {GST_RATES.map((r) => <option key={r} value={r}>{r}%</option>)}
+              {gstRatePickerOptions(item.gstRate).map((r) => <option key={r} value={r}>{gstRateLabel(r)}</option>)}
             </select>
           </label>
           <label className="block text-sm text-silver sm:col-span-2">
