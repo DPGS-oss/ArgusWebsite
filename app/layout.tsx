@@ -25,11 +25,11 @@ const GOOGLE_SITE_VERIFICATION =
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "Argus — Accounting & GST for Indian Shops",
+    default: "Argus | GST billing and books your CA can open",
     template: "%s | Argus",
   },
   description:
-    "Books, billing, inventory, khata, and GST summaries for Indian SMEs. Start free on Android; unlock the full web suite from ₹500/month.",
+    "GST invoices, khata, stock, and GSTR-1 / 2B / 3B summaries. Invite your CA for free. Start on Android, same login on web.",
   applicationName: "Argus",
   authors: [{ name: "B&L Softwares and Logistics" }],
   manifest: "/manifest.webmanifest",

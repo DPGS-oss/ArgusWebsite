@@ -5,7 +5,7 @@ const SITE_URL = "https://argusinvoicing.com";
 export const dynamic = "force-static";
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const now = new Date("2026-08-25");
+  const now = new Date("2026-08-27");
 
   return [
     {
@@ -15,16 +15,28 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 1,
     },
     {
-      url: `${SITE_URL}/gst-billing-software-india/`,
+      url: `${SITE_URL}/gstr/`,
       lastModified: now,
       changeFrequency: "monthly",
       priority: 0.9,
     },
     {
-      url: `${SITE_URL}/gstr-1-filing-tool/`,
+      url: `${SITE_URL}/ca/`,
       lastModified: now,
       changeFrequency: "monthly",
       priority: 0.9,
+    },
+    {
+      url: `${SITE_URL}/gst-billing-software-india/`,
+      lastModified: now,
+      changeFrequency: "monthly",
+      priority: 0.85,
+    },
+    {
+      url: `${SITE_URL}/gstr-1-filing-tool/`,
+      lastModified: now,
+      changeFrequency: "monthly",
+      priority: 0.85,
     },
     {
       url: `${SITE_URL}/guide/`,

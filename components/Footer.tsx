@@ -19,6 +19,8 @@ export function Footer() {
             <div className="flex flex-col gap-2 text-sm text-slate">
               <a href="#features">Features</a>
               <a href="#pricing">Pricing</a>
+              <Link href="/gstr/">GSTR summaries</Link>
+              <Link href="/ca/">CA portal</Link>
               <Link href="/gst-billing-software-india/">GST billing software</Link>
               <Link href="/gstr-1-filing-tool/">GSTR-1 summaries</Link>
               <Link href="/guide/">User Guide</Link>
@@ -41,7 +43,7 @@ export function Footer() {
               <Link href="/privacy/">Privacy Policy</Link>
               <Link href="/terms/">Terms of Service</Link>
               <Link href="/refund/">Refund Policy</Link>
-              <Link href="/delete-account">Request Data Deletion</Link>
+              <Link href="/delete-account/">Request Data Deletion</Link>
             </div>
           </StaggerItem>
         </Stagger>
