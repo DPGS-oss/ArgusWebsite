@@ -1,6 +1,7 @@
 {
   "hosting": [
     {
+      "site": "argus-invocing",
       "public": "out",
       "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
       "redirects": [
