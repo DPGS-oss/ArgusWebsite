@@ -3,6 +3,7 @@ import { Inter, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth-provider";
 import { CanonicalHostRedirect } from "@/components/CanonicalHostRedirect";
+import { HashScroll } from "@/components/HashScroll";
 import { LegalConsentGate } from "@/components/LegalConsentGate";
 
 const inter = Inter({
@@ -100,6 +101,7 @@ export default function RootLayout({
         <AuthProvider>
           <CanonicalHostRedirect />
           <LegalConsentGate />
+          <HashScroll />
           {children}
         </AuthProvider>
       </body>

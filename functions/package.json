@@ -6,7 +6,7 @@
   "scripts": {
     "seed:promo": "node scripts/seed-promo-codes.js",
     "seed:launch-promo": "node scripts/seed-launch-promo.js",
-    "test": "node --test tests/promo-logic.test.js",
+    "test": "node --test tests/promo-logic.test.js promo.load.test.js",
     "test:resend": "node scripts/test-resend-email.js",
     "issue:admin-key": "node scripts/issue-admin-key.js"
   },

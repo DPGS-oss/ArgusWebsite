@@ -12,23 +12,21 @@ export function Download() {
           </h2>
           <p className="mb-10 text-lg text-slate">
             Free on Android to get started. Full books on the web when you subscribe.
-            Web works best in Chrome or Edge on desktop.
+            Available on web now; iOS coming soon. Web works best in Chrome or Edge on desktop.
           </p>
         </Reveal>
         <Stagger className="flex flex-wrap items-center justify-center gap-4" stagger={0.12}>
           <StaggerItem>
-            <a
-              href="https://play.google.com/store/apps/details?id=com.getargus.billing"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-4 rounded-card border border-bone bg-mist px-6 py-4 transition hover:border-brand-violet/30"
+            <div
+              className="flex cursor-not-allowed items-center gap-4 rounded-card border border-bone bg-plaster/50 px-6 py-4 opacity-60"
+              aria-disabled="true"
             >
               <Image src="/play-store.svg" alt="Google Play" width={40} height={40} />
               <div className="text-left">
-                <span className="block text-xs text-slate">Get it on</span>
+                <span className="block text-xs text-slate">Coming soon to</span>
                 <strong className="text-ink">Google Play</strong>
               </div>
-            </a>
+            </div>
           </StaggerItem>
           <StaggerItem>
             <Link
