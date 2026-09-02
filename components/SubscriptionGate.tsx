@@ -81,7 +81,7 @@ export function SubscriptionGate() {
   const savingsLabel = promoOffer ? "Offer" : yearly ? "Best value" : null;
 
   const freeFeatures = [
-    "Up to 5 invoices / month on Android",
+    "Unlimited invoices on Android",
     "Basic billing & customers",
     "UPI payment links",
     "Upgrade anytime for full books + web",

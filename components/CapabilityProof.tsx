@@ -22,7 +22,7 @@ const proofs = [
   {
     icon: Smartphone,
     title: "Phone + web, same login",
-    text: "Start free on Android (5 invoices). Unlock the full suite on web when you grow.",
+    text: "Start free on Android (unlimited invoices). Unlock the full suite on web when you grow.",
   },
 ];
 

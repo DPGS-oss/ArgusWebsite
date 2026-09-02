@@ -191,7 +191,7 @@ export function Hero() {
             </a>
           </div>
           <p className="mt-4 text-xs text-white/60">
-            14-day Business trial on web · Free tier on Android (5 invoices/month)
+            14-day Business trial on web · Free unlimited billing on Android
           </p>
         </div>
       </div>

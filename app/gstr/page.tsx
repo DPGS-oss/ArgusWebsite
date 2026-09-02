@@ -96,7 +96,7 @@ export default function GstrPage() {
       <h2>Who this is for</h2>
       <p>
         Shopkeepers who raise GST invoices, keep khata, and want month-end GST to match the bills
-        already on the phone. Free Android is 5 invoices a month. The 14-day Business trial is on
+        already on the phone. Free Android billing is unlimited. The 14-day Business trial is on
         the web with the same login. Business is ₹500/month. Lifetime ₹18,000 is sold on this
         website only, not inside the Play app. iOS is coming soon.
       </p>

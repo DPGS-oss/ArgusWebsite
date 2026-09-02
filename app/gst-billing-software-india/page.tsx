@@ -5,7 +5,7 @@ import { BrandLogo } from "@/components/BrandLogo";
 export const metadata: Metadata = {
   title: "GST Billing Software for Indian Shops",
   description:
-    "Argus is GST billing and accounting software for Indian shops — invoices, inventory, khata, and GSTR summaries. Free on Android (5 invoices/month); 14-day Business trial on web.",
+    "Argus is GST billing and accounting software for Indian shops — invoices, inventory, khata, and GSTR summaries. Free unlimited billing on Android; 14-day Business trial on web.",
   alternates: { canonical: "/gst-billing-software-india/" },
   keywords: [
     "GST billing software India",
@@ -28,7 +28,7 @@ export default function GstBillingSoftwarePage() {
         </h1>
         <p className="mt-4 max-w-2xl text-lg text-slate">
           Argus is more than invoices — sales, purchases, stock, dues, and filing-ready GST
-          views in one workspace. Start free on Android (5 invoices/month). Unlock the full
+          views in one workspace. Start free on Android (unlimited invoices). Unlock the full
           web suite with a 14-day Business trial or subscribe from ₹500/month.
         </p>
         <div className="mt-8 flex flex-wrap gap-3">

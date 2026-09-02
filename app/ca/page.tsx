@@ -72,7 +72,7 @@ export default function CaPage() {
 
       <h2>For the shopkeeper</h2>
       <p>
-        Start on Android (5 invoices a month on the free plan) or start the 14-day Business trial
+        Start on Android (unlimited invoices on the free plan) or start the 14-day Business trial
         on the web. Same login. When your CA asks for books, generate the invite from Settings.
         Business is ₹500/month. Lifetime ₹18,000 is on this website only. iOS is coming soon.
       </p>

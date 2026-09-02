@@ -17,7 +17,7 @@ const plans = [
     suffix: "",
     featured: false,
     features: [
-      "✓ Up to 5 invoices / month on Android",
+      "✓ Unlimited invoices on Android",
       "✓ Customers & basic billing",
       "✓ UPI payment links",
       "✓ Upgrade anytime for full books + web",
@@ -305,7 +305,7 @@ export function Pricing() {
           </Stagger>
           <Reveal delay={0.2}>
             <p className="mt-8 text-center text-sm text-slate">
-              Free covers everyday billing on Android (5 invoices/month). The web app is part of
+              Free covers everyday billing on Android (unlimited invoices). The web app is part of
               Business — so your books, GST summaries, and CA invite stay in one paid workspace.
               Same login unlocks both. Lifetime is a one-time licence for the current Business
               generation (see Terms); cancelled renewals are not refunded for unused time.
