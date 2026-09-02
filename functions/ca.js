@@ -413,7 +413,13 @@ async function handleEinvoiceDownload(req, res, decoded, ownerId) {
     const json = buildEinvoiceJson({
       invoice: inv,
       business: businessForInvoice(appData, inv),
+      parties: appData.parties || [],
     });
+    if (!json) {
+      return res.status(404).json({
+        error: 'E-invoice JSON is only for registered (B2B) buyers',
+      });
+    }
     const safe = invoiceNo.replace(/[^A-Za-z0-9._-]+/g, '_');
     return sendAttachment(res, {
       body: JSON.stringify(json, null, 2),
@@ -426,6 +432,7 @@ async function handleEinvoiceDownload(req, res, decoded, ownerId) {
     month,
     invoices: appData.invoices || [],
     businesses: appData.businesses || [],
+    parties: appData.parties || [],
   });
   const { fp } = monthBounds(month);
   return sendAttachment(res, {

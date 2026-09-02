@@ -21,6 +21,7 @@ import {
   buildInvoiceDocument,
   openHistoricalInvoice,
   stateCodeFromPlaceOfSupply,
+  resolveBillToStateCode,
 } from "@/lib/gst";
 import { generateId, generateInvoiceNumber } from "@/lib/storage";
 import { BarcodeScannerModal } from "./BarcodeScannerModal";
@@ -147,7 +148,10 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
       (shipToAddress || "") !== originalShipAddress ||
       (partyId || "") !== originalPartyId);
   const preserveStoredTax = !!openedInvoice && !posOrPartyEdited;
-  const partyStateCode = selectedParty?.stateCode || businessStateCode;
+  const partyStateCode = resolveBillToStateCode({
+    partyStateCode: selectedParty?.stateCode,
+    partyGstin: selectedParty?.gstin,
+  });
   const partyAddress = selectedParty
     ? formatPartyAddress(selectedParty)
     : "";
@@ -403,7 +407,10 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
       partyGstin: billToGstin,
       partyPhone: party?.phone || inlinePartyPhone || "",
       partyAddress: party ? formatPartyAddress(party) : "",
-      partyStateCode: party?.stateCode || business.stateCode || "",
+      partyStateCode: resolveBillToStateCode({
+        partyStateCode: party?.stateCode,
+        partyGstin: billToGstin,
+      }),
       shipToGstin,
       shipToAddress,
       shipToStateCode,

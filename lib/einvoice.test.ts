@@ -178,12 +178,7 @@ describe("NIC IRP e-invoice JSON v1.1", () => {
       isInterState: false,
       items: [line({ gstRate: 18, isInterState: false })],
     });
-    const walkJson = buildEinvoiceJson({ invoice: walkIn, business: seller });
-    expect(walkJson.BuyerDtls.Gstin).toBe("URP");
-    expect(walkJson.ShipDtls.Gstin).toBe("URP");
-    expect(walkJson.ItemList[0].CgstAmt).toBe(90);
-    expect(walkJson.ItemList[0].SgstAmt).toBe(90);
-    expect(walkJson.ItemList[0].IgstAmt).toBe(0);
+    expect(buildEinvoiceJson({ invoice: walkIn, business: seller })).toBeNull();
   });
 
   it("sets DocDtls.Typ to CRN for credit notes and DBN for debit notes", () => {
@@ -236,9 +231,14 @@ describe("NIC IRP e-invoice JSON v1.1", () => {
       status: "draft",
       items: [line({ gstRate: 18, isInterState: true })],
     });
+    const urp = invoice({
+      invoiceNumber: "INV-URP",
+      partyGstin: "URP",
+      items: [line({ gstRate: 18, isInterState: false })],
+    });
     const batch = buildEinvoiceBatch({
       month: "2026-04",
-      invoices: [keep, other, draft],
+      invoices: [keep, other, draft, urp],
       businesses: [seller],
     });
     expect(Array.isArray(batch)).toBe(true);
@@ -246,5 +246,85 @@ describe("NIC IRP e-invoice JSON v1.1", () => {
     expect(batch[0].DocDtls.No).toBe("INV-KEEP");
     expect(batch[0].Version).toBe("1.1");
     expect(batch[0].ShipDtls.Gstin).toBeTruthy();
+  });
+
+  it("emits SupTyp B2B for a registered GSTIN and omits URP/blank/invalid (B2C is not an IRP enum)", () => {
+    const registered = invoice({
+      partyGstin: KA_GSTIN,
+      items: [line({ gstRate: 18, isInterState: true })],
+    });
+    const json = buildEinvoiceJson({ invoice: registered, business: seller });
+    expect(json).not.toBeNull();
+    expect(json.TranDtls.SupTyp).toBe("B2B");
+    expect(json.TranDtls.SupTyp).not.toBe("B2C");
+
+    for (const partyGstin of ["URP", "", "   ", "ABC", "27AAPFU0939F1Z0"]) {
+      const unreg = invoice({
+        partyGstin,
+        partyName: "Walk-in",
+        placeOfSupply: MH,
+        isInterState: false,
+        items: [line({ gstRate: 18, isInterState: false })],
+      });
+      expect(buildEinvoiceJson({ invoice: unreg, business: seller })).toBeNull();
+    }
+
+    const mixed = buildEinvoiceBatch({
+      month: "2026-04",
+      invoices: [
+        registered,
+        invoice({ id: "u1", invoiceNumber: "INV-URP", partyGstin: "URP", items: [line({ gstRate: 18, isInterState: false })] }),
+        invoice({ id: "u2", invoiceNumber: "INV-BLANK", partyGstin: "", items: [line({ gstRate: 18, isInterState: false })] }),
+      ],
+      businesses: [seller],
+    });
+    expect(mixed).toHaveLength(1);
+    expect(mixed[0].DocDtls.No).toBe(registered.invoiceNumber);
+    expect(mixed[0].TranDtls.SupTyp).toBe("B2B");
+  });
+
+  it("puts bill-to on BuyerDtls and keeps a different ship-to on ShipDtls only", () => {
+    const inv = {
+      ...invoice({
+        partyGstin: KA_GSTIN,
+        shipToGstin: MH_GSTIN,
+        shipToAddress: "Mumbai warehouse",
+        items: [line({ gstRate: 18, isInterState: true })],
+      }),
+      partyAddress: "Bengaluru bill-to",
+      partyCity: "Bengaluru",
+      partyPincode: "560001",
+      shipToCity: "Mumbai",
+      shipToPincode: "400001",
+    };
+    const json = buildEinvoiceJson({ invoice: inv, business: seller });
+    expect(json.BuyerDtls.Addr1).toBe("Bengaluru bill-to");
+    expect(json.BuyerDtls.Loc).toBe("Bengaluru");
+    expect(json.BuyerDtls.Pin).toBe(560001);
+    expect(json.ShipDtls.Addr1).toBe("Mumbai warehouse");
+    expect(json.ShipDtls.Loc).toBe("Mumbai");
+    expect(json.ShipDtls.Pin).toBe(400001);
+
+    const fromParty = invoice({
+      partyId: "p-bill",
+      partyGstin: KA_GSTIN,
+      shipToAddress: "Mumbai warehouse",
+      items: [line({ gstRate: 18, isInterState: true })],
+    });
+    const lookedUp = buildEinvoiceJson({
+      invoice: fromParty,
+      business: seller,
+      parties: [
+        {
+          id: "p-bill",
+          address: "1 MG Road",
+          city: "Bengaluru",
+          state: "Karnataka",
+          pincode: "560001",
+        },
+      ],
+    });
+    expect(lookedUp.BuyerDtls.Addr1).toBe("1 MG Road, Bengaluru, Karnataka, 560001");
+    expect(lookedUp.ShipDtls.Addr1).toBe("Mumbai warehouse");
   });
 });

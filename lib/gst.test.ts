@@ -11,6 +11,7 @@ import {
   openHistoricalInvoice,
   resolvePlaceOfSupply,
   resolveShipTo,
+  resolveBillToStateCode,
   stateCodeFromPlaceOfSupply,
 } from "./gst";
 import { isRegisteredGstin, normalizeGstin } from "./gstin";
@@ -583,6 +584,121 @@ describe("historical invoices", () => {
     expect(afterRateEdit.items[0].igst).toBe(360);
     expect(afterRateEdit.items[0].cgst).toBe(0);
     expect(afterRateEdit.items[0].sgst).toBe(0);
+  });
+
+  it("does not inherit the seller state when the party state is blank", () => {
+    const businessStateCode = MH;
+    const blankUrp = resolveBillToStateCode({ partyStateCode: "", partyGstin: "URP" });
+    expect(blankUrp).toBe("");
+    expect(blankUrp).not.toBe(businessStateCode);
+
+    const buggyFallback = "" || businessStateCode;
+    expect(buggyFallback).toBe(MH);
+    expect(isInterState(businessStateCode, buggyFallback)).toBe(false);
+
+    const kaPartyBlankState = resolveBillToStateCode({
+      partyStateCode: "",
+      partyGstin: "29AABCU9603R1ZJ",
+    });
+    expect(kaPartyBlankState).toBe(KA);
+    expect(isInterState(businessStateCode, kaPartyBlankState)).toBe(true);
+    expect(isInterState(businessStateCode, buggyFallback)).toBe(false);
+
+    const flipped = buildInvoiceDocument({
+      id: "blank-state-fallback",
+      invoiceNumber: "INV-BLANK-FALLBACK",
+      type: "tax_invoice",
+      status: "unpaid",
+      businessId: "biz-1",
+      sellerGstin: MH_GSTIN,
+      sellerStateCode: MH,
+      partyId: "party-ka",
+      partyName: "KA buyer, state left blank",
+      partyGstin: "29AABCU9603R1ZJ",
+      partyPhone: "",
+      partyAddress: "Bengaluru",
+      partyStateCode: buggyFallback,
+      placeOfSupply: "",
+      date: "2026-04-10",
+      dueDate: "2026-04-25",
+      items: [line({ gstRate: 18, isInterState: true, rate: 1000 })],
+      roundOffEnabled: false,
+      paidAmount: 0,
+      paymentMode: "",
+      notes: "",
+      terms: "",
+      reverseCharge: false,
+      isTotalMode: false,
+      createdAt: "2026-04-10T00:00:00.000Z",
+      preserveStoredTax: false,
+    });
+    expect(flipped.isInterState).toBe(false);
+    expect(flipped.totalIgst).toBe(0);
+    expect(flipped.totalCgst).toBeGreaterThan(0);
+
+    const kept = buildInvoiceDocument({
+      id: "blank-state-fixed",
+      invoiceNumber: "INV-BLANK-FIXED",
+      type: "tax_invoice",
+      status: "unpaid",
+      businessId: "biz-1",
+      sellerGstin: MH_GSTIN,
+      sellerStateCode: MH,
+      partyId: "party-ka",
+      partyName: "KA buyer, state left blank",
+      partyGstin: "29AABCU9603R1ZJ",
+      partyPhone: "",
+      partyAddress: "Bengaluru",
+      partyStateCode: kaPartyBlankState,
+      placeOfSupply: "",
+      date: "2026-04-10",
+      dueDate: "2026-04-25",
+      items: [line({ gstRate: 18, isInterState: true, rate: 1000 })],
+      roundOffEnabled: false,
+      paidAmount: 0,
+      paymentMode: "",
+      notes: "",
+      terms: "",
+      reverseCharge: false,
+      isTotalMode: false,
+      createdAt: "2026-04-10T00:00:00.000Z",
+      preserveStoredTax: false,
+    });
+    expect(kept.placeOfSupply).toBe(KA);
+    expect(kept.isInterState).toBe(true);
+    expect(kept.totalIgst).toBe(180);
+    expect(kept.totalCgst).toBe(0);
+    expect(kept.totalSgst).toBe(0);
+
+    const urpBlank = buildInvoiceDocument({
+      id: "urp-blank-state",
+      invoiceNumber: "INV-URP-BLANK",
+      type: "tax_invoice",
+      status: "unpaid",
+      businessId: "biz-1",
+      sellerGstin: MH_GSTIN,
+      sellerStateCode: MH,
+      partyId: "",
+      partyName: "Walk-in",
+      partyGstin: "URP",
+      partyPhone: "",
+      partyAddress: "Counter",
+      partyStateCode: blankUrp,
+      placeOfSupply: "",
+      date: "2026-04-10",
+      dueDate: "2026-04-25",
+      items: [line({ gstRate: 18, isInterState: true, rate: 1000 })],
+      roundOffEnabled: false,
+      paidAmount: 0,
+      paymentMode: "",
+      notes: "",
+      terms: "",
+      reverseCharge: false,
+      isTotalMode: false,
+      createdAt: "2026-04-10T00:00:00.000Z",
+      preserveStoredTax: false,
+    });
+    expect(urpBlank.placeOfSupply).not.toBe(MH);
   });
 });
 
