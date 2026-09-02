@@ -4,11 +4,12 @@
  * GST portal passwords. Upload the file on einvoice.gst.gov.in.
  *
  * Field names (IRP v1.1):
- * Version, TranDtls.{TaxSch,SupTyp B2B|B2C,RegRev,IgstOnIntra},
+ * Version, TranDtls.{TaxSch,SupTyp B2B (IRP enum also has SEZWP|SEZWOP|EXPWP|EXPWOP|DEXP — not B2C),RegRev,IgstOnIntra},
  * DocDtls.{Typ,No,Dt}  Typ = INV|CRN|DBN, Dt = DD/MM/YYYY,
  * SellerDtls.{Gstin,LglNm,Addr1,Loc,Pin,Stcd},
- * BuyerDtls.{Gstin,LglNm,Pos,Addr1,Loc,Pin,Stcd}  Gstin = 15-char or URP,
- * ShipDtls.{Gstin,LglNm,Addr1,Loc,Pin,Stcd}  Gstin always present (URP if unregistered),
+ * BuyerDtls.{Gstin,LglNm,Pos,Addr1,Loc,Pin,Stcd}  Gstin = 15-char (B2B only),
+ * ShipDtls.{Gstin,LglNm,Addr1,Loc,Pin,Stcd}  Gstin always present (URP if ship-to unregistered),
+ * Unregistered / URP / blank / invalid buyer GSTIN is omitted (isRegisteredGstin gate). B2C is not an IRP SupTyp.
  * ItemList[].{SlNo,PrdDesc,IsServc,HsnCd,Qty,Unit,UnitPrice,TotAmt,Discount,AssAmt,GstRt,IgstAmt,CgstAmt,SgstAmt,CesAmt,TotItemVal},
  * ValDtls.{AssVal,CgstVal,SgstVal,IgstVal,CesVal,RndOffAmt,TotInvVal}.
  * Do not emit Irn or EwbDtls.
@@ -92,6 +93,7 @@ function partyAddr(inv, party) {
 
 function buildEinvoiceJson(input) {
   const inv = input.invoice || {};
+  if (!isRegisteredGstin(inv.partyGstin)) return null;
   const biz = input.business || {};
   const party = input.party || findParty(inv, input.parties);
   const sellerGstin = nicGstin(biz.gstin || inv.sellerGstin);
@@ -105,7 +107,6 @@ function buildEinvoiceJson(input) {
   const buyerStcd = buyerGstin !== 'URP' ? buyerGstin.slice(0, 2) : pos;
   const shipStcd = shipGstin !== 'URP' ? shipGstin.slice(0, 2) : pos;
   const addr = partyAddr(inv, party);
-  const supTyp = isRegisteredGstin(inv.partyGstin) ? 'B2B' : 'B2C';
 
   const items = (inv.items || []).map((item, i) => {
     const qty = Number(item.quantity) || 0;
@@ -137,7 +138,7 @@ function buildEinvoiceJson(input) {
     Version: '1.1',
     TranDtls: {
       TaxSch: 'GST',
-      SupTyp: supTyp,
+      SupTyp: 'B2B',
       RegRev: inv.reverseCharge ? 'Y' : 'N',
       IgstOnIntra: 'N',
     },
@@ -191,14 +192,18 @@ function resolveBusiness(invoice, businesses) {
 
 function buildEinvoiceBatch(input) {
   const { from, to } = monthBounds(input.month);
-  const invoices = (input.invoices || []).filter((inv) => isOpen(inv) && inMonth(inv, from, to));
-  return invoices.map((inv) =>
-    buildEinvoiceJson({
-      invoice: inv,
-      business: input.business || resolveBusiness(inv, input.businesses),
-      parties: input.parties,
-    })
+  const invoices = (input.invoices || []).filter(
+    (inv) => isOpen(inv) && inMonth(inv, from, to) && isRegisteredGstin(inv.partyGstin)
   );
+  return invoices
+    .map((inv) =>
+      buildEinvoiceJson({
+        invoice: inv,
+        business: input.business || resolveBusiness(inv, input.businesses),
+        parties: input.parties,
+      })
+    )
+    .filter(Boolean);
 }
 
 module.exports = {

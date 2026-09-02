@@ -415,6 +415,11 @@ async function handleEinvoiceDownload(req, res, decoded, ownerId) {
       business: businessForInvoice(appData, inv),
       parties: appData.parties || [],
     });
+    if (!json) {
+      return res.status(404).json({
+        error: 'E-invoice JSON is only for registered (B2B) buyers',
+      });
+    }
     const safe = invoiceNo.replace(/[^A-Za-z0-9._-]+/g, '_');
     return sendAttachment(res, {
       body: JSON.stringify(json, null, 2),
