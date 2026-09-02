@@ -247,4 +247,68 @@ describe("NIC IRP e-invoice JSON v1.1", () => {
     expect(batch[0].Version).toBe("1.1");
     expect(batch[0].ShipDtls.Gstin).toBeTruthy();
   });
+
+  it("sets TranDtls.SupTyp to B2B for a registered GSTIN and B2C for URP/blank/invalid", () => {
+    const registered = invoice({
+      partyGstin: KA_GSTIN,
+      items: [line({ gstRate: 18, isInterState: true })],
+    });
+    expect(buildEinvoiceJson({ invoice: registered, business: seller }).TranDtls.SupTyp).toBe("B2B");
+
+    for (const partyGstin of ["URP", "", "   ", "ABC", "27AAPFU0939F1Z0"]) {
+      const unreg = invoice({
+        partyGstin,
+        partyName: "Walk-in",
+        placeOfSupply: MH,
+        isInterState: false,
+        items: [line({ gstRate: 18, isInterState: false })],
+      });
+      expect(buildEinvoiceJson({ invoice: unreg, business: seller }).TranDtls.SupTyp).toBe("B2C");
+    }
+  });
+
+  it("puts bill-to on BuyerDtls and keeps a different ship-to on ShipDtls only", () => {
+    const inv = {
+      ...invoice({
+        partyGstin: KA_GSTIN,
+        shipToGstin: MH_GSTIN,
+        shipToAddress: "Mumbai warehouse",
+        items: [line({ gstRate: 18, isInterState: true })],
+      }),
+      partyAddress: "Bengaluru bill-to",
+      partyCity: "Bengaluru",
+      partyPincode: "560001",
+      shipToCity: "Mumbai",
+      shipToPincode: "400001",
+    };
+    const json = buildEinvoiceJson({ invoice: inv, business: seller });
+    expect(json.BuyerDtls.Addr1).toBe("Bengaluru bill-to");
+    expect(json.BuyerDtls.Loc).toBe("Bengaluru");
+    expect(json.BuyerDtls.Pin).toBe(560001);
+    expect(json.ShipDtls.Addr1).toBe("Mumbai warehouse");
+    expect(json.ShipDtls.Loc).toBe("Mumbai");
+    expect(json.ShipDtls.Pin).toBe(400001);
+
+    const fromParty = invoice({
+      partyId: "p-bill",
+      partyGstin: KA_GSTIN,
+      shipToAddress: "Mumbai warehouse",
+      items: [line({ gstRate: 18, isInterState: true })],
+    });
+    const lookedUp = buildEinvoiceJson({
+      invoice: fromParty,
+      business: seller,
+      parties: [
+        {
+          id: "p-bill",
+          address: "1 MG Road",
+          city: "Bengaluru",
+          state: "Karnataka",
+          pincode: "560001",
+        },
+      ],
+    });
+    expect(lookedUp.BuyerDtls.Addr1).toBe("1 MG Road, Bengaluru, Karnataka, 560001");
+    expect(lookedUp.ShipDtls.Addr1).toBe("Mumbai warehouse");
+  });
 });

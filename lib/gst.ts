@@ -79,6 +79,21 @@ export function resolvePlaceOfSupply(shipToStateCode: string, billToStateCode: s
   );
 }
 
+/**
+ * Bill-to state used for POS / CGST+SGST vs IGST.
+ * Blank party state must not inherit the seller/business state (that fallback
+ * silently made URP / blank-state parties look intra-state). A registered
+ * GSTIN still contributes its own state code.
+ */
+export function resolveBillToStateCode(input: {
+  partyStateCode?: string | null;
+  partyGstin?: string | null;
+}): string {
+  const raw = (input.partyStateCode || "").trim();
+  if (raw) return stateCodeFromPlaceOfSupply(raw) || raw;
+  return stateCodeFromGstin(input.partyGstin) || "";
+}
+
 function normalizeStateKey(value: string): string {
   return value
     .trim()

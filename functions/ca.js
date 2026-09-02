@@ -413,6 +413,7 @@ async function handleEinvoiceDownload(req, res, decoded, ownerId) {
     const json = buildEinvoiceJson({
       invoice: inv,
       business: businessForInvoice(appData, inv),
+      parties: appData.parties || [],
     });
     const safe = invoiceNo.replace(/[^A-Za-z0-9._-]+/g, '_');
     return sendAttachment(res, {
@@ -426,6 +427,7 @@ async function handleEinvoiceDownload(req, res, decoded, ownerId) {
     month,
     invoices: appData.invoices || [],
     businesses: appData.businesses || [],
+    parties: appData.parties || [],
   });
   const { fp } = monthBounds(month);
   return sendAttachment(res, {

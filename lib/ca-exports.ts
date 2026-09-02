@@ -68,6 +68,15 @@ export type Gstr1Json = {
       itms: Array<{ num: number; itm_det: Gstr1ItemDet }>;
     }>;
   }>;
+  cdnur: Array<{
+    typ: "B2CL" | "B2CS";
+    ntty: "C" | "D";
+    nt_num: string;
+    nt_dt: string;
+    val: number;
+    pos: string;
+    itms: Array<{ num: number; itm_det: Gstr1ItemDet }>;
+  }>;
   hsn: {
     data: Array<{
       num: number;

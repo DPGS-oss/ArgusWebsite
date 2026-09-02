@@ -184,6 +184,46 @@ describe("GSTR-1 GSTN offline-tool JSON", () => {
     expect(nt.nt_dt).toBe("10-04-2026");
     expect(nt.itms[0].itm_det.iamt).toBe(90);
     expect(json.b2b || []).toEqual([]);
+    expect(json.cdnur || []).toEqual([]);
+  });
+
+  it("puts unregistered credit notes in cdnur, not cdnr", () => {
+    const urpCn = invoice({
+      invoiceNumber: "CN-URP-0001",
+      type: "credit_note",
+      documentType: "CRN",
+      partyGstin: "URP",
+      partyName: "Walk-in",
+      placeOfSupply: MH,
+      isInterState: false,
+      items: [line({ gstRate: 18, isInterState: false, rate: 500 })],
+    });
+    const blankCn = invoice({
+      id: "cn-blank",
+      invoiceNumber: "CN-URP-0002",
+      type: "credit_note",
+      partyGstin: "",
+      partyName: "Walk-in 2",
+      placeOfSupply: KA,
+      isInterState: true,
+      items: [line({ gstRate: 18, isInterState: true, rate: 500 })],
+    });
+    const json = buildGstr1Json({ gstin: MH_GSTIN, month: "2026-04", invoices: [urpCn, blankCn] });
+    expect(json.cdnr || []).toEqual([]);
+    expect(json.cdnur).toHaveLength(2);
+    const intra = json.cdnur.find((n) => n.nt_num === "CN-URP-0001");
+    const inter = json.cdnur.find((n) => n.nt_num === "CN-URP-0002");
+    expect(intra).toBeTruthy();
+    expect(intra!.typ).toBe("B2CS");
+    expect(intra!.ntty).toBe("C");
+    expect(intra!.pos).toBe(MH);
+    expect(intra!.itms[0].itm_det.camt).toBe(45);
+    expect(intra!.itms[0].itm_det.samt).toBe(45);
+    expect(inter).toBeTruthy();
+    expect(inter!.typ).toBe("B2CL");
+    expect(inter!.ntty).toBe("C");
+    expect(inter!.pos).toBe(KA);
+    expect(inter!.itms[0].itm_det.iamt).toBe(90);
   });
 
   it("builds hsn and doc_issue with GSTN field names", () => {

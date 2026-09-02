@@ -6,7 +6,7 @@
  * GSTR-1 JSON keys follow the GSTN Returns Offline Tool / public schema:
  * gstin, fp, b2b[].ctin/inv[].inum,idt,val,pos,rchrg,inv_typ,itms[].itm_det
  * {rt,txval,iamt,camt,samt,csamt}, b2cl, b2cs {sply_ty,pos,typ,rt,txval,...},
- * cdnr[].ctin/nt[].ntty,nt_num,nt_dt, hsn.data[], doc_issue.doc_det[].docs[].
+ * cdnr[].ctin/nt[].ntty,nt_num,nt_dt, cdnur[] (unregistered notes), hsn.data[], doc_issue.doc_det[].docs[].
  *
  * TallyPrime XML: ENVELOPE / TALLYMESSAGE / LEDGER + Sales and Credit Note vouchers.
  * Download only — no HTTP push to Tally localhost:9000.
@@ -246,6 +246,7 @@ function buildGstr1Json(input) {
   const b2clMap = new Map();
   const b2csMap = new Map();
   const cdnrMap = new Map();
+  const cdnur = [];
   const hsnMap = new Map();
 
   const docs = { inv: [], cn: [], dn: [] };
@@ -259,21 +260,30 @@ function buildGstr1Json(input) {
     const note = isCreditNote(inv) || isDebitNote(inv);
 
     if (note) {
+      const ntty = isCreditNote(inv) ? 'C' : 'D';
+      const noteRow = {
+        ntty,
+        nt_num: inv.invoiceNumber,
+        nt_dt: gstDate(inv.date),
+        val: round2(inv.grandTotal || 0),
+        pos: posOf(inv),
+        itms: toItms(itemRows(inv)),
+      };
       if (registered) {
-        const ntty = isCreditNote(inv) ? 'C' : 'D';
         const ctin = normalizeGstin(inv.partyGstin);
         const list = cdnrMap.get(ctin) || [];
         list.push({
-          ntty,
-          nt_num: inv.invoiceNumber,
-          nt_dt: gstDate(inv.date),
-          val: round2(inv.grandTotal || 0),
-          pos: posOf(inv),
+          ...noteRow,
           rchrg: rchrg(inv),
           inv_typ: 'R',
-          itms: toItms(itemRows(inv)),
         });
         cdnrMap.set(ctin, list);
+      } else {
+        // Table 9B CDNUR — unregistered CN/DN. typ B2CL for inter-state, B2CS for intra.
+        cdnur.push({
+          typ: isInter(inv) ? 'B2CL' : 'B2CS',
+          ...noteRow,
+        });
       }
       continue;
     }
@@ -375,6 +385,7 @@ function buildGstr1Json(input) {
     b2cl: [...b2clMap.entries()].map(([pos, inv]) => ({ pos, inv })),
     b2cs: [...b2csMap.values()],
     cdnr: [...cdnrMap.entries()].map(([ctin, nt]) => ({ ctin, nt })),
+    cdnur,
     hsn: { data: hsnData },
     doc_issue: { doc_det },
   };

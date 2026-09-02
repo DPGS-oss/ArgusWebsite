@@ -4,7 +4,7 @@
  * GST portal passwords. Upload the file on einvoice.gst.gov.in.
  *
  * Field names (IRP v1.1):
- * Version, TranDtls.{TaxSch,SupTyp,RegRev,IgstOnIntra},
+ * Version, TranDtls.{TaxSch,SupTyp B2B|B2C,RegRev,IgstOnIntra},
  * DocDtls.{Typ,No,Dt}  Typ = INV|CRN|DBN, Dt = DD/MM/YYYY,
  * SellerDtls.{Gstin,LglNm,Addr1,Loc,Pin,Stcd},
  * BuyerDtls.{Gstin,LglNm,Pos,Addr1,Loc,Pin,Stcd}  Gstin = 15-char or URP,
@@ -13,7 +13,7 @@
  * ValDtls.{AssVal,CgstVal,SgstVal,IgstVal,CesVal,RndOffAmt,TotInvVal}.
  * Do not emit Irn or EwbDtls.
  */
-const { monthBounds, posOf: invoicePos } = require('./ca-exports');
+const { monthBounds, posOf: invoicePos, isRegisteredGstin } = require('./ca-exports');
 
 function round2(n) {
   return Math.round((Number(n) || 0) * 100) / 100;
@@ -68,17 +68,32 @@ function inMonth(inv, from, to) {
   return d >= from && d <= to;
 }
 
-function partyAddr(inv) {
+function formatPartyAddress(party) {
+  if (!party) return '';
+  return [party.address, party.city, party.state, party.pincode].filter(Boolean).join(', ');
+}
+
+function findParty(inv, parties) {
+  const list = parties || [];
+  if (inv.partyId) {
+    return list.find((p) => p && p.id === inv.partyId) || {};
+  }
+  return {};
+}
+
+/** Buyer/bill-to only. Ship-to must not fill BuyerDtls. */
+function partyAddr(inv, party) {
   return {
-    Addr1: text(inv.shipToAddress || inv.partyAddress, 'Address'),
-    Loc: text(inv.partyCity || inv.shipToCity, 'City'),
-    Pin: pinOf(inv.partyPincode || inv.shipToPincode),
+    Addr1: text(inv.partyAddress || formatPartyAddress(party), 'Address'),
+    Loc: text(inv.partyCity || (party && party.city), 'City'),
+    Pin: pinOf(inv.partyPincode || (party && party.pincode)),
   };
 }
 
 function buildEinvoiceJson(input) {
   const inv = input.invoice || {};
   const biz = input.business || {};
+  const party = input.party || findParty(inv, input.parties);
   const sellerGstin = nicGstin(biz.gstin || inv.sellerGstin);
   const buyerGstin = nicGstin(inv.partyGstin);
   const shipRaw = inv.shipToGstin;
@@ -89,7 +104,8 @@ function buildEinvoiceJson(input) {
   const sellerStcd = stateCode(biz.stateCode, sellerGstin) || (sellerGstin !== 'URP' ? sellerGstin.slice(0, 2) : '');
   const buyerStcd = buyerGstin !== 'URP' ? buyerGstin.slice(0, 2) : pos;
   const shipStcd = shipGstin !== 'URP' ? shipGstin.slice(0, 2) : pos;
-  const addr = partyAddr(inv);
+  const addr = partyAddr(inv, party);
+  const supTyp = isRegisteredGstin(inv.partyGstin) ? 'B2B' : 'B2C';
 
   const items = (inv.items || []).map((item, i) => {
     const qty = Number(item.quantity) || 0;
@@ -121,7 +137,7 @@ function buildEinvoiceJson(input) {
     Version: '1.1',
     TranDtls: {
       TaxSch: 'GST',
-      SupTyp: 'B2B',
+      SupTyp: supTyp,
       RegRev: inv.reverseCharge ? 'Y' : 'N',
       IgstOnIntra: 'N',
     },
@@ -180,6 +196,7 @@ function buildEinvoiceBatch(input) {
     buildEinvoiceJson({
       invoice: inv,
       business: input.business || resolveBusiness(inv, input.businesses),
+      parties: input.parties,
     })
   );
 }
