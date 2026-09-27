@@ -9,6 +9,9 @@ import { About } from "@/components/About";
 import { Download } from "@/components/Download";
 import { Contact } from "@/components/Contact";
 import { Footer } from "@/components/Footer";
+import { Navbar } from "@/components/Navbar";
+import { Faq } from "@/components/Faq";
+import { FinalCta } from "@/components/FinalCta";
 import { AuthModal } from "@/components/AuthModal";
 import { ProfileModal } from "@/components/ProfileModal";
 import { HomeJsonLd } from "@/components/HomeJsonLd";
@@ -29,6 +32,7 @@ export default function HomePage() {
   return (
     <>
       <HomeJsonLd />
+      <Navbar />
       <main>
         <Hero />
         <CapabilityProof />
@@ -36,9 +40,11 @@ export default function HomePage() {
         <WhatsAppInvoice />
         <Features />
         <Pricing />
+        <Faq />
         <About />
         <Download />
         <Contact />
+        <FinalCta />
       </main>
       <Footer />
       <AuthModal />

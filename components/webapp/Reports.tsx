@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { BarChart3, Download, FileText } from "lucide-react";
 import type { AppData, GSTRReportType, GSTRReport } from "@/lib/types";
-import { generateGSTRReport, formatCurrency, formatDate } from "@/lib/gst";
+import { generateGSTRReport, generateGstnJson, formatCurrency, formatDate } from "@/lib/gst";
 
 type ReportsProps = {
   data: AppData;
@@ -38,6 +38,19 @@ export function Reports({ data }: ReportsProps) {
     setReport(r);
   }
 
+  function downloadGstnJson() {
+    const { from, to } = getMonthRange(month);
+    const gstin = data.businesses.find((b) => b.id === data.activeBusinessId)?.gstin || "";
+    const payload = generateGstnJson(invoices, "gstr1", from, to, data.purchases || [], gstin);
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `GSTR1_GSTN_${month}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   function downloadReport() {
     if (!report) return;
     const content = JSON.stringify(report, null, 2);
@@ -52,7 +65,12 @@ export function Reports({ data }: ReportsProps) {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl text-starlight">GSTR Reports</h1>
+      <div>
+        <h1 className="text-2xl text-starlight">GSTR Reports</h1>
+        <p className="mt-1 text-sm text-silver">
+          Working copies for your CA. You still file on the GST portal. Argus does not mint IRNs or e-way bills.
+        </p>
+      </div>
 
       <div className="rounded-lg border border-lead/20 bg-midnight p-5">
         <div className="grid gap-4 sm:grid-cols-3">
@@ -77,9 +95,12 @@ export function Reports({ data }: ReportsProps) {
               className="mt-1 w-full rounded-btn border border-lead/30 bg-graphite px-4 py-2.5 text-starlight outline-none focus:border-mercury-blue"
             />
           </label>
-          <div className="flex items-end">
+          <div className="flex items-end gap-2">
             <button onClick={generate} className="btn-primary w-full">
               <BarChart3 className="mr-1 h-4 w-4" /> Generate Report
+            </button>
+            <button onClick={downloadGstnJson} className="btn-secondary w-full !py-2" type="button">
+              <Download className="mr-1 h-4 w-4" /> GSTN JSON
             </button>
           </div>
         </div>

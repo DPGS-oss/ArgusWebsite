@@ -1,6 +1,6 @@
 "use client";
 
-import type { AppData, AppSettings, BusinessProfile, Invoice, Party, StockItem, CreditNote, DeliveryChallan, Expense, Quote, Purchase, Payment, Template, KhataEntry } from "./types";
+import type { AppData, AppSettings, BusinessProfile, Invoice, Party, StockItem, CreditNote, DebitNote, PayrollEntry, DeliveryChallan, Expense, Quote, Purchase, Payment, Template, KhataEntry } from "./types";
 
 declare global {
   interface Window {
@@ -40,6 +40,8 @@ export function getDefaultData(): AppData {
     invoiceCounter: 1,
     settings: { ...DEFAULT_SETTINGS },
     creditNotes: [],
+    debitNotes: [],
+    payroll: [],
     deliveryChallans: [],
     expenses: [],
     quotes: [],
@@ -599,6 +601,36 @@ export function saveCreditNote(cn: CreditNote): void {
 export function deleteCreditNote(id: string): void {
   const data = loadData();
   data.creditNotes = data.creditNotes.filter((c) => c.id !== id);
+  saveData(data);
+}
+
+export function saveDebitNote(note: DebitNote): void {
+  const data = loadData();
+  data.debitNotes = data.debitNotes || [];
+  const idx = data.debitNotes.findIndex((c) => c.id === note.id);
+  if (idx >= 0) data.debitNotes[idx] = note;
+  else data.debitNotes.push(note);
+  saveData(data);
+}
+
+export function deleteDebitNote(id: string): void {
+  const data = loadData();
+  data.debitNotes = (data.debitNotes || []).filter((c) => c.id !== id);
+  saveData(data);
+}
+
+export function savePayrollEntry(entry: PayrollEntry): void {
+  const data = loadData();
+  data.payroll = data.payroll || [];
+  const idx = data.payroll.findIndex((c) => c.id === entry.id);
+  if (idx >= 0) data.payroll[idx] = entry;
+  else data.payroll.push(entry);
+  saveData(data);
+}
+
+export function deletePayrollEntry(id: string): void {
+  const data = loadData();
+  data.payroll = (data.payroll || []).filter((c) => c.id !== id);
   saveData(data);
 }
 

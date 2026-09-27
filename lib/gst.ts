@@ -505,6 +505,14 @@ export function suggestHSN(description: string): HSNCode[] {
   return scored.map((s) => s.hsn);
 }
 
+/**
+ * Pre-tax unit rate for a GST-inclusive price. Kept unrounded so that
+ * calculateItem reproduces the entered inclusive total exactly.
+ */
+export function exclusiveRateFromInclusive(inclusiveAmount: number, gstRate: number): number {
+  return inclusiveAmount / (1 + gstRate / 100);
+}
+
 export function calculateItem(item: {
   quantity: number;
   rate: number;

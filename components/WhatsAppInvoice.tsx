@@ -3,10 +3,12 @@ import { Reveal } from "./Reveal";
 
 export function WhatsAppInvoice() {
   return (
-    <section id="whatsapp" className="bg-mist py-20 md:py-28">
-      <div className="container-page">
+    <section id="whatsapp" className="relative overflow-hidden bg-mist py-24 md:py-32">
+      <div aria-hidden className="bg-grid-light pointer-events-none absolute inset-0 [mask-image:radial-gradient(ellipse_at_center,black_20%,transparent_70%)]" />
+      <div className="container-page relative">
         <Reveal>
           <div className="section-header">
+            <span className="eyebrow">Get paid faster</span>
             <h2>Send on WhatsApp. Collect on UPI.</h2>
             <p>
               The invoice screen leads with your shop&apos;s WhatsApp and a{" "}
@@ -17,7 +19,7 @@ export function WhatsAppInvoice() {
         </Reveal>
 
         <Reveal delay={0.1} y={40}>
-          <div className="mx-auto max-w-3xl overflow-hidden rounded-card border border-bone bg-white shadow-subtle">
+          <div className="mx-auto max-w-3xl overflow-hidden rounded-card-lg border border-bone bg-white shadow-lift">
             <div className="border-b border-bone px-5 py-4">
               <p className="text-xs uppercase tracking-wide text-slate">Invoice INV-2026-0001</p>
               <p className="text-lg font-bold text-ink">Sharma Traders · ₹1,180.00</p>

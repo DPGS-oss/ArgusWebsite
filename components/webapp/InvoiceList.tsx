@@ -79,7 +79,10 @@ export function InvoiceList({ data, business, onNew, onEdit, onPreview, onDelete
       {invoices.length === 0 ? (
         <div className="rounded-lg border border-lead/20 bg-midnight py-16 text-center">
           <FileText className="mx-auto mb-3 h-12 w-12 text-lead" />
-          <p className="text-silver">No invoices found. Create one to get started!</p>
+          <p className="text-silver">No invoices yet.</p>
+          <button type="button" onClick={onNew} className="btn-primary mt-4">
+            <Plus className="mr-1 h-4 w-4" /> Create bill
+          </button>
         </div>
       ) : (
         <>

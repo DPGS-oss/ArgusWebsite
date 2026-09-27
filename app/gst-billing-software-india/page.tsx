@@ -38,13 +38,8 @@ export default function GstBillingSoftwarePage() {
           <a href="/#pricing" className="btn-outline">
             See pricing
           </a>
-          <a
-            href="https://play.google.com/store/apps/details?id=com.getargus.billing"
-            className="btn-secondary"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Get Android app
+          <a href="/#download" className="btn-secondary">
+            Android app (coming soon)
           </a>
         </div>
 

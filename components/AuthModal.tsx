@@ -11,7 +11,8 @@ export function AuthModal() {
   const { showAuthModal, setShowAuthModal, login, loginWithGoogle, register } = useAuth();
   const [tab, setTab] = useState<Tab>("login");
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  // Which sign-in path is busy, so only that button shows a spinner label.
+  const [loading, setLoading] = useState<false | "email" | "google">(false);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
   const titleId = useId();
 
@@ -40,7 +41,7 @@ export function AuthModal() {
 
   async function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setLoading(true);
+    setLoading("email");
     setError("");
     const form = new FormData(event.currentTarget);
     try {
@@ -53,7 +54,7 @@ export function AuthModal() {
   }
 
   async function handleGoogleLogin() {
-    setLoading(true);
+    setLoading("google");
     setError("");
     try {
       await loginWithGoogle();
@@ -66,7 +67,7 @@ export function AuthModal() {
 
   async function handleRegister(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setLoading(true);
+    setLoading("email");
     setError("");
     const form = new FormData(event.currentTarget);
     const password = String(form.get("password"));
@@ -135,7 +136,7 @@ export function AuthModal() {
         {/* Google Sign-In */}
         <button
           onClick={handleGoogleLogin}
-          disabled={loading}
+          disabled={Boolean(loading)}
           className="mb-4 flex w-full items-center justify-center gap-3 rounded-input border border-bone bg-white px-4 py-3 text-sm font-bold text-ink transition hover:bg-plaster"
         >
           <svg className="h-5 w-5" viewBox="0 0 24 24">
@@ -144,7 +145,7 @@ export function AuthModal() {
             <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
             <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
           </svg>
-          {loading ? "Signing in..." : "Continue with Google"}
+          {loading === "google" ? "Signing in..." : "Continue with Google"}
         </button>
         <p className="mb-4 text-center text-xs text-slate">
           Popup blocked? We switch to a full-page Google sign-in, or use email below.
@@ -163,6 +164,7 @@ export function AuthModal() {
               <input
                 name="email"
                 type="email"
+                autoComplete="email"
                 required
                 className="mt-1 w-full rounded-input border border-bone bg-white px-4 py-3 text-ink outline-none focus:border-signal-blue"
               />
@@ -172,12 +174,13 @@ export function AuthModal() {
               <input
                 name="password"
                 type="password"
+                autoComplete="current-password"
                 required
                 className="mt-1 w-full rounded-input border border-bone bg-white px-4 py-3 text-ink outline-none focus:border-signal-blue"
               />
             </label>
-            <button type="submit" disabled={loading} className="btn-primary w-full">
-              {loading ? "Signing in..." : "Sign In"}
+            <button type="submit" disabled={Boolean(loading)} className="btn-primary w-full">
+              {loading === "email" ? "Signing in..." : "Sign In"}
             </button>
           </form>
         ) : (
@@ -196,6 +199,7 @@ export function AuthModal() {
               <input
                 name="email"
                 type="email"
+                autoComplete="email"
                 required
                 className="mt-1 w-full rounded-input border border-bone bg-white px-4 py-3 text-ink outline-none focus:border-signal-blue"
               />
@@ -205,6 +209,7 @@ export function AuthModal() {
               <input
                 name="password"
                 type="password"
+                autoComplete="new-password"
                 required
                 className="mt-1 w-full rounded-input border border-bone bg-white px-4 py-3 text-ink outline-none focus:border-signal-blue"
               />
@@ -218,8 +223,8 @@ export function AuthModal() {
                 className="mt-1 w-full rounded-input border border-bone bg-white px-4 py-3 text-ink outline-none focus:border-signal-blue"
               />
             </label>
-            <button type="submit" disabled={loading} className="btn-primary w-full">
-              {loading ? "Creating account..." : "Create Account"}
+            <button type="submit" disabled={Boolean(loading)} className="btn-primary w-full">
+              {loading === "email" ? "Creating account..." : "Create Account"}
             </button>
           </form>
         )}

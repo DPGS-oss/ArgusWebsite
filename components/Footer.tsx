@@ -1,57 +1,76 @@
 import Link from "next/link";
-import { Reveal, Stagger, StaggerItem } from "./Reveal";
+import { BrandLogo } from "./BrandLogo";
+
+const columns: { title: string; links: { label: string; href: string }[] }[] = [
+  {
+    title: "Product",
+    links: [
+      { label: "Features", href: "/#features" },
+      { label: "Pricing", href: "/#pricing" },
+      { label: "Launch web app", href: "/app/" },
+      { label: "CA portal", href: "/ca/" },
+      { label: "User guide", href: "/guide/" },
+    ],
+  },
+  {
+    title: "GST",
+    links: [
+      { label: "GSTR summaries", href: "/gstr/" },
+      { label: "GSTR-1 filing tool", href: "/gstr-1-filing-tool/" },
+      { label: "GST billing software", href: "/gst-billing-software-india/" },
+    ],
+  },
+  {
+    title: "Company",
+    links: [
+      { label: "About", href: "/#about" },
+      { label: "Contact", href: "/#contact" },
+      { label: "Privacy Policy", href: "/privacy/" },
+      { label: "Terms of Service", href: "/terms/" },
+      { label: "Refund Policy", href: "/refund/" },
+      { label: "Request data deletion", href: "/delete-account/" },
+    ],
+  },
+];
 
 export function Footer() {
   const year = new Date().getFullYear();
 
   return (
-    <footer className="border-t border-bone bg-mist py-12">
+    <footer className="border-t border-bone bg-white pt-16">
       <div className="container-page">
-        <Stagger className="grid gap-10 md:grid-cols-2 lg:grid-cols-4" stagger={0.1}>
-          <StaggerItem>
-            <h3 className="mb-4 text-lg font-bold text-ink">Argus</h3>
-            <p className="text-sm text-slate">
-              Accounting, GST, and collections for Indian shops — phone and web.
+        <div className="grid gap-12 md:grid-cols-[1.4fr_repeat(3,1fr)]">
+          <div>
+            <BrandLogo size={32} showWordmark wordmarkClassName="font-display text-lg font-bold text-ink" />
+            <p className="mt-4 max-w-xs text-sm leading-relaxed text-slate">
+              Accounting, GST, and collections for Indian shops — on your phone and in the browser.
             </p>
-          </StaggerItem>
-          <StaggerItem>
-            <h4 className="mb-4 font-bold text-ink">Product</h4>
-            <div className="flex flex-col gap-2 text-sm text-slate">
-              <a href="#features">Features</a>
-              <a href="#pricing">Pricing</a>
-              <Link href="/gstr/">GSTR summaries</Link>
-              <Link href="/ca/">CA portal</Link>
-              <Link href="/gst-billing-software-india/">GST billing software</Link>
-              <Link href="/gstr-1-filing-tool/">GSTR-1 summaries</Link>
-              <Link href="/guide/">User Guide</Link>
-              <a href="#download">Download</a>
-              <Link href="/app/">Launch Web App</Link>
-            </div>
-          </StaggerItem>
-          <StaggerItem>
-            <h4 className="mb-4 font-bold text-ink">Company</h4>
-            <div className="flex flex-col gap-2 text-sm text-slate">
-              <a href="#about">About Us</a>
-              <a href="#contact">Contact</a>
-              <Link href="/privacy/">Privacy Policy</Link>
-              <Link href="/terms/">Terms of Service</Link>
-            </div>
-          </StaggerItem>
-          <StaggerItem>
-            <h4 className="mb-4 font-bold text-ink">Legal</h4>
-            <div className="flex flex-col gap-2 text-sm text-slate">
-              <Link href="/privacy/">Privacy Policy</Link>
-              <Link href="/terms/">Terms of Service</Link>
-              <Link href="/refund/">Refund Policy</Link>
-              <Link href="/delete-account/">Request Data Deletion</Link>
-            </div>
-          </StaggerItem>
-        </Stagger>
-        <Reveal delay={0.3}>
-          <div className="mt-10 border-t border-bone pt-6 text-center text-sm text-slate">
-            © {year} B&amp;L Softwares and Logistics. All rights reserved.
+            <a
+              href="mailto:support@argusinvoicing.com"
+              className="mt-4 inline-block text-sm font-semibold text-brand-violet hover:underline"
+            >
+              support@argusinvoicing.com
+            </a>
           </div>
-        </Reveal>
+          {columns.map((col) => (
+            <div key={col.title}>
+              <h4 className="mb-4 text-sm font-bold text-ink">{col.title}</h4>
+              <ul className="space-y-2.5 text-sm text-slate">
+                {col.links.map((link) => (
+                  <li key={link.href}>
+                    <Link href={link.href} className="hover:text-ink">
+                      {link.label}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+        <div className="mt-14 flex flex-col items-center justify-between gap-3 border-t border-bone py-6 text-sm text-ash md:flex-row">
+          <p>© {year} B&amp;L Softwares and Logistics. All rights reserved.</p>
+          <p>Made in India</p>
+        </div>
       </div>
     </footer>
   );

@@ -16,6 +16,9 @@ import { Parties } from "@/components/webapp/Parties";
 import { Settings } from "@/components/webapp/Settings";
 import { Inventory } from "@/components/webapp/Inventory";
 import { CreditNotes } from "@/components/webapp/CreditNotes";
+import { DebitNotes } from "@/components/webapp/DebitNotes";
+import { Payroll } from "@/components/webapp/Payroll";
+import { Compliance } from "@/components/webapp/Compliance";
 import { DeliveryChallans } from "@/components/webapp/DeliveryChallans";
 import { Expenses } from "@/components/webapp/Expenses";
 import { Quotes } from "@/components/webapp/Quotes";
@@ -35,6 +38,7 @@ import {
   WebAppTutorial,
   hasCompletedTutorial,
 } from "@/components/webapp/WebAppTutorial";
+import { KeyboardShortcuts } from "@/components/webapp/KeyboardShortcuts";
 import { getExpiryIso } from "@/lib/subscription";
 
 function trialDaysLeft(user: { subscription?: { plan_key?: string; plan?: string; expiry_date?: string | null; source?: string } } | null): number | null {
@@ -294,24 +298,29 @@ export default function AppPage() {
           />
         );
 
-      case "invoice-preview":
-        return previewInvoice ? (
+      case "invoice-preview": {
+        // Look the invoice up in current data so paid status / IRN edits show immediately.
+        const liveInvoice = previewInvoice
+          ? d.invoices.find((i) => i.id === previewInvoice.id) ?? previewInvoice
+          : null;
+        return liveInvoice ? (
           <InvoicePreview
-            invoice={previewInvoice}
+            invoice={liveInvoice}
             business={activeBusiness}
             stock={d.stock}
             onBack={() => navigate("invoices")}
             onEdit={handleEditInvoice}
+            onSaved={refresh}
             onMarkPaid={() => {
-              const amt = previewInvoice.balanceDue || previewInvoice.grandTotal;
+              const amt = liveInvoice.balanceDue || liveInvoice.grandTotal;
               persistLedger(
                 applyPaymentToInvoice(d, {
                   id: generateId(),
-                  invoiceId: previewInvoice.id,
+                  invoiceId: liveInvoice.id,
                   amount: amt,
                   method: "UPI",
                   date: new Date().toISOString().slice(0, 10),
-                  note: "I got it",
+                  note: "Marked paid",
                 })
               );
               refresh();
@@ -321,6 +330,7 @@ export default function AppPage() {
         ) : (
           <div className="text-slate">No invoice selected.</div>
         );
+      }
 
       case "parties":
         return <Parties data={d} onSaved={refresh} />;
@@ -339,6 +349,15 @@ export default function AppPage() {
 
       case "credit-notes":
         return <CreditNotes data={d} onSaved={refresh} />;
+
+      case "debit-notes":
+        return <DebitNotes data={d} onSaved={refresh} />;
+
+      case "payroll":
+        return <Payroll data={d} onSaved={refresh} />;
+
+      case "compliance":
+        return <Compliance data={d} onSaved={refresh} />;
 
       case "delivery-challans":
         return <DeliveryChallans data={d} onSaved={refresh} />;
@@ -390,10 +409,16 @@ export default function AppPage() {
       {showTutorial && firebaseUser?.uid ? (
         <WebAppTutorial
           userId={firebaseUser.uid}
-          onComplete={() => setShowTutorial(false)}
-          onGoToBusiness={() => navigate("business")}
-          onGoToSettings={() => navigate("settings")}
+          hasBusiness={Boolean(data?.businesses?.length)}
+          onComplete={() => {
+            setShowTutorial(false);
+            refresh();
+          }}
+          onCreateFirstInvoice={handleNewInvoice}
         />
+      ) : null}
+      {data && hasValidSubscription(user) && !showTutorial ? (
+        <KeyboardShortcuts onNewInvoice={handleNewInvoice} />
       ) : null}
 
       {data && data.settings.cloudSharing === undefined && !showTutorial && (
@@ -443,6 +468,8 @@ export default function AppPage() {
         <div className="flex items-center justify-between border-b border-bone bg-mist px-4 py-3 lg:hidden">
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
+            aria-label={sidebarOpen ? "Close menu" : "Open menu"}
+            aria-expanded={sidebarOpen}
             className="rounded-full p-2 text-slate hover:bg-plaster"
           >
             {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}

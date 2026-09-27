@@ -116,7 +116,7 @@ export async function syncToCloud(token: string, data?: AppData): Promise<boolea
   return saveCloudData(token, dataToSync);
 }
 
-function mergeData(local: AppData, cloud: AppData): AppData {
+export function mergeData(local: AppData, cloud: AppData): AppData {
   const merged: AppData = {
     businesses: mergeById(local.businesses, cloud.businesses),
     parties: mergeById(local.parties, cloud.parties),
@@ -131,6 +131,8 @@ function mergeData(local: AppData, cloud: AppData): AppData {
       ),
     },
     creditNotes: mergeById(local.creditNotes ?? [], cloud.creditNotes ?? []),
+    debitNotes: mergeById(local.debitNotes ?? [], cloud.debitNotes ?? []),
+    payroll: mergeById(local.payroll ?? [], cloud.payroll ?? []),
     deliveryChallans: mergeById(local.deliveryChallans ?? [], cloud.deliveryChallans ?? []),
     expenses: mergeById(local.expenses ?? [], cloud.expenses ?? []),
     quotes: mergeById(local.quotes ?? [], cloud.quotes ?? []),

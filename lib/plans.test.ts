@@ -25,7 +25,7 @@ describe("Business / Lifetime prices (Play + website)", () => {
     expect(listed.business_yearly.price).toBe(5000);
     expect(listed.business_lifetime.price).toBe(18000);
 
-    for (const [id, plan] of Object.entries(PLANS)) {
+    for (const [id, plan] of Object.entries(PLANS as Record<string, { price: number }>)) {
       expect(plan.price, id).not.toBe(299);
       expect(String(id)).not.toMatch(/299/);
     }
@@ -65,7 +65,9 @@ describe("Free vs Business entitlements (Vyapar model)", () => {
 describe("Firebase Hosting www → apex", () => {
   it("declares www.argusinvoicing.com as a redirect site to the apex, not a content host", () => {
     const cfg = JSON.parse(readFileSync(new URL("../firebase.json", import.meta.url), "utf8"));
-    const hosting = Array.isArray(cfg.hosting) ? cfg.hosting : [cfg.hosting];
+    type HostingRedirect = { destination?: string };
+    type HostingEntry = { site?: string; target?: string; redirects?: HostingRedirect[]; rewrites?: unknown[] };
+    const hosting: HostingEntry[] = Array.isArray(cfg.hosting) ? cfg.hosting : [cfg.hosting];
     const www = hosting.find(
       (h) =>
         h.site === "argusinvoicing-www" ||
@@ -74,10 +76,10 @@ describe("Firebase Hosting www → apex", () => {
           h.redirects.some((r) => String(r.destination || "").includes("argusinvoicing.com")))
     );
     expect(www).toBeTruthy();
-    const destinations = (www.redirects || []).map((r) => r.destination);
+    const destinations = (www?.redirects || []).map((r) => r.destination);
     expect(destinations.some((d) => d === "https://argusinvoicing.com" || d?.startsWith("https://argusinvoicing.com/"))).toBe(
       true
     );
-    expect(www.rewrites || []).toEqual([]);
+    expect(www?.rewrites || []).toEqual([]);
   });
 });

@@ -114,7 +114,7 @@ export function SubscriptionGate() {
               ? "Your Business subscription has expired. Renew below to continue using the web app."
               : currentPlan
               ? `Your current plan (${currentPlan}) doesn't include web access. Upgrade to Business to continue.`
-              : "The Argus Web App is available to Business members. Start a 14-day free trial, or subscribe below."}
+              : "Web books, GSTR summaries, and the CA portal are Business. Android Free is unlimited basic billing — it does not unlock this web suite. Start a 14-day trial, or subscribe below."}
           </p>
         </div>
 
@@ -207,7 +207,7 @@ export function SubscriptionGate() {
             >
               Yearly
               {savingsLabel ? (
-                <span className="ml-1 text-xs text-emerald-500">{savingsLabel}</span>
+                <span className="ml-1 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800">{savingsLabel}</span>
               ) : null}
             </button>
           </div>

@@ -4,6 +4,7 @@ import {
   buildInvoiceDocument,
   calculateItem,
   defaultGstRateForNew,
+  exclusiveRateFromInclusive,
   documentTypeFromInvoiceType,
   generateGSTRReport,
   gstRatePickerOptions,
@@ -745,5 +746,62 @@ describe("invoice document shape", () => {
     });
     expect(invoice.partyGstin).toBe("URP");
     expect(invoice.shipToGstin).toBe("URP");
+  });
+});
+
+describe("GST-inclusive (total mode) invoices", () => {
+  function inclusiveInvoice(amount: number, gstRate: InvoiceItem["gstRate"], discount = 0) {
+    return buildInvoiceDocument({
+      id: "inv-total",
+      invoiceNumber: "INV-2026-0100",
+      type: "tax_invoice",
+      status: "unpaid",
+      businessId: "biz-1",
+      sellerGstin: MH_GSTIN,
+      sellerStateCode: MH,
+      partyId: "",
+      partyName: "Walk-in",
+      partyGstin: "",
+      partyPhone: "",
+      partyAddress: "",
+      partyStateCode: MH,
+      date: "2026-09-27",
+      dueDate: "2026-10-12",
+      items: [
+        line({
+          gstRate,
+          isInterState: false,
+          rate: exclusiveRateFromInclusive(amount, gstRate),
+          discount,
+        }),
+      ],
+      roundOffEnabled: false,
+      paidAmount: 0,
+      paymentMode: "",
+      notes: "",
+      terms: "",
+      reverseCharge: false,
+      isTotalMode: true,
+      createdAt: "2026-09-27T00:00:00.000Z",
+    });
+  }
+
+  it("keeps the entered ₹1,180 incl. 18% as the grand total, not GST on GST", () => {
+    const inv = inclusiveInvoice(1180, 18);
+    expect(inv.totalTaxable).toBe(1000);
+    expect(inv.totalCgst).toBe(90);
+    expect(inv.totalSgst).toBe(90);
+    expect(inv.grandTotal).toBe(1180);
+  });
+
+  it("reproduces awkward inclusive amounts within one paisa", () => {
+    // CGST/SGST halves are rounded per line, so an odd-paisa tax can land 0.01 high.
+    for (const [amount, rate] of [[1000, 18], [999, 5], [250, 40], [73.5, 18]] as const) {
+      expect(Math.abs(inclusiveInvoice(amount, rate).grandTotal - amount)).toBeLessThanOrEqual(0.0101);
+    }
+  });
+
+  it("applies discount before splitting out GST", () => {
+    expect(inclusiveInvoice(1180, 18, 10).grandTotal).toBeCloseTo(1062, 2);
   });
 });

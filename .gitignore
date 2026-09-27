@@ -5,6 +5,7 @@ out/
 !.env.example
 functions/.env.local
 functions/.env
+functions/.secret.local
 .firebase/
 .DS_Store
 *.log

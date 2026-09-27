@@ -1,4 +1,5 @@
 import type { Config } from "tailwindcss";
+import defaultColors from "tailwindcss/colors";
 
 const config: Config = {
   content: [
@@ -34,10 +35,12 @@ const config: Config = {
         "brand-violet": "#6647f0",
         "signal-blue": "#0091ff",
         mint: "#6ee7b7",
-        emerald: "#00c07a",
+        // Keep Tailwind's emerald-50…950 scale; bare `emerald` is the brand green.
+        emerald: { ...defaultColors.emerald, DEFAULT: "#00c07a" },
       },
       fontFamily: {
         sans: [
+          "var(--font-inter)",
           "Inter",
           "ui-sans-serif",
           "system-ui",
@@ -48,6 +51,7 @@ const config: Config = {
           "sans-serif",
         ],
         display: [
+          "var(--font-jakarta)",
           "Plus Jakarta Sans",
           "Inter",
           "ui-sans-serif",
@@ -79,6 +83,22 @@ const config: Config = {
       boxShadow: {
         subtle: "rgba(0, 0, 0, 0.1) 0px 1px 3px 0px, rgba(0, 0, 0, 0.1) 0px 1px 2px -1px",
         card: "rgba(13, 21, 48, 0.04) 0px 4px 4px 0px",
+        lift: "0 1px 2px rgba(16, 24, 40, 0.04), 0 12px 32px -12px rgba(49, 36, 120, 0.18)",
+        glow: "0 0 0 1px rgba(102, 71, 240, 0.15), 0 24px 64px -24px rgba(102, 71, 240, 0.45)",
+      },
+      keyframes: {
+        aurora: {
+          "0%, 100%": { transform: "translate3d(0, 0, 0) scale(1)" },
+          "50%": { transform: "translate3d(2%, -3%, 0) scale(1.06)" },
+        },
+        "float-slow": {
+          "0%, 100%": { transform: "translateY(0)" },
+          "50%": { transform: "translateY(-8px)" },
+        },
+      },
+      animation: {
+        aurora: "aurora 14s ease-in-out infinite",
+        "float-slow": "float-slow 6s ease-in-out infinite",
       },
     },
   },

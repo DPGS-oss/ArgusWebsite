@@ -19,6 +19,8 @@ import {
   LayoutTemplate,
   Repeat,
   ArrowLeftRight,
+  Banknote,
+  ClipboardCheck,
 } from "lucide-react";
 import type { View } from "@/lib/types";
 import { isUsingFileSystem, getFolderName } from "@/lib/storage";
@@ -37,6 +39,9 @@ const menuItems: { view: View; label: string; icon: typeof LayoutDashboard }[] =
   { view: "invoices", label: "Invoices", icon: FileText },
   { view: "quotes", label: "Quotes", icon: FileSignature },
   { view: "credit-notes", label: "Credit Notes", icon: ArrowLeftRight },
+  { view: "debit-notes", label: "Debit Notes", icon: ArrowLeftRight },
+  { view: "payroll", label: "Payroll", icon: Banknote },
+  { view: "compliance", label: "GST check", icon: ClipboardCheck },
   { view: "delivery-challans", label: "Delivery Challans", icon: Truck },
   { view: "parties", label: "Parties", icon: Users },
   { view: "books", label: "Books", icon: BookOpen },

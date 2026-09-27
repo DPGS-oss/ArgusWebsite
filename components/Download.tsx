@@ -4,21 +4,22 @@ import { Reveal, Stagger, StaggerItem } from "./Reveal";
 
 export function Download() {
   return (
-    <section id="download" className="py-20 md:py-28">
+    <section id="download" className="bg-white py-24 md:py-32">
       <div className="container-page text-center">
         <Reveal>
+          <span className="eyebrow">Get Argus</span>
           <h2 className="mb-4 text-4xl font-bold tracking-tightest text-ink md:text-5xl">
-            Download Argus Today
+            Start on the web today
           </h2>
-          <p className="mb-10 text-lg text-slate">
-            Free on Android to get started. Full books on the web when you subscribe.
-            Available on web now; iOS coming soon. Web works best in Chrome or Edge on desktop.
+          <p className="mx-auto mb-10 max-w-2xl text-lg text-slate">
+            The web app is live now and works best in Chrome or Edge on desktop. The Android app
+            (free, unlimited invoices) and iOS are coming soon — same login everywhere.
           </p>
         </Reveal>
         <Stagger className="flex flex-wrap items-center justify-center gap-4" stagger={0.12}>
           <StaggerItem>
             <div
-              className="flex cursor-not-allowed items-center gap-4 rounded-card border border-bone bg-plaster/50 px-6 py-4 opacity-60"
+              className="flex cursor-not-allowed items-center gap-4 rounded-card-lg border border-dashed border-cloud bg-white/60 px-6 py-4 opacity-70"
               aria-disabled="true"
             >
               <Image src="/play-store.svg" alt="Google Play" width={40} height={40} />
@@ -31,7 +32,7 @@ export function Download() {
           <StaggerItem>
             <Link
               href="/app/"
-              className="flex items-center gap-4 rounded-card border border-brand-violet/30 bg-mist px-6 py-4 transition hover:border-brand-violet"
+              className="flex items-center gap-4 rounded-card-lg border border-brand-violet/30 bg-white px-6 py-4 shadow-lift transition hover:-translate-y-0.5 hover:border-brand-violet"
             >
               <div className="flex h-10 w-10 items-center justify-center rounded-card bg-brand-violet/10">
                 <svg className="h-5 w-5 text-brand-violet" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
@@ -45,7 +46,7 @@ export function Download() {
             </Link>
           </StaggerItem>
           <StaggerItem>
-            <div className="flex cursor-not-allowed items-center gap-4 rounded-card border border-bone bg-plaster/50 px-6 py-4 opacity-60">
+            <div className="flex cursor-not-allowed items-center gap-4 rounded-card-lg border border-dashed border-cloud bg-white/60 px-6 py-4 opacity-70">
               <Image src="/app-store.svg" alt="App Store" width={40} height={40} />
               <div className="text-left">
                 <span className="block text-xs text-slate">Coming soon to</span>

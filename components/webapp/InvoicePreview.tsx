@@ -5,7 +5,7 @@ import { ArrowLeft, FileJson, FileText, Edit, FileDown } from "lucide-react";
 import { useAuth } from "@/lib/auth-provider";
 import type { BusinessProfile, Invoice, StockItem } from "@/lib/types";
 import { formatCurrency, formatDate, generateInvoiceHTML } from "@/lib/gst";
-import { saveInvoiceToFile, saveInvoiceAsHTML, saveInvoiceAsPDF, downloadInvoiceFile, downloadInvoiceHTML, downloadInvoicePDF, isUsingFileSystem } from "@/lib/storage";
+import { saveInvoice, saveInvoiceToFile, saveInvoiceAsHTML, saveInvoiceAsPDF, downloadInvoiceFile, downloadInvoiceHTML, downloadInvoicePDF, isUsingFileSystem } from "@/lib/storage";
 import { InvoiceShareActions } from "./InvoiceShareActions";
 
 type InvoicePreviewProps = {
@@ -16,11 +16,14 @@ type InvoicePreviewProps = {
   onEdit: (invoice: Invoice) => void;
   onMarkPaid?: () => void;
   onAddUpi?: () => void;
+  onSaved?: () => void;
 };
 
-export function InvoicePreview({ invoice, business, stock = [], onBack, onEdit, onMarkPaid, onAddUpi }: InvoicePreviewProps) {
+export function InvoicePreview({ invoice, business, stock = [], onBack, onEdit, onMarkPaid, onAddUpi, onSaved }: InvoicePreviewProps) {
   const { token, firebaseUser } = useAuth();
   const [savingPDF, setSavingPDF] = useState(false);
+  const [irn, setIrn] = useState(invoice.irn || "");
+  const [eway, setEway] = useState(invoice.ewayBillNo || "");
   const [savingEinvoice, setSavingEinvoice] = useState(false);
 
   async function handleDownloadEinvoice() {
@@ -113,19 +116,25 @@ export function InvoicePreview({ invoice, business, stock = [], onBack, onEdit, 
     return pdfBlob;
   }
 
+  function savePortalRefs() {
+    saveInvoice({ ...invoice, irn: irn.trim(), ewayBillNo: eway.trim(), updatedAt: new Date().toISOString() });
+    onSaved?.();
+    alert("IRN and e-way bill saved. File them on the GST portal — Argus only stores the numbers.");
+  }
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <button onClick={onBack} className="rounded-lg p-2 text-silver hover:bg-graphite hover:text-starlight">
             <ArrowLeft className="h-5 w-5" />
           </button>
-          <h1 className="text-2xl text-starlight">{invoice.invoiceNumber}</h1>
+          <h1 className="whitespace-nowrap text-2xl text-starlight">{invoice.invoiceNumber}</h1>
         </div>
         <div className="flex flex-wrap gap-2">
           {onMarkPaid && invoice.status !== "paid" ? (
             <button onClick={onMarkPaid} className="btn-primary !py-2">
-              I got it
+              Mark as paid
             </button>
           ) : null}
           <InvoiceShareActions
@@ -175,10 +184,20 @@ export function InvoicePreview({ invoice, business, stock = [], onBack, onEdit, 
               <>
                 <h2 className="text-lg font-semibold">{business.name}</h2>
                 <p className="text-sm text-gray-600">
-                  {business.address}<br />
-                  {business.city}, {business.state} - {business.pincode}<br />
-                  GSTIN: {business.gstin}<br />
-                  {business.phone} | {business.email}
+                  {[
+                    business.address,
+                    [[business.city, business.state].filter(Boolean).join(", "), business.pincode]
+                      .filter(Boolean)
+                      .join(" - "),
+                    business.gstin ? `GSTIN: ${business.gstin}` : "",
+                    [business.phone, business.email].filter(Boolean).join(" | "),
+                  ]
+                    .filter(Boolean)
+                    .map((line) => (
+                      <span key={line} className="block">
+                        {line}
+                      </span>
+                    ))}
                 </p>
               </>
             )}
@@ -325,6 +344,14 @@ export function InvoicePreview({ invoice, business, stock = [], onBack, onEdit, 
           <p>This is a computer-generated invoice from Argus GST Billing App</p>
           <p>© {new Date().getFullYear()} {business?.name}</p>
         </div>
+      </div>
+      <div className="rounded-xl border border-bone bg-white p-4 print:hidden">
+        <div className="mb-2 text-sm font-medium text-ink">GST portal numbers</div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <input className="input-field" placeholder="IRN" value={irn} onChange={(e) => setIrn(e.target.value)} />
+          <input className="input-field" placeholder="E-way bill number" value={eway} onChange={(e) => setEway(e.target.value)} />
+        </div>
+        <button className="btn-secondary mt-3" onClick={savePortalRefs}>Save IRN / e-way</button>
       </div>
     </div>
   );
