@@ -5,6 +5,7 @@ import {
   calculateItem,
   defaultGstRateForNew,
   exclusiveRateFromInclusive,
+  generateInvoiceHTML,
   documentTypeFromInvoiceType,
   generateGSTRReport,
   gstRatePickerOptions,
@@ -803,5 +804,55 @@ describe("GST-inclusive (total mode) invoices", () => {
 
   it("applies discount before splitting out GST", () => {
     expect(inclusiveInvoice(1180, 18, 10).grandTotal).toBeCloseTo(1062, 2);
+  });
+});
+
+describe("invoice HTML branding", () => {
+  const biz = {
+    name: "QA Traders",
+    gstin: MH_GSTIN,
+    address: "",
+    city: "Pune",
+    state: "Maharashtra",
+    pincode: "411001",
+    phone: "",
+    email: "",
+  };
+  const inv = {
+    id: "i1",
+    invoiceNumber: "INV-1",
+    type: "tax_invoice",
+    status: "unpaid",
+    date: "2026-09-27",
+    dueDate: "2026-10-12",
+    partyName: "",
+    items: [line({ gstRate: 18, isInterState: false })],
+    subtotal: 1000,
+    totalDiscount: 0,
+    totalTaxable: 1000,
+    totalCgst: 90,
+    totalSgst: 90,
+    totalIgst: 0,
+    totalTax: 180,
+    roundOff: 0,
+    grandTotal: 1180,
+    paidAmount: 0,
+    balanceDue: 1180,
+  } as unknown as Invoice;
+
+  it("leads with the shop name and has no Argus mark for paid plans", () => {
+    const html = generateInvoiceHTML(inv, biz);
+    expect(html).toContain("<h1>QA Traders</h1>");
+    expect(html).not.toMatch(/Made with Argus|<h1>Argus<\/h1>/);
+  });
+
+  it("adds a small Argus footer only for the Free plan", () => {
+    expect(generateInvoiceHTML(inv, biz, { showArgusBranding: true })).toContain("Made with Argus");
+  });
+
+  it("prints a clean em dash for a walk-in with no name", () => {
+    const html = generateInvoiceHTML(inv, biz);
+    expect(html).toContain("<strong>—</strong>");
+    expect(html).not.toContain("Ã");
   });
 });

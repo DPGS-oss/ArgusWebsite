@@ -687,7 +687,7 @@ export function buildInvoiceDocument(input: BuildInvoiceInput): Invoice {
     ? resolvePlaceOfSupply(ship.shipToStateCode, billState)
     : historicalPos || resolvePlaceOfSupply(ship.shipToStateCode, billState);
   // Map a named historical POS to a code, but do not replace it with the seller
-  // state when keeping stored tax Ã¢â‚¬â€ that fallback is what flipped walk-in IGST.
+  // state when keeping stored tax — that fallback is what flipped walk-in IGST.
   const keepStoredTax = input.preserveStoredTax !== false;
   const placeOfSupply = keepStoredTax
     ? historicalPos || (input.placeOfSupply || "").trim() || computedPlaceOfSupply
@@ -1116,7 +1116,7 @@ export function generateInvoiceHTML(invoice: Invoice, business: {
   bankAccount?: string;
   bankIfsc?: string;
   upiId?: string;
-}): string {
+}, options: { showArgusBranding?: boolean } = {}): string {
   const itemsRows = invoice.items
     .map(
       (item) => `
@@ -1188,8 +1188,7 @@ export function generateInvoiceHTML(invoice: Invoice, business: {
 <div class="invoice">
   <div class="header">
     <div class="business-info">
-      <h1>Argus</h1>
-      <h2>${business.name}</h2>
+      <h1>${business.name}</h1>
       <p>${business.address}<br>${business.city}, ${business.state} - ${business.pincode}<br>GSTIN: ${business.gstin}<br>Phone: ${business.phone} | Email: ${business.email}</p>
     </div>
     <div class="invoice-meta">
@@ -1203,7 +1202,7 @@ export function generateInvoiceHTML(invoice: Invoice, business: {
   <div class="parties">
     <div class="party-box">
       <h4>Bill To</h4>
-      <p><strong>${invoice.partyName || "Ã¢â‚¬â€"}</strong>${invoice.partyPhone ? `<br>Phone: ${invoice.partyPhone}` : ""}<br>GSTIN: ${billToGstin === "URP" ? "URP (Unregistered)" : billToGstin}<br>Place of Supply: ${invoice.placeOfSupply}${invoice.reverseCharge ? "<br>Reverse Charge: Yes" : ""}${invoice.documentType ? `<br>Document: ${invoice.documentType}` : ""}</p>
+      <p><strong>${invoice.partyName || "—"}</strong>${invoice.partyPhone ? `<br>Phone: ${invoice.partyPhone}` : ""}<br>GSTIN: ${billToGstin === "URP" ? "URP (Unregistered)" : billToGstin}<br>Place of Supply: ${invoice.placeOfSupply}${invoice.reverseCharge ? "<br>Reverse Charge: Yes" : ""}${invoice.documentType ? `<br>Document: ${invoice.documentType}` : ""}</p>
     </div>
     ${showShipTo ? `<div class="party-box">
       <h4>Ship To</h4>
@@ -1250,8 +1249,8 @@ export function generateInvoiceHTML(invoice: Invoice, business: {
   ${invoice.notes ? `<div class="notes"><p><strong>Notes:</strong> ${invoice.notes}</p></div>` : ""}
   ${invoice.terms ? `<div class="notes"><p><strong>Terms:</strong> ${invoice.terms}</p></div>` : ""}
   <div class="footer">
-    <p>This is a computer-generated invoice from Argus GST Billing App</p>
-    <p>Ã‚Â© ${new Date().getFullYear()} ${business.name}</p>
+    <p>This is a computer-generated invoice.</p>
+    ${options.showArgusBranding ? `<p>Made with Argus · argusinvoicing.com</p>` : ""}
   </div>
 </div>
 </body>

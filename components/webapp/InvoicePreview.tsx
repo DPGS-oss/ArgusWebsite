@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { ArrowLeft, FileJson, FileText, Edit, FileDown } from "lucide-react";
-import { useAuth } from "@/lib/auth-provider";
+import { hasValidSubscription, useAuth } from "@/lib/auth-provider";
 import type { BusinessProfile, Invoice, StockItem } from "@/lib/types";
 import { formatCurrency, formatDate, generateInvoiceHTML } from "@/lib/gst";
 import { saveInvoice, saveInvoiceToFile, saveInvoiceAsHTML, saveInvoiceAsPDF, downloadInvoiceFile, downloadInvoiceHTML, downloadInvoicePDF, isUsingFileSystem } from "@/lib/storage";
@@ -20,7 +20,9 @@ type InvoicePreviewProps = {
 };
 
 export function InvoicePreview({ invoice, business, stock = [], onBack, onEdit, onMarkPaid, onAddUpi, onSaved }: InvoicePreviewProps) {
-  const { token, firebaseUser } = useAuth();
+  const { token, firebaseUser, user } = useAuth();
+  // Argus branding is a Free-plan mark only; Business and trial invoices stay unbranded.
+  const showArgusBranding = !hasValidSubscription(user);
   const [savingPDF, setSavingPDF] = useState(false);
   const [irn, setIrn] = useState(invoice.irn || "");
   const [eway, setEway] = useState(invoice.ewayBillNo || "");
@@ -66,7 +68,7 @@ export function InvoicePreview({ invoice, business, stock = [], onBack, onEdit, 
 
   async function handleSaveHTML() {
     if (!business) return;
-    const html = generateInvoiceHTML(invoice, business);
+    const html = generateInvoiceHTML(invoice, business, { showArgusBranding });
     if (isUsingFileSystem()) {
       await saveInvoiceAsHTML(invoice, business.name, html);
       alert(`Invoice saved to folder as ${invoice.invoiceNumber}.html`);
@@ -95,7 +97,7 @@ export function InvoicePreview({ invoice, business, stock = [], onBack, onEdit, 
   }
 
   async function generatePDFBlob(inv: Invoice, biz: BusinessProfile): Promise<Blob> {
-    const html = generateInvoiceHTML(inv, biz);
+    const html = generateInvoiceHTML(inv, biz, { showArgusBranding });
     const container = document.createElement("div");
     container.style.position = "absolute";
     container.style.left = "-9999px";
@@ -179,10 +181,9 @@ export function InvoicePreview({ invoice, business, stock = [], onBack, onEdit, 
       <div className="rounded-lg border border-lead/20 bg-white p-8 text-gray-800">
         <div className="mb-6 flex justify-between border-b-2 border-[#5266eb] pb-4">
           <div>
-            <h1 className="text-2xl font-bold text-[#5266eb]">Argus</h1>
             {business && (
               <>
-                <h2 className="text-lg font-semibold">{business.name}</h2>
+                <h2 className="text-2xl font-bold text-[#5266eb]">{business.name}</h2>
                 <p className="text-sm text-gray-600">
                   {[
                     business.address,
@@ -341,8 +342,8 @@ export function InvoicePreview({ invoice, business, stock = [], onBack, onEdit, 
         )}
 
         <div className="mt-6 border-t border-gray-200 pt-4 text-center text-xs text-gray-400">
-          <p>This is a computer-generated invoice from Argus GST Billing App</p>
-          <p>© {new Date().getFullYear()} {business?.name}</p>
+          <p>This is a computer-generated invoice.</p>
+          {showArgusBranding ? <p>Made with Argus · argusinvoicing.com</p> : null}
         </div>
       </div>
       <div className="rounded-xl border border-bone bg-white p-4 print:hidden">
