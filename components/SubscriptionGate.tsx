@@ -220,6 +220,7 @@ export function SubscriptionGate() {
           <div className="mb-6">
             <h3 className="mb-2 text-2xl font-bold text-ink">Business</h3>
             <div className="text-4xl font-bold text-ink">{priceLabel}</div>
+            <div className="mt-1 text-xs text-slate">Incl. of all taxes · cancel auto-renew anytime from your profile</div>
             <p className="mt-1 text-sm text-slate">
               {promoOffer
                 ? "Applied to this checkout"

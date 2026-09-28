@@ -1,5 +1,5 @@
 import type { AppData } from "./types";
-import { generateGSTRReport } from "./gst";
+import { generateGSTRReport, notesAsInvoices } from "./gst";
 
 export type AskArgusSummary = {
   period: { from: string; to: string };
@@ -67,7 +67,7 @@ export function buildAskArgusSummary(
     expenseTotal += e.amount;
   }
 
-  const gstr3b = generateGSTRReport(invoices, "gstr3b", from, to, purchases);
+  const gstr3b = generateGSTRReport([...invoices, ...notesAsInvoices({ ...data, invoices })], "gstr3b", from, to, purchases);
 
   const stock = data.stock ?? [];
   const lowStock = stock.filter((s) => s.minStock > 0 && s.currentStock <= s.minStock).length;

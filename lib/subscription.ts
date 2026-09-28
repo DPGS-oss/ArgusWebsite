@@ -10,7 +10,27 @@ export type SubscriptionInfo = {
   active?: boolean;
   expiry_date?: string | null;
   expiryDate?: string | null;
+  auto_renew?: boolean;
+  source?: string;
 };
+
+/** Razorpay-billed plans can be cancelled in one click from Argus. */
+export function canCancelAutoRenew(sub: SubscriptionInfo | undefined): boolean {
+  return !!sub?.active && sub.auto_renew !== false && String(sub.source || "").startsWith("razorpay");
+}
+
+/** Turn off auto-renew. Access continues until the current period ends. */
+export async function cancelAutoRenew(token: string): Promise<{ accessUntil: string | null }> {
+  const res = await fetch("/api/subscription/cancel", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(typeof data.error === "string" ? data.error : "Could not cancel auto-renew");
+  }
+  return { accessUntil: data.access_until ?? null };
+}
 
 const BUSINESS_PLAN_KEYS = new Set([
   "business",

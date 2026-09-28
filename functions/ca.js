@@ -10,6 +10,7 @@ const { verifyToken, getUser, getDb } = require('./_shared/firebase-admin');
 const { checkRateLimit } = require('./_shared/rate-limit');
 const {
   buildGstr1Json,
+  notesAsInvoices,
   buildTallyXml,
   sellerGstinFromAppData,
   companyNameFromAppData,
@@ -374,7 +375,7 @@ async function handleGstr1Download(req, res, decoded, ownerId) {
   const json = buildGstr1Json({
     gstin: sellerGstinFromAppData(appData),
     month,
-    invoices: appData.invoices || [],
+    invoices: [...(appData.invoices || []), ...notesAsInvoices(appData)],
   });
   const { fp } = monthBounds(month);
   return sendAttachment(res, {
@@ -444,7 +445,7 @@ async function handleTallyDownload(req, res, decoded, ownerId) {
   const xml = buildTallyXml({
     companyName: companyNameFromAppData(appData),
     month,
-    invoices: appData.invoices || [],
+    invoices: [...(appData.invoices || []), ...notesAsInvoices(appData)],
   });
   const { fp } = monthBounds(month);
   return sendAttachment(res, {

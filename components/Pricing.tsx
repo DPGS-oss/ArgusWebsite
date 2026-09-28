@@ -228,8 +228,12 @@ export function Pricing() {
                   </div>
                   {plan.key === "business" && promoOffer ? (
                     <p className="mt-2 text-sm text-brand-violet">{promoOffer.message}</p>
+                  ) : plan.key === "business_lifetime" ? (
+                    <p className="mt-2 text-sm text-slate">Incl. of all taxes. One-time payment, no renewal.</p>
                   ) : plan.key === "business" ? (
-                    <p className="mt-2 text-sm text-slate">Auto-renews until you cancel in Razorpay.</p>
+                    <p className="mt-2 text-sm text-slate">
+                      Incl. of all taxes. Auto-renews; cancel anytime in one click from your profile.
+                    </p>
                   ) : null}
                 </div>
                 <ul className="mb-8 flex-1 space-y-3 text-sm text-slate">

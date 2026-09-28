@@ -4,7 +4,7 @@ import { useState } from "react";
 import { ArrowLeft, FileJson, FileText, Edit, FileDown } from "lucide-react";
 import { hasValidSubscription, useAuth } from "@/lib/auth-provider";
 import type { BusinessProfile, Invoice, StockItem } from "@/lib/types";
-import { formatCurrency, formatDate, generateInvoiceHTML } from "@/lib/gst";
+import { formatCurrency, formatDate, generateInvoiceHTML, placeOfSupplyLabel } from "@/lib/gst";
 import { saveInvoice, saveInvoiceToFile, saveInvoiceAsHTML, saveInvoiceAsPDF, downloadInvoiceFile, downloadInvoiceHTML, downloadInvoicePDF, isUsingFileSystem } from "@/lib/storage";
 import { InvoiceShareActions } from "./InvoiceShareActions";
 
@@ -224,9 +224,9 @@ export function InvoicePreview({ invoice, business, stock = [], onBack, onEdit, 
             <p className="font-semibold">{invoice.partyName || "—"}</p>
             {invoice.partyPhone && <p className="text-sm text-gray-600">Phone: {invoice.partyPhone}</p>}
             <p className="text-sm text-gray-600">GSTIN: {invoice.partyGstin === "URP" || !invoice.partyGstin ? "URP (Unregistered)" : invoice.partyGstin}</p>
-            <p className="text-sm text-gray-600">Place of Supply: {invoice.placeOfSupply}</p>
+            <p className="text-sm text-gray-600">Place of Supply: {placeOfSupplyLabel(invoice.placeOfSupply)}</p>
             {invoice.documentType && <p className="text-sm text-gray-600">Document: {invoice.documentType}</p>}
-            {invoice.reverseCharge && <p className="text-sm text-gray-600">Reverse Charge: Yes</p>}
+            <p className="text-sm text-gray-600">Reverse Charge: {invoice.reverseCharge ? "Yes" : "No"}</p>
           </div>
           {(invoice.shipToAddress || (invoice.shipToGstin && invoice.shipToGstin !== invoice.partyGstin)) && (
             <div>
@@ -340,6 +340,12 @@ export function InvoicePreview({ invoice, business, stock = [], onBack, onEdit, 
         {invoice.terms && (
           <div className="mt-1 text-xs text-gray-600"><strong>Terms:</strong> {invoice.terms}</div>
         )}
+
+        {/* Rule 46(q): supplier signature block. */}
+        <div className="mt-8 text-right text-sm text-gray-700">
+          <p>For <strong>{business?.name}</strong></p>
+          <p className="mt-10 inline-block border-t border-gray-400 pt-1">Authorised Signatory</p>
+        </div>
 
         <div className="mt-6 border-t border-gray-200 pt-4 text-center text-xs text-gray-400">
           <p>This is a computer-generated invoice.</p>

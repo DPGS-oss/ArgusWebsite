@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { BarChart3, Download, FileText } from "lucide-react";
 import type { AppData, GSTRReportType, GSTRReport } from "@/lib/types";
-import { generateGSTRReport, generateGstnJson, formatCurrency, formatDate } from "@/lib/gst";
+import { generateGSTRReport, generateGstnJson, formatCurrency, formatDate, notesAsInvoices } from "@/lib/gst";
 
 type ReportsProps = {
   data: AppData;
@@ -30,11 +30,14 @@ export function Reports({ data }: ReportsProps) {
   const [month, setMonth] = useState(defaultMonth);
   const [report, setReport] = useState<GSTRReport | null>(null);
 
-  const invoices = data.invoices.filter((i) => i.businessId === data.activeBusinessId);
+  const ownInvoices = data.invoices.filter((i) => i.businessId === data.activeBusinessId);
+  // Include notes raised on the Credit / Debit Notes screens, same as the CA portal sees.
+  const invoices = [...ownInvoices, ...notesAsInvoices({ ...data, invoices: ownInvoices })];
+  const sellerGstin = data.businesses.find((b) => b.id === data.activeBusinessId)?.gstin || "";
 
   function generate() {
     const { from, to } = getMonthRange(month);
-    const r = generateGSTRReport(invoices, reportType, from, to, data.purchases || []);
+    const r = generateGSTRReport(invoices, reportType, from, to, data.purchases || [], sellerGstin);
     setReport(r);
   }
 

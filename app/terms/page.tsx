@@ -42,10 +42,12 @@ export default function TermsPage() {
 
       <h2 className="mt-8 text-xl font-semibold text-ink">4. Subscriptions (monthly / yearly)</h2>
       <p>
-        Paid plans and prices are shown on the website or in the app store. Monthly and yearly
-        Business plans billed via Razorpay may auto-renew until you cancel through the billing
-        provider (or Play Store for in-app purchases). Cancel stops future renewals; it does not
-        erase your duty to pay for the current period already charged.
+        Paid plans and prices are shown on the website or in the app store and are inclusive of
+        all taxes. Monthly and yearly Business plans billed via Razorpay auto-renew until you
+        cancel. You can cancel auto-renew in one click from your profile on the website (Play Store
+        purchases: Play Store &gt; Payments &amp; subscriptions). Your bank or card issuer sends a
+        pre-debit notice before each renewal as RBI e-mandate rules require. Cancelling stops future
+        renewals; you keep access until the end of the period already paid for.
       </p>
       <p>
         <strong>No refund on cancellation.</strong> If you cancel a subscription, fees already paid
@@ -151,9 +153,9 @@ export default function TermsPage() {
 
       <h2 className="mt-8 text-xl font-semibold text-ink">12. Changes</h2>
       <p>
-        We may update these Terms. Continued use after the updated &quot;Last updated&quot; date
-        constitutes acceptance. If you disagree, stop using Argus and cancel renewing
-        subscriptions.
+        We may update these Terms. For material changes we ask you to review and accept the new
+        version in the app before you continue. If you disagree, you can stop using Argus, export
+        your data, and cancel auto-renew from your profile.
       </p>
 
       <h2 className="mt-8 text-xl font-semibold text-ink">13. Governing law</h2>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import dynamic from "next/dynamic";
 import { Menu, X, Cloud, CloudOff, RefreshCw } from "lucide-react";
 import type { AppData, BusinessProfile, Invoice, View } from "@/lib/types";
 import { loadData, saveInvoice, deleteInvoice, pickFolder, deductStockForInvoice, saveData, generateId, initStorage, isFileSystemSupported, isUsingFileSystem, getFolderName } from "@/lib/storage";
@@ -8,28 +9,7 @@ import { syncFromCloud, syncToCloud, getLastSyncTime, type SyncStatus } from "@/
 import { Sidebar } from "@/components/webapp/Sidebar";
 import { Dashboard } from "@/components/webapp/Dashboard";
 import { InvoiceList } from "@/components/webapp/InvoiceList";
-import { InvoiceForm } from "@/components/webapp/InvoiceForm";
-import { InvoicePreview } from "@/components/webapp/InvoicePreview";
-import { Reports } from "@/components/webapp/Reports";
-import { BusinessManager } from "@/components/webapp/BusinessManager";
-import { Parties } from "@/components/webapp/Parties";
-import { Settings } from "@/components/webapp/Settings";
-import { Inventory } from "@/components/webapp/Inventory";
-import { CreditNotes } from "@/components/webapp/CreditNotes";
-import { DebitNotes } from "@/components/webapp/DebitNotes";
-import { Payroll } from "@/components/webapp/Payroll";
-import { Compliance } from "@/components/webapp/Compliance";
-import { DeliveryChallans } from "@/components/webapp/DeliveryChallans";
-import { Expenses } from "@/components/webapp/Expenses";
-import { Quotes } from "@/components/webapp/Quotes";
-import { Purchases } from "@/components/webapp/Purchases";
-import { Payments } from "@/components/webapp/Payments";
-import { Templates } from "@/components/webapp/Templates";
-import { Khata } from "@/components/webapp/Khata";
-import { RecurringInvoices } from "@/components/webapp/RecurringInvoices";
-import { Books } from "@/components/webapp/Books";
 import { postInvoiceLedger, persistLedger, applyPaymentToInvoice } from "@/lib/books";
-import { FilesArchive } from "@/components/webapp/FilesArchive";
 import { BrandLogo } from "@/components/BrandLogo";
 import { useAuth, hasValidSubscription } from "@/lib/auth-provider";
 import { AuthModal } from "@/components/AuthModal";
@@ -40,6 +20,32 @@ import {
 } from "@/components/webapp/WebAppTutorial";
 import { KeyboardShortcuts } from "@/components/webapp/KeyboardShortcuts";
 import { getExpiryIso } from "@/lib/subscription";
+
+// Screens load on first open; only the shell (sidebar, dashboard, invoice list) ships up front.
+function ViewLoading() {
+  return <div className="animate-pulse p-6 text-sm text-slate">Loading…</div>;
+}
+const InvoiceForm = dynamic(() => import("@/components/webapp/InvoiceForm").then((m) => m.InvoiceForm), { loading: ViewLoading });
+const InvoicePreview = dynamic(() => import("@/components/webapp/InvoicePreview").then((m) => m.InvoicePreview), { loading: ViewLoading });
+const Reports = dynamic(() => import("@/components/webapp/Reports").then((m) => m.Reports), { loading: ViewLoading });
+const BusinessManager = dynamic(() => import("@/components/webapp/BusinessManager").then((m) => m.BusinessManager), { loading: ViewLoading });
+const Parties = dynamic(() => import("@/components/webapp/Parties").then((m) => m.Parties), { loading: ViewLoading });
+const Settings = dynamic(() => import("@/components/webapp/Settings").then((m) => m.Settings), { loading: ViewLoading });
+const Inventory = dynamic(() => import("@/components/webapp/Inventory").then((m) => m.Inventory), { loading: ViewLoading });
+const CreditNotes = dynamic(() => import("@/components/webapp/CreditNotes").then((m) => m.CreditNotes), { loading: ViewLoading });
+const DebitNotes = dynamic(() => import("@/components/webapp/DebitNotes").then((m) => m.DebitNotes), { loading: ViewLoading });
+const Payroll = dynamic(() => import("@/components/webapp/Payroll").then((m) => m.Payroll), { loading: ViewLoading });
+const Compliance = dynamic(() => import("@/components/webapp/Compliance").then((m) => m.Compliance), { loading: ViewLoading });
+const DeliveryChallans = dynamic(() => import("@/components/webapp/DeliveryChallans").then((m) => m.DeliveryChallans), { loading: ViewLoading });
+const Expenses = dynamic(() => import("@/components/webapp/Expenses").then((m) => m.Expenses), { loading: ViewLoading });
+const Quotes = dynamic(() => import("@/components/webapp/Quotes").then((m) => m.Quotes), { loading: ViewLoading });
+const Purchases = dynamic(() => import("@/components/webapp/Purchases").then((m) => m.Purchases), { loading: ViewLoading });
+const Payments = dynamic(() => import("@/components/webapp/Payments").then((m) => m.Payments), { loading: ViewLoading });
+const Templates = dynamic(() => import("@/components/webapp/Templates").then((m) => m.Templates), { loading: ViewLoading });
+const Khata = dynamic(() => import("@/components/webapp/Khata").then((m) => m.Khata), { loading: ViewLoading });
+const RecurringInvoices = dynamic(() => import("@/components/webapp/RecurringInvoices").then((m) => m.RecurringInvoices), { loading: ViewLoading });
+const Books = dynamic(() => import("@/components/webapp/Books").then((m) => m.Books), { loading: ViewLoading });
+const FilesArchive = dynamic(() => import("@/components/webapp/FilesArchive").then((m) => m.FilesArchive), { loading: ViewLoading });
 
 function trialDaysLeft(user: { subscription?: { plan_key?: string; plan?: string; expiry_date?: string | null; source?: string } } | null): number | null {
   if (!user?.subscription) return null;
@@ -73,9 +79,16 @@ export default function AppPage() {
     setLastSync(getLastSyncTime());
   }, []);
 
+  // Books are opened per signed-in account; a different account gets its own store.
+  const storageUid = firebaseUser?.uid || "";
+  const syncedUid = useRef("");
   useEffect(() => {
     let cancelled = false;
-    initStorage().then((local) => {
+    if (syncedUid.current !== storageUid) {
+      syncedUid.current = storageUid;
+      hasSyncedFromCloud.current = false;
+    }
+    initStorage(storageUid).then((local) => {
       if (cancelled) return;
       setStorageBooted(true);
       if (isUsingFileSystem()) setFolderName(getFolderName());
@@ -109,7 +122,7 @@ export default function AppPage() {
     return () => {
       cancelled = true;
     };
-  }, [token, user]);
+  }, [token, user, storageUid]);
 
   useEffect(() => {
     const uid = firebaseUser?.uid;

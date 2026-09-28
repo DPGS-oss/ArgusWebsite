@@ -32,6 +32,8 @@ const {
   CAMPAIGN,
 } = require('./_shared/promo');
 const {
+  cancelRazorpaySubscriptionAtCycleEnd,
+  cancelRazorpaySubscriptionNow,
   createRazorpaySubscription,
   fetchRazorpaySubscription,
   fetchRazorpayPayment,
@@ -188,6 +190,62 @@ exports.apiAuthSync = onRequest({ region: 'us-central1', maxInstances: 10, secre
 });
 
 // ==================== /api/user/profile ====================
+// ==================== /api/subscription/cancel ====================
+// One-click cancel of auto-renew (CCPA dark-pattern guidelines: no subscription traps).
+// Access stays until the paid period ends; nothing is refunded for unused time.
+exports.apiSubscriptionCancel = onRequest(
+  { region: 'us-central1', maxInstances: 5, secrets: RAZORPAY_SECRETS },
+  async (req, res) => {
+    if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+    const token = extractToken(req);
+    if (!token) return res.status(401).json({ error: 'Unauthorized' });
+    let decoded;
+    try {
+      decoded = await verifyToken(token);
+    } catch (err) {
+      return res.status(401).json({ error: 'Invalid or expired token' });
+    }
+    const uid = decoded.uid;
+    const rl = await checkRateLimit(uid, 'subscription_cancel');
+    if (!rl.allowed) {
+      return res.status(429).json({ error: 'Rate limit exceeded', retry_after_seconds: rl.retryAfterSeconds });
+    }
+
+    const user = await getUser(uid);
+    const sub = user && user.subscription;
+    if (!sub || sub.auto_renew === false) {
+      return res.status(200).json({ cancelled: true, already: true, access_until: sub ? sub.expiry_date : null });
+    }
+    if (sub.source === 'google_play' || sub.source === 'iap' || sub.source === 'play') {
+      return res.status(409).json({
+        error: 'This plan was bought on Google Play. Cancel it in Play Store > Payments & subscriptions.',
+        manage_in: 'google_play',
+      });
+    }
+
+    try {
+      if (sub.razorpay_subscription_id) {
+        await cancelRazorpaySubscriptionAtCycleEnd(sub.razorpay_subscription_id);
+      }
+    } catch (error) {
+      // Already cancelled / completed on Razorpay's side is fine; anything else must not
+      // silently leave the card mandate active.
+      const desc = String((error && error.message) || '');
+      if (!/cancel|complet|not active/i.test(desc)) {
+        console.error('Subscription cancel error:', error);
+        return res.status(502).json({ error: 'Could not reach Razorpay. Please try again or email support.' });
+      }
+    }
+
+    const now = new Date().toISOString();
+    await updateUser(uid, {
+      subscription: { ...sub, auto_renew: false, cancelled_at: now, updated_at: now },
+      updated_at: now,
+    });
+    return res.status(200).json({ cancelled: true, access_until: sub.expiry_date || null });
+  }
+);
+
 exports.apiUserProfile = onRequest({ region: 'us-central1', maxInstances: 10, secrets: FIREBASE_SECRETS }, async (req, res) => {
   const token = extractToken(req);
   if (!token) return res.status(401).json({ error: 'Unauthorized' });
@@ -1411,7 +1469,7 @@ exports.apiPaymentVerify = onRequest({ region: 'us-central1', maxInstances: 10, 
 });
 
 // ==================== /api/account/delete ====================
-exports.apiAccountDelete = onRequest({ region: 'us-central1', maxInstances: 10, secrets: FIREBASE_SECRETS }, async (req, res) => {
+exports.apiAccountDelete = onRequest({ region: 'us-central1', maxInstances: 10, secrets: [...FIREBASE_SECRETS, ...RAZORPAY_SECRETS] }, async (req, res) => {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const body = req.body || {};
@@ -1457,6 +1515,20 @@ exports.apiAccountDelete = onRequest({ region: 'us-central1', maxInstances: 10, 
 
   // If user is authenticated, delete their data immediately
   if (uid) {
+    // Stop any card / UPI mandate first: a deleted account must never be charged again.
+    try {
+      const existing = await getUser(uid);
+      const subId = existing && existing.subscription && existing.subscription.razorpay_subscription_id;
+      if (subId && existing.subscription.auto_renew !== false) {
+        await cancelRazorpaySubscriptionNow(subId);
+      }
+    } catch (err) {
+      const desc = String((err && err.message) || '');
+      if (!/cancel|complet|not active/i.test(desc)) {
+        console.error('Deletion: could not cancel Razorpay subscription:', err);
+        return res.status(502).json({ error: 'Could not stop your subscription. Please try again or email support.' });
+      }
+    }
     try {
       const auth = getAuth();
       // Delete Firestore user document

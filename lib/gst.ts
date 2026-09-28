@@ -1,6 +1,12 @@
-import type { GSTRate, HSNCode, Invoice, InvoiceItem, InvoiceStatus, InvoiceType, GSTRReport, GSTRSection, GSTRReportType, GstDocumentType, Purchase } from "./types";
+import type { AppData, CreditNote, DebitNote, GSTRate, HSNCode, Invoice, InvoiceItem, InvoiceStatus, InvoiceType, GSTRReport, GSTRSection, GSTRReportType, GstDocumentType, Purchase } from "./types";
 import { GST_2_0_RATES, INDIAN_STATES } from "./types";
 import { isRegisteredGstin, normalizeGstin, stateCodeFromGstin } from "./gstin";
+import caExports from "../functions/_shared/ca-exports.js";
+
+const { buildGstr1Json, notesAsInvoices: sharedNotesAsInvoices } = caExports as {
+  buildGstr1Json: (input: { gstin: string; from: string; to: string; fp: string; invoices: unknown[] }) => unknown;
+  notesAsInvoices: (data: unknown) => unknown[];
+};
 
 export { GST_2_0_RATES };
 export type { GstDocumentType };
@@ -506,6 +512,21 @@ export function suggestHSN(description: string): HSNCode[] {
 }
 
 /**
+ * GSTR-1 Table 5 (B2CL) cut-off for inter-state B2C invoices. Notification
+ * 12/2024-CT lowered it from ₹2.5 lakh to ₹1 lakh for supplies from 1 Aug 2024.
+ */
+/** Rule 46(n): place of supply printed with the state name, e.g. "Maharashtra (27)". */
+export function placeOfSupplyLabel(pos: string): string {
+  const code = stateCodeFromPlaceOfSupply(pos) || (pos || "").trim();
+  const state = INDIAN_STATES.find((s) => s.code === code);
+  return state ? `${state.name} (${state.code})` : (pos || "").trim();
+}
+
+export function b2clThreshold(invoiceDate: string): number {
+  return (invoiceDate || "").slice(0, 10) >= "2024-08-01" ? 100000 : 250000;
+}
+
+/**
  * Pre-tax unit rate for a GST-inclusive price. Kept unrounded so that
  * calculateItem reproduces the entered inclusive total exactly.
  */
@@ -776,28 +797,50 @@ export function buildInvoiceDocument(input: BuildInvoiceInput): Invoice {
 }
 
 
-function gstnItem(inv: Invoice) {
-  const rate = inv.items[0]?.gstRate ?? (inv.totalTaxable ? round2((inv.totalTax / inv.totalTaxable) * 100) : 0);
+type TaxSplit = { txval: number; iamt: number; camt: number; samt: number; csamt: number };
+const zeroTax = (): TaxSplit => ({ txval: 0, iamt: 0, camt: 0, samt: 0, csamt: 0 });
+function addTax(into: TaxSplit, add: TaxSplit, sign = 1) {
+  into.txval = round2(into.txval + sign * add.txval);
+  into.iamt = round2(into.iamt + sign * add.iamt);
+  into.camt = round2(into.camt + sign * add.camt);
+  into.samt = round2(into.samt + sign * add.samt);
+  into.csamt = round2(into.csamt + sign * add.csamt);
+}
+function invoiceTax(inv: Invoice): TaxSplit {
   return {
-    num: 1,
-    itm_det: {
-      txval: round2(inv.totalTaxable),
-      rt: rate,
-      iamt: round2(inv.totalIgst),
-      camt: round2(inv.totalCgst),
-      samt: round2(inv.totalSgst),
-      csamt: 0,
-    },
+    txval: round2(inv.totalTaxable || 0),
+    iamt: round2(inv.totalIgst || 0),
+    camt: round2(inv.totalCgst || 0),
+    samt: round2(inv.totalSgst || 0),
+    csamt: round2(inv.totalCess || 0),
   };
 }
 
-function posCode(inv: Invoice) {
-  const raw = String(inv.placeOfSupply || "").trim();
-  if (/^\d{2}$/.test(raw)) return raw;
-  return "";
+/** Purchase tax split; infers IGST vs CGST+SGST from supplier/recipient state when not stored. */
+export function purchaseTax(p: Purchase, recipientGstin = ""): TaxSplit {
+  const inv = purchaseToInvoice(p);
+  const split = invoiceTax(inv);
+  const stored = split.iamt + split.camt + split.samt;
+  const tax = round2(p.totalGstAmount || stored);
+  if (stored === 0 && tax > 0) {
+    const inter =
+      !!p.supplierGstin && !!recipientGstin && p.supplierGstin.slice(0, 2) !== recipientGstin.slice(0, 2);
+    if (inter) split.iamt = tax;
+    else {
+      split.camt = round2(tax / 2);
+      split.samt = round2(tax - split.camt);
+    }
+  }
+  if (!split.txval) split.txval = round2(Math.max(0, (p.totalAmount || 0) - tax));
+  return split;
 }
 
-/** GSTN-shaped JSON a CA can upload (not a live GSP filing). */
+const isCreditNoteDoc = (i: Invoice) => i.type === "credit_note" || i.documentType === "CRN";
+
+/**
+ * GSTN-shaped JSON a CA can import (not a live GSP filing).
+ * GSTR-1 comes from the same builder the CA export API uses, so the two never drift.
+ */
 export function generateGstnJson(
   invoices: Invoice[],
   type: GSTRReportType,
@@ -806,161 +849,103 @@ export function generateGstnJson(
   purchases: Purchase[] = [],
   gstin = ""
 ): Record<string, unknown> {
-  const filtered = invoices.filter((inv) => {
-    if (inv.status === "draft" || inv.status === "cancelled") return false;
-    const d = String(inv.date || inv.createdAt || "").slice(0, 10);
-    return d >= fromDate && d <= toDate;
-  });
-  const sales = filtered.filter((i) => i.type !== "credit_note");
-  const notes = filtered.filter((i) => i.type === "credit_note");
   const fp = fromDate.slice(5, 7) + fromDate.slice(0, 4);
-  const inPeriodPurchases = purchases.filter((p) => {
-    const d = String(p.createdAt || "").slice(0, 10);
-    return d >= fromDate && d <= toDate;
-  });
+  if (type === "gstr1" || type === "gstr4") {
+    return buildGstr1Json({ gstin, from: fromDate, to: toDate, fp, invoices }) as unknown as Record<string, unknown>;
+  }
+
+  const inRange = (d: string) => d >= fromDate && d <= toDate;
+  const open = invoices.filter(
+    (inv) =>
+      inv.status !== "draft" &&
+      inv.status !== "cancelled" &&
+      inRange(String(inv.date || inv.createdAt || "").slice(0, 10))
+  );
+  const inPeriodPurchases = purchases.filter((p) => inRange(String(p.createdAt || "").slice(0, 10)));
 
   if (type === "gstr2b") {
     return {
       gstin,
       fp,
-      itc: inPeriodPurchases.map((p) => ({
-        ctin: p.supplierGstin || "",
-        inum: p.purchaseNumber,
-        idt: String(p.createdAt || "").slice(0, 10),
-        val: round2(p.totalAmount),
-        txval: round2(Math.max(0, p.totalAmount - p.totalGstAmount)),
-        iamt: 0,
-        camt: 0,
-        samt: 0,
-        supplier: p.supplierName,
-      })),
-    };
-  }
-
-  if (type === "gstr3b") {
-    const intra = sales.filter((i) => !i.isInterState);
-    const inter = sales.filter((i) => i.isInterState);
-    const sum = (rows: Invoice[], key: keyof Invoice) => round2(rows.reduce((s, i) => s + Number(i[key] || 0), 0));
-    return {
-      gstin,
-      fp,
-      "3.1": {
-        osup_det: {
-          txval: sum(intra, "totalTaxable"),
-          iamt: 0,
-          camt: sum(intra, "totalCgst"),
-          samt: sum(intra, "totalSgst"),
-        },
-        osup_zero: {
-          txval: sum(inter, "totalTaxable"),
-          iamt: sum(inter, "totalIgst"),
-          camt: 0,
-          samt: 0,
-        },
-      },
-      "4": {
-        itc_avl: inPeriodPurchases.map((p) => ({
+      itc: inPeriodPurchases.map((p) => {
+        const t = purchaseTax(p, gstin);
+        return {
           ctin: p.supplierGstin || "",
-          txval: round2(Math.max(0, p.totalAmount - p.totalGstAmount)),
-          iamt: 0,
-          camt: 0,
-          samt: 0,
-        })),
-      },
+          inum: p.supplierInvoiceNumber || p.purchaseNumber,
+          idt: String(p.supplierInvoiceDate || p.createdAt || "").slice(0, 10),
+          val: round2(p.totalAmount),
+          ...t,
+          rchrg: p.reverseCharge ? "Y" : "N",
+          itc_elg: p.itcEligible === false ? "N" : "Y",
+          supplier: p.supplierName,
+        };
+      }),
     };
   }
 
-  const b2bSales = sales.filter((i) => i.partyGstin);
-  const b2cSales = sales.filter((i) => !i.partyGstin);
-  const b2cl = b2cSales.filter((i) => i.isInterState && i.grandTotal > 250000);
-  const b2cs = b2cSales.filter((i) => !(i.isInterState && i.grandTotal > 250000));
-
-  const b2bByCtin = new Map<string, Invoice[]>();
-  for (const inv of b2bSales) {
-    const list = b2bByCtin.get(inv.partyGstin) || [];
-    list.push(inv);
-    b2bByCtin.set(inv.partyGstin, list);
-  }
-
-  const hsnMap = new Map<string, { txval: number; iamt: number; camt: number; samt: number; qty: number; val: number }>();
-  for (const inv of sales) {
-    for (const item of inv.items || []) {
-      const key = item.hsn || "NA";
-      const cur = hsnMap.get(key) || { txval: 0, iamt: 0, camt: 0, samt: 0, qty: 0, val: 0 };
-      cur.txval += item.taxableAmount || 0;
-      cur.iamt += item.igst || 0;
-      cur.camt += item.cgst || 0;
-      cur.samt += item.sgst || 0;
-      cur.qty += item.quantity || 0;
-      cur.val += item.total || 0;
-      hsnMap.set(key, cur);
+  // GSTR-3B (GSTN return schema).
+  const osup_det = zeroTax(); // 3.1(a) outward taxable
+  const osup_nil = { txval: 0 }; // 3.1(c) nil / exempt
+  const isup_rev = zeroTax(); // 3.1(d) inward liable to reverse charge
+  const unreg = new Map<string, { pos: string; txval: number; iamt: number }>(); // 3.2
+  for (const inv of open) {
+    const t = invoiceTax(inv);
+    const sign = isCreditNoteDoc(inv) ? -1 : 1;
+    const taxed = t.iamt + t.camt + t.samt + t.csamt !== 0;
+    if (taxed) addTax(osup_det, t, sign);
+    else osup_nil.txval = round2(osup_nil.txval + sign * (inv.grandTotal || 0));
+    if (taxed && inv.isInterState && !isRegisteredGstin(inv.partyGstin || "")) {
+      const pos = stateCodeFromPlaceOfSupply(inv.placeOfSupply) || String(inv.placeOfSupply || "");
+      const row = unreg.get(pos) || { pos, txval: 0, iamt: 0 };
+      row.txval = round2(row.txval + sign * t.txval);
+      row.iamt = round2(row.iamt + sign * t.iamt);
+      unreg.set(pos, row);
     }
   }
 
+  const itcOther = zeroTax();
+  const itcRcm = zeroTax();
+  const itcIneligible = zeroTax();
+  for (const p of inPeriodPurchases) {
+    const t = purchaseTax(p, gstin);
+    if (p.reverseCharge) addTax(isup_rev, t);
+    if (p.itcEligible === false) addTax(itcIneligible, t);
+    else if (p.reverseCharge) addTax(itcRcm, t);
+    else if (p.supplierGstin) addTax(itcOther, t); // no GSTIN → not in 2B, not claimable
+  }
+  const tax = ({ iamt, camt, samt, csamt }: TaxSplit) => ({ iamt, camt, samt, csamt });
+  const itcAvl = zeroTax();
+  addTax(itcAvl, itcOther);
+  addTax(itcAvl, itcRcm);
+
   return {
     gstin,
-    fp,
-    gt: 0,
-    cur_gt: 0,
-    b2b: Array.from(b2bByCtin.entries()).map(([ctin, invs]) => ({
-      ctin,
-      inv: invs.map((inv) => ({
-        inum: inv.invoiceNumber,
-        idt: String(inv.date || "").slice(0, 10),
-        val: round2(inv.grandTotal),
-        pos: posCode(inv),
-        rchrg: "N",
-        inv_typ: "R",
-        itms: [gstnItem(inv)],
-      })),
-    })),
-    b2cl: b2cl.map((inv) => ({
-      pos: posCode(inv),
-      inv: [
-        {
-          inum: inv.invoiceNumber,
-          idt: String(inv.date || "").slice(0, 10),
-          val: round2(inv.grandTotal),
-          itms: [gstnItem(inv)],
-        },
+    ret_period: fp,
+    sup_details: {
+      osup_det,
+      osup_zero: { txval: 0, iamt: 0, csamt: 0 },
+      osup_nil_exmp: osup_nil,
+      isup_rev,
+      osup_nongst: { txval: 0 },
+    },
+    inter_sup: { unreg_details: [...unreg.values()], comp_details: [], uin_details: [] },
+    itc_elg: {
+      itc_avl: [
+        { ty: "IMPG", iamt: 0, camt: 0, samt: 0, csamt: 0 },
+        { ty: "IMPS", iamt: 0, camt: 0, samt: 0, csamt: 0 },
+        { ty: "ISRC", ...tax(itcRcm) },
+        { ty: "ISD", iamt: 0, camt: 0, samt: 0, csamt: 0 },
+        { ty: "OTH", ...tax(itcOther) },
       ],
-    })),
-    b2cs: b2cs.map((inv) => ({
-      sply_ty: inv.isInterState ? "INTER" : "INTRA",
-      pos: posCode(inv),
-      typ: "OE",
-      txval: round2(inv.totalTaxable),
-      rt: inv.items[0]?.gstRate ?? 0,
-      iamt: round2(inv.totalIgst),
-      camt: round2(inv.totalCgst),
-      samt: round2(inv.totalSgst),
-    })),
-    cdnr: notes.map((inv) => ({
-      ctin: inv.partyGstin || "",
-      nt: [
-        {
-          ntty: "C",
-          nt_num: inv.invoiceNumber,
-          nt_dt: String(inv.date || "").slice(0, 10),
-          val: round2(inv.grandTotal),
-          pos: posCode(inv),
-          itms: [gstnItem(inv)],
-        },
+      itc_rev: [
+        { ty: "RUL", iamt: 0, camt: 0, samt: 0, csamt: 0 },
+        { ty: "OTH", iamt: 0, camt: 0, samt: 0, csamt: 0 },
       ],
-    })),
-    hsn: {
-      data: Array.from(hsnMap.entries()).map(([hsn, row], idx) => ({
-        num: idx + 1,
-        hsn_sc: hsn,
-        desc: "",
-        uqc: "NOS",
-        qty: round2(row.qty),
-        val: round2(row.val),
-        txval: round2(row.txval),
-        iamt: round2(row.iamt),
-        camt: round2(row.camt),
-        samt: round2(row.samt),
-      })),
+      itc_net: tax(itcAvl),
+      itc_inelg: [
+        { ty: "RUL", ...tax(itcIneligible) },
+        { ty: "OTH", iamt: 0, camt: 0, samt: 0, csamt: 0 },
+      ],
     },
   };
 }
@@ -1011,96 +996,125 @@ export function purchaseToInvoice(purchase: Purchase): Invoice {
 }
 
 
+/**
+ * Credit / debit notes from the Notes screens as GST documents (shared with the
+ * CA export API so owner and CA always see the same GSTR figures).
+ */
+export function notesAsInvoices(
+  data: Pick<AppData, "invoices"> & { creditNotes?: CreditNote[]; debitNotes?: DebitNote[] }
+): Invoice[] {
+  return sharedNotesAsInvoices(data) as Invoice[];
+}
+
 export function generateGSTRReport(
   invoices: Invoice[],
   type: GSTRReportType,
   fromDate: string,
   toDate: string,
-  purchases: Purchase[] = []
+  purchases: Purchase[] = [],
+  gstin = ""
 ): GSTRReport {
   const filtered = invoices.filter((inv) => {
     if (inv.status === "draft" || inv.status === "cancelled") return false;
     const d = String(inv.date || inv.createdAt || "").slice(0, 10);
     return d >= fromDate && d <= toDate;
   });
-  const purchaseInvoices = purchases
-    .filter((p) => {
-      const d = String(p.createdAt || "").slice(0, 10);
-      return d >= fromDate && d <= toDate;
-    })
-    .map(purchaseToInvoice);
+  const inPeriodPurchases = purchases.filter((p) => {
+    const d = String(p.createdAt || "").slice(0, 10);
+    return d >= fromDate && d <= toDate;
+  });
+  // Purchases as invoices with a real tax split (older records store only the GST total).
+  const asInvoice = (p: Purchase): Invoice => {
+    const t = purchaseTax(p, gstin);
+    return {
+      ...purchaseToInvoice(p),
+      totalTaxable: t.txval,
+      totalIgst: t.iamt,
+      totalCgst: t.camt,
+      totalSgst: t.samt,
+      totalTax: round2(t.iamt + t.camt + t.samt),
+    };
+  };
+  const purchaseInvoices = inPeriodPurchases.map(asInvoice);
 
   const period = `${formatDate(fromDate)} - ${formatDate(toDate)}`;
-
   const sections: GSTRSection[] = [];
+  const isNote = (i: Invoice) => isCreditNoteDoc(i) || i.type === "debit_note" || i.documentType === "DBN";
+  const registered = (i: Invoice) => isRegisteredGstin(i.partyGstin || "");
+  const isB2cl = (i: Invoice) => !!i.isInterState && i.grandTotal > b2clThreshold(i.date);
+  const taxed = (i: Invoice) => (i.totalIgst || 0) + (i.totalCgst || 0) + (i.totalSgst || 0) !== 0;
+  const push = (code: string, label: string, rows: Invoice[]) => {
+    if (rows.length) sections.push(buildSection(code, label, rows));
+  };
 
+  let source: Invoice[] = filtered;
   if (type === "gstr1") {
-    const sales = filtered.filter((i) => i.type !== "credit_note");
-    const b2b = sales.filter((i) => isRegisteredGstin(i.partyGstin));
-    const b2c = sales.filter((i) => !isRegisteredGstin(i.partyGstin));
-    const creditNotes = filtered.filter((i) => i.type === "credit_note");
-
-    sections.push(buildSection("B2B", "Business to Business Invoices", b2b));
-    sections.push(buildSection("B2C", "Business to Consumer Invoices", b2c));
-    if (creditNotes.length > 0) {
-      sections.push(buildSection("CDNR", "Credit Notes and Debit Notes", creditNotes));
-    }
+    const sales = filtered.filter((i) => !isNote(i));
+    const notes = filtered.filter(isNote);
+    push("4A", "B2B invoices (Table 4)", sales.filter(registered));
+    push("5", "B2C large, inter-state above threshold (Table 5 / B2CL)", sales.filter((i) => !registered(i) && isB2cl(i)));
+    push("7", "B2C others (Table 7 / B2CS)", sales.filter((i) => !registered(i) && !isB2cl(i)));
+    push("9B", "Credit / debit notes, registered (CDNR)", notes.filter(registered));
+    push("9B-U", "Credit / debit notes, unregistered (CDNUR / net in B2CS)", notes.filter((i) => !registered(i)));
   } else if (type === "gstr3b") {
-    const intraState = filtered.filter((i) => !i.isInterState);
-    const interState = filtered.filter((i) => i.isInterState);
-
-    sections.push(buildSection("3.1(a)", "Outward taxable supplies (intra-state)", intraState));
-    sections.push(buildSection("3.1(b)", "Outward taxable supplies (inter-state)", interState));
-    sections.push(buildSection("4(A)", "Eligible ITC (from purchases / GSTR-2)", purchaseInvoices));
+    push("3.1(a)", "Outward taxable supplies (net of credit notes)", filtered.filter(taxed));
+    push("3.1(c)", "Nil rated / exempt supplies", filtered.filter((i) => !taxed(i)));
+    push("3.1(d)", "Inward supplies liable to reverse charge", purchaseInvoices.filter((_, k) => !!inPeriodPurchases[k].reverseCharge));
+    push("3.2", "Inter-state supplies to unregistered persons", filtered.filter((i) => taxed(i) && i.isInterState && !registered(i)));
+    push("4(A)(3)", "ITC on inward supplies liable to reverse charge", purchaseInvoices.filter((_, k) => inPeriodPurchases[k].reverseCharge && inPeriodPurchases[k].itcEligible !== false));
+    push("4(A)(5)", "All other ITC (supplier GSTIN on record)", purchaseInvoices.filter((_, k) => {
+      const p = inPeriodPurchases[k];
+      return !p.reverseCharge && p.itcEligible !== false && !!p.supplierGstin;
+    }));
+    push("4(D)", "Ineligible ITC (Section 17(5) / marked not eligible)", purchaseInvoices.filter((_, k) => inPeriodPurchases[k].itcEligible === false));
+    source = filtered.filter(taxed);
   } else if (type === "gstr2b") {
-    sections.push(buildSection("ITC", "Input Tax Credit available (GSTR-2 / GSTR-2B)", purchaseInvoices));
+    push("ITC", "Purchase register to match against GSTR-2B", purchaseInvoices);
+    source = purchaseInvoices;
   } else if (type === "gstr4") {
-    sections.push(buildSection("4(a)", "Outward supplies", filtered));
+    push("4(a)", "Outward supplies", filtered);
   }
 
-  const source = type === "gstr2b" ? purchaseInvoices : filtered;
-  const totalTaxableValue = source.reduce((s, i) => s + i.totalTaxable, 0);
-  const totalCgst = source.reduce((s, i) => s + i.totalCgst, 0);
-  const totalSgst = source.reduce((s, i) => s + i.totalSgst, 0);
-  const totalIgst = source.reduce((s, i) => s + i.totalIgst, 0);
-  const totalTax = totalCgst + totalSgst + totalIgst;
-  const totalInvoiceValue = source.reduce((s, i) => s + i.grandTotal, 0);
-
+  const totals = sumSigned(source);
   return {
     type,
     period,
     fromDate,
     toDate,
     totalInvoices: source.length,
-    totalTaxableValue: round2(totalTaxableValue),
-    totalCgst: round2(totalCgst),
-    totalSgst: round2(totalSgst),
-    totalIgst: round2(totalIgst),
-    totalTax: round2(totalTax),
-    totalInvoiceValue: round2(totalInvoiceValue),
+    totalTaxableValue: totals.taxableValue,
+    totalCgst: totals.cgst,
+    totalSgst: totals.sgst,
+    totalIgst: totals.igst,
+    totalTax: totals.tax,
+    totalInvoiceValue: totals.invoiceValue,
     sections,
   };
 }
 
-function buildSection(section: string, description: string, invoices: Invoice[]): GSTRSection {
-  const taxableValue = invoices.reduce((s, i) => s + i.totalTaxable, 0);
-  const cgst = invoices.reduce((s, i) => s + i.totalCgst, 0);
-  const sgst = invoices.reduce((s, i) => s + i.totalSgst, 0);
-  const igst = invoices.reduce((s, i) => s + i.totalIgst, 0);
-  const tax = cgst + sgst + igst;
-  const invoiceValue = invoices.reduce((s, i) => s + i.grandTotal, 0);
-
+/** Credit notes reduce every total; everything else adds. */
+function sumSigned(invoices: Invoice[]) {
+  let taxableValue = 0, cgst = 0, sgst = 0, igst = 0, invoiceValue = 0;
+  for (const i of invoices) {
+    const sign = isCreditNoteDoc(i) ? -1 : 1;
+    taxableValue += sign * (i.totalTaxable || 0);
+    cgst += sign * (i.totalCgst || 0);
+    sgst += sign * (i.totalSgst || 0);
+    igst += sign * (i.totalIgst || 0);
+    invoiceValue += sign * (i.grandTotal || 0);
+  }
   return {
-    section,
-    description,
-    invoices,
     taxableValue: round2(taxableValue),
     cgst: round2(cgst),
     sgst: round2(sgst),
     igst: round2(igst),
-    tax: round2(tax),
+    tax: round2(cgst + sgst + igst),
     invoiceValue: round2(invoiceValue),
   };
+}
+
+function buildSection(section: string, description: string, invoices: Invoice[]): GSTRSection {
+  return { section, description, invoices, ...sumSigned(invoices) };
 }
 
 export function generateInvoiceHTML(invoice: Invoice, business: {
@@ -1202,7 +1216,7 @@ export function generateInvoiceHTML(invoice: Invoice, business: {
   <div class="parties">
     <div class="party-box">
       <h4>Bill To</h4>
-      <p><strong>${invoice.partyName || "—"}</strong>${invoice.partyPhone ? `<br>Phone: ${invoice.partyPhone}` : ""}<br>GSTIN: ${billToGstin === "URP" ? "URP (Unregistered)" : billToGstin}<br>Place of Supply: ${invoice.placeOfSupply}${invoice.reverseCharge ? "<br>Reverse Charge: Yes" : ""}${invoice.documentType ? `<br>Document: ${invoice.documentType}` : ""}</p>
+      <p><strong>${invoice.partyName || "—"}</strong>${invoice.partyPhone ? `<br>Phone: ${invoice.partyPhone}` : ""}<br>GSTIN: ${billToGstin === "URP" ? "URP (Unregistered)" : billToGstin}<br>Place of Supply: ${placeOfSupplyLabel(invoice.placeOfSupply)}<br>Reverse Charge: ${invoice.reverseCharge ? "Yes" : "No"}${invoice.documentType ? `<br>Document: ${invoice.documentType}` : ""}</p>
     </div>
     ${showShipTo ? `<div class="party-box">
       <h4>Ship To</h4>
@@ -1248,6 +1262,10 @@ export function generateInvoiceHTML(invoice: Invoice, business: {
   </div>` : ""}
   ${invoice.notes ? `<div class="notes"><p><strong>Notes:</strong> ${invoice.notes}</p></div>` : ""}
   ${invoice.terms ? `<div class="notes"><p><strong>Terms:</strong> ${invoice.terms}</p></div>` : ""}
+  <div style="margin-top:32px;text-align:right;font-size:13px">
+    <p>For <strong>${business.name}</strong></p>
+    <p style="margin-top:40px;border-top:1px solid #999;display:inline-block;padding-top:4px">Authorised Signatory</p>
+  </div>
   <div class="footer">
     <p>This is a computer-generated invoice.</p>
     ${options.showArgusBranding ? `<p>Made with Argus · argusinvoicing.com</p>` : ""}

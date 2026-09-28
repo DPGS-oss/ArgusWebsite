@@ -191,8 +191,9 @@ describe("GSTR-1 GSTN offline-tool JSON", () => {
       items: [line({ gstRate: 18, isInterState: false, hsn: "9983", quantity: 2, rate: 100 })],
     });
     const json = buildGstr1Json({ gstin: MH_GSTIN, month: "2026-04", invoices: [inv] });
-    const hsnRows = json.hsn?.data || json.hsn;
+    const hsnRows = json.hsn.hsn_b2b;
     expect(Array.isArray(hsnRows)).toBe(true);
+    expect(json.hsn.hsn_b2c).toEqual([]);
     expect(hsnRows[0].hsn_sc).toBe("9983");
     expect(hsnRows[0].rt).toBe(18);
     expect(hsnRows[0].txval).toBe(200);
@@ -355,5 +356,87 @@ describe("TallyPrime XML", () => {
     const xml = buildTallyXml({ companyName: "Demo Shop", month: "2026-04", invoices: [walk] });
     expect(xml).toContain("<ENVELOPE>");
     expect(xml).toContain("Walk-in");
+  });
+});
+
+describe("GSTR-1 compliance details", () => {
+  const b2c = (p: Partial<Invoice> & { items: InvoiceItem[] }) => invoice({ partyGstin: "", ...p });
+
+  it("puts inter-state B2C above ₹1 lakh in B2CL (from Aug 2024), below it in B2CS", () => {
+    const big = b2c({
+      id: "big", invoiceNumber: "INV-B", isInterState: true, placeOfSupply: KA,
+      items: [line({ gstRate: 18, isInterState: true, rate: 100000 })],
+    });
+    const small = b2c({
+      id: "small", invoiceNumber: "INV-S", isInterState: true, placeOfSupply: KA,
+      items: [line({ gstRate: 18, isInterState: true, rate: 50000 })],
+    });
+    const json = buildGstr1Json({ gstin: MH_GSTIN, month: "2026-04", invoices: [big, small] });
+    expect(json.b2cl.flatMap((g) => g.inv.map((i) => i.inum))).toEqual(["INV-B"]);
+    expect(json.b2cs).toHaveLength(1);
+    expect(json.b2cs[0].txval).toBe(50000);
+  });
+
+  it("nets small unregistered credit notes into B2CS and HSN B2C", () => {
+    const sale = b2c({ id: "s", invoiceNumber: "INV-1", items: [line({ gstRate: 18, isInterState: false, rate: 1000 })] });
+    const cn = b2c({
+      id: "c", invoiceNumber: "CN-1", type: "credit_note",
+      items: [line({ gstRate: 18, isInterState: false, rate: 200 })],
+    });
+    const json = buildGstr1Json({ gstin: MH_GSTIN, month: "2026-04", invoices: [sale, cn] });
+    expect(json.cdnr).toEqual([]);
+    expect(json.b2cs[0].txval).toBe(800);
+    expect(json.hsn.hsn_b2c[0].txval).toBe(800);
+  });
+
+  it("reports large unregistered inter-state credit notes in CDNUR", () => {
+    const cn = b2c({
+      id: "c", invoiceNumber: "CN-9", type: "credit_note", isInterState: true, placeOfSupply: KA,
+      items: [line({ gstRate: 18, isInterState: true, rate: 200000 })],
+    });
+    const json = buildGstr1Json({ gstin: MH_GSTIN, month: "2026-04", invoices: [cn] });
+    expect(json.cdnur).toHaveLength(1);
+    expect(json.cdnur[0].typ).toBe("B2CL");
+    expect(json.cdnur[0].ntty).toBe("C");
+  });
+
+  it("counts cancelled invoices in Table 13 but keeps them out of B2B", () => {
+    const ok = invoice({ id: "a", invoiceNumber: "INV-1", items: [line({ gstRate: 18, isInterState: false })] });
+    const cancelled = invoice({
+      id: "b", invoiceNumber: "INV-2", status: "cancelled", items: [line({ gstRate: 18, isInterState: false })],
+    });
+    const json = buildGstr1Json({ gstin: MH_GSTIN, month: "2026-04", invoices: [ok, cancelled] });
+    expect(json.b2b[0].inv).toHaveLength(1);
+    const docs = json.doc_issue.doc_det[0].docs[0];
+    expect(docs).toMatchObject({ from: "INV-1", to: "INV-2", totnum: 2, cancel: 1, net_issue: 1 });
+  });
+
+  it("flags reverse-charge B2B invoices and uses dd-mm-yyyy dates", () => {
+    const rcm = invoice({ reverseCharge: true, items: [line({ gstRate: 18, isInterState: false })] });
+    const json = buildGstr1Json({ gstin: MH_GSTIN, month: "2026-04", invoices: [rcm] });
+    expect(json.b2b[0].inv[0].rchrg).toBe("Y");
+    expect(json.b2b[0].inv[0].idt).toBe("10-04-2026");
+  });
+});
+
+describe("Notes-screen credit / debit notes in GSTR-1", () => {
+  it("reports a debit note against an inter-state registered invoice in CDNR with IGST", async () => {
+    const { notesAsInvoices } = await import("./gst");
+    const base = invoice({
+      id: "orig", invoiceNumber: "INV-7", partyGstin: KA_GSTIN, isInterState: true, placeOfSupply: KA,
+      items: [line({ gstRate: 18, isInterState: true })],
+    });
+    const notes = notesAsInvoices({
+      invoices: [base],
+      debitNotes: [{
+        id: "d1", debitNoteNumber: "DN-2026-001", invoiceId: "orig", customerName: "Buyer", reason: "Freight",
+        subtotal: 100, totalGstAmount: 18, totalAmount: 118, notes: "", status: "active",
+        createdAt: "2026-04-20T10:00:00.000Z", updatedAt: "",
+      }],
+    });
+    const json = buildGstr1Json({ gstin: MH_GSTIN, month: "2026-04", invoices: [base, ...notes] });
+    const nt = json.cdnr.find((c) => c.ctin === KA_GSTIN)?.nt[0];
+    expect(nt).toMatchObject({ ntty: "D", nt_num: "DN-2026-001", pos: KA });
+    expect(nt?.itms[0].itm_det).toMatchObject({ rt: 18, txval: 100, iamt: 18, camt: 0 });
   });
 });

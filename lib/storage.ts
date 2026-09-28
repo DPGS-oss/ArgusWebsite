@@ -68,6 +68,15 @@ let memoryCache: AppData | null = null;
 let storageReady = false;
 let initPromise: Promise<void> | null = null;
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
+/**
+ * Books are stored per Firebase account ("appData:<uid>") so a second person
+ * signing in on a shared computer never sees, or cloud-merges, someone else's books.
+ */
+let scopeUid = "";
+const LEGACY_OWNER_KEY = "appDataOwner";
+function scoped(base: string, uid = scopeUid): string {
+  return uid ? `${base}:${uid}` : base;
+}
 
 function openIdb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -114,9 +123,51 @@ function readLegacyLocalStorage(): AppData | null {
   }
 }
 
-/** Call once on web app boot before relying on loadData/saveData. */
-export async function initStorage(): Promise<AppData> {
+async function idbDelete(key: string): Promise<void> {
+  const db = await openIdb();
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, "readwrite");
+    tx.objectStore(IDB_STORE).delete(key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+/** Pre-scoping books (single shared key) go to the first account that signs in, once. */
+async function claimLegacyBooks(uid: string): Promise<AppData | null> {
+  try {
+    const owner = await idbGet<string>(LEGACY_OWNER_KEY);
+    if (owner && owner !== uid) return null;
+    const legacy = (await idbGet<AppData>("appData")) ?? readLegacyLocalStorage();
+    const legacyHandle = await idbGet<DirHandle>("dirHandle");
+    await idbSet(LEGACY_OWNER_KEY, uid);
+    if (legacyHandle) await idbSet(scoped("dirHandle", uid), legacyHandle);
+    await idbDelete("appData");
+    await idbDelete("dirHandle");
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      // ignore
+    }
+    return legacy && typeof legacy === "object" ? { ...getDefaultData(), ...legacy } : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Call on web app boot, with the signed-in uid, before relying on loadData/saveData. */
+export async function initStorage(uid = ""): Promise<AppData> {
   if (typeof window === "undefined") return getDefaultData();
+  if (uid !== scopeUid) {
+    // Account changed: persist anything pending under the old account, then start clean.
+    flushPendingSave();
+    scopeUid = uid;
+    memoryCache = null;
+    storageReady = false;
+    initPromise = null;
+    dirHandle = null;
+    useFileSystem = false;
+  }
   if (storageReady && memoryCache) return memoryCache;
   if (initPromise) {
     await initPromise;
@@ -126,7 +177,7 @@ export async function initStorage(): Promise<AppData> {
   initPromise = (async () => {
     let data: AppData | null = null;
     try {
-      const fromIdb = await idbGet<AppData>("appData");
+      const fromIdb = await idbGet<AppData>(scoped("appData"));
       if (fromIdb && typeof fromIdb === "object") {
         data = { ...getDefaultData(), ...fromIdb };
       }
@@ -134,19 +185,20 @@ export async function initStorage(): Promise<AppData> {
       // IndexedDB unavailable
     }
 
-    if (!data) {
-      data = readLegacyLocalStorage() ?? getDefaultData();
+    if (!data && scopeUid) {
+      data = (await claimLegacyBooks(scopeUid)) ?? getDefaultData();
       try {
-        await idbSet("appData", data);
+        await idbSet(scoped("appData"), data);
       } catch {
         // ignore
       }
     }
+    if (!data) data = getDefaultData();
 
     memoryCache = data;
 
     try {
-      const handle = await idbGet<DirHandle>("dirHandle");
+      const handle = scopeUid ? await idbGet<DirHandle>(scoped("dirHandle")) : undefined;
       if (handle) {
         dirHandle = handle;
         useFileSystem = true;
@@ -157,7 +209,7 @@ export async function initStorage(): Promise<AppData> {
           const folderData = await readBooksFromFolder();
           if (folderData) {
             memoryCache = { ...getDefaultData(), ...folderData };
-            await idbSet("appData", memoryCache);
+            await idbSet(scoped("appData"), memoryCache);
           }
         }
       }
@@ -191,10 +243,10 @@ async function ensureDirPermission(handle: DirHandle): Promise<boolean> {
   }
 }
 
-async function writeBooksToFolder(data: AppData): Promise<void> {
-  if (!useFileSystem || !dirHandle) return;
+async function writeBooksToFolder(data: AppData, handle: DirHandle | null = useFileSystem ? dirHandle : null): Promise<void> {
+  if (!handle) return;
   try {
-    await writeFileToDir(dirHandle, BOOKS_FILENAME, JSON.stringify(data, null, 2));
+    await writeFileToDir(handle, BOOKS_FILENAME, JSON.stringify(data, null, 2));
   } catch {
     // folder may be revoked
   }
@@ -238,7 +290,7 @@ export async function pickFolder(): Promise<string | null> {
     useFileSystem = true;
 
     try {
-      await idbSet("dirHandle", handle);
+      await idbSet(scoped("dirHandle"), handle);
     } catch {
       // Chrome may still keep the in-memory handle for this session
     }
@@ -246,12 +298,7 @@ export async function pickFolder(): Promise<string | null> {
     const existing = await readBooksFromFolder();
     if (existing) {
       memoryCache = existing;
-      await idbSet("appData", existing);
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(existing));
-      } catch {
-        // ignore
-      }
+      await idbSet(scoped("appData"), existing);
     } else {
       const current = loadData();
       current.settings.folderName = handle.name;
@@ -289,7 +336,7 @@ export async function disconnectFolder(): Promise<void> {
     const db = await openIdb();
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(IDB_STORE, "readwrite");
-      tx.objectStore(IDB_STORE).delete("dirHandle");
+      tx.objectStore(IDB_STORE).delete(scoped("dirHandle"));
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     });
@@ -424,36 +471,73 @@ function triggerDownload(blob: Blob, filename: string): void {
 export function loadData(): AppData {
   if (typeof window === "undefined") return getDefaultData();
   if (memoryCache) return memoryCache;
-  const legacy = readLegacyLocalStorage();
-  memoryCache = legacy ?? getDefaultData();
+  // Before initStorage(uid) we do not know whose books these would be; start empty.
+  memoryCache = getDefaultData();
   return memoryCache;
 }
 
-async function persistNow(data: AppData): Promise<void> {
+type PersistTarget = { key: string; lsKey: string; handle: DirHandle | null };
+
+/** Where a save goes, captured when it is scheduled so an account switch cannot redirect it. */
+function currentTarget(): PersistTarget {
+  return { key: scoped("appData"), lsKey: scoped(STORAGE_KEY), handle: useFileSystem ? dirHandle : null };
+}
+
+async function persistNow(data: AppData, target: PersistTarget = currentTarget()): Promise<void> {
+  if (!scopeUid && target.key === "appData") return; // never persist books without an account
   try {
-    await idbSet("appData", data);
+    await idbSet(target.key, data);
+    // IndexedDB holds the books now; drop the legacy copy so it cannot resurface stale.
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      // ignore
+    }
   } catch {
-    // IndexedDB may be blocked
+    // IndexedDB blocked (e.g. some private modes): fall back to localStorage.
+    try {
+      localStorage.setItem(target.lsKey, JSON.stringify(data));
+    } catch {
+      // storage full
+    }
   }
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  } catch {
-    // storage full
-  }
-  await writeBooksToFolder(data);
+  await writeBooksToFolder(data, target.handle);
+}
+
+let pendingTarget: PersistTarget | null = null;
+
+/** Write any debounced save immediately (tab hidden / closing / account switch). */
+export function flushPendingSave(): void {
+  if (!persistTimer || !memoryCache) return;
+  clearTimeout(persistTimer);
+  persistTimer = null;
+  void persistNow(memoryCache, pendingTarget ?? currentTarget());
+  pendingTarget = null;
+}
+
+let flushListenersAttached = false;
+function attachFlushListeners() {
+  if (flushListenersAttached || typeof window === "undefined") return;
+  flushListenersAttached = true;
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") flushPendingSave();
+  });
+  window.addEventListener("pagehide", flushPendingSave);
 }
 
 export function saveData(data: AppData): void {
   if (typeof window === "undefined") return;
   memoryCache = data;
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  } catch {
-    // ignore
-  }
+  // Serialising the whole book synchronously on every edit stalled the UI for
+  // large shops; persist once, debounced, and flush when the tab is hidden.
+  attachFlushListeners();
   if (persistTimer) clearTimeout(persistTimer);
+  const target = currentTarget();
+  pendingTarget = target;
   persistTimer = setTimeout(() => {
-    void persistNow(data);
+    persistTimer = null;
+    pendingTarget = null;
+    void persistNow(data, target);
   }, 200);
 }
 

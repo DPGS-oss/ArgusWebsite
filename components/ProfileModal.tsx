@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { getInitials, useAuth } from "@/lib/auth-provider";
+import { canCancelAutoRenew, cancelAutoRenew } from "@/lib/subscription";
 
 export function ProfileModal() {
   const {
@@ -12,7 +13,10 @@ export function ProfileModal() {
     setShowProfileModal,
     logout,
     updateLocalUser,
+    refreshProfile,
   } = useAuth();
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelMessage, setCancelMessage] = useState("");
 
   const [businessName, setBusinessName] = useState("");
   const [gstin, setGstin] = useState("");
@@ -85,6 +89,41 @@ export function ProfileModal() {
           <p className="mb-4 text-sm text-slate">
             {user.subscription?.details || "Unlimited Android billing. Business required for web books, GSTR JSON, and Tally XML."}
           </p>
+          {user.subscription?.active && user.subscription.auto_renew === false && user.subscription.expiry_date ? (
+            <p className="mb-4 text-sm text-slate">
+              Auto-renew is off. Business stays active until{" "}
+              {new Date(user.subscription.expiry_date).toLocaleDateString("en-IN")}.
+            </p>
+          ) : null}
+          {canCancelAutoRenew(user.subscription) ? (
+            <button
+              type="button"
+              className="mb-3 block text-sm font-semibold text-red-600 hover:underline disabled:opacity-60"
+              disabled={cancelling || !token}
+              onClick={async () => {
+                if (!token) return;
+                if (!window.confirm("Stop auto-renew? You keep Business until the end of the period you paid for.")) return;
+                setCancelling(true);
+                setCancelMessage("");
+                try {
+                  const { accessUntil } = await cancelAutoRenew(token);
+                  await refreshProfile();
+                  setCancelMessage(
+                    accessUntil
+                      ? `Auto-renew cancelled. Business stays active until ${new Date(accessUntil).toLocaleDateString("en-IN")}.`
+                      : "Auto-renew cancelled."
+                  );
+                } catch (err) {
+                  setCancelMessage(err instanceof Error ? err.message : "Could not cancel auto-renew");
+                } finally {
+                  setCancelling(false);
+                }
+              }}
+            >
+              {cancelling ? "Cancelling…" : "Cancel auto-renew"}
+            </button>
+          ) : null}
+          {cancelMessage ? <p className="mb-3 text-sm text-ink">{cancelMessage}</p> : null}
           <button
             className="btn-primary"
             onClick={() => {

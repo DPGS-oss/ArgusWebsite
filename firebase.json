@@ -15,6 +15,7 @@
         { "source": "/api/auth/plans", "function": "apiAuthPlans" },
         { "source": "/api/user/profile", "function": "apiUserProfile" },
         { "source": "/api/trial/start", "function": "apiTrialStart" },
+        { "source": "/api/subscription/cancel", "function": "apiSubscriptionCancel" },
         { "source": "/api/contact", "function": "apiContact" },
         { "source": "/api/payment/create-order", "function": "apiPaymentCreateOrder" },
         { "source": "/api/payment/create-subscription", "function": "apiPaymentCreateSubscription" },
