@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { Reveal, Stagger, StaggerItem } from "./Reveal";
+import { AnimatedHeading } from "./AnimatedHeading";
 
 export function Download() {
   return (
@@ -8,9 +9,7 @@ export function Download() {
       <div className="container-page text-center">
         <Reveal>
           <span className="eyebrow">Get Argus</span>
-          <h2 className="mb-4 text-4xl font-bold tracking-tightest text-ink md:text-5xl">
-            Start on the web today
-          </h2>
+          <AnimatedHeading className="mb-4 text-4xl font-bold tracking-tightest text-ink md:text-5xl" text="Start on the web today" />
           <p className="mx-auto mb-10 max-w-2xl text-lg text-slate">
             The web app is live now and works best in Chrome or Edge on desktop. The Android app
             (free, unlimited invoices) and iOS are coming soon — same login everywhere.

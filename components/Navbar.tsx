@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { motion, useScroll, useSpring } from "framer-motion";
 import { ArrowRight, Menu, X } from "lucide-react";
 import { BrandLogo } from "./BrandLogo";
 import { getInitials, useAuth } from "@/lib/auth-provider";
@@ -31,9 +32,16 @@ export function Navbar() {
   }, []);
 
   const light = scrolled || mobileOpen;
+  const { scrollYProgress } = useScroll();
+  const progress = useSpring(scrollYProgress, { stiffness: 140, damping: 30, restDelta: 0.001 });
 
   return (
     <header className="fixed inset-x-0 top-0 z-50 px-3 pt-3 md:px-6">
+      <motion.div
+        aria-hidden
+        style={{ scaleX: progress }}
+        className="fixed inset-x-0 top-0 h-[3px] origin-left bg-gradient-to-r from-brand-violet via-signal-blue to-mint"
+      />
       <nav
         aria-label="Main"
         className={`mx-auto flex max-w-6xl items-center justify-between rounded-full border px-3 py-2 transition-all duration-300 md:px-4 ${

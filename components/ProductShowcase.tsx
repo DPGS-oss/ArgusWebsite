@@ -13,6 +13,7 @@ import {
   Package,
 } from "lucide-react";
 import { Reveal, Stagger, StaggerItem } from "./Reveal";
+import { AnimatedHeading } from "./AnimatedHeading";
 
 /** Sample preview only — illustrative shop data for the marketing mock. */
 const stats = [
@@ -60,7 +61,7 @@ export function ProductShowcase() {
         <Reveal>
           <div className="section-header">
             <span className="eyebrow">Web app</span>
-            <h2>Your shop, on one dashboard</h2>
+            <AnimatedHeading text="Your shop, on one dashboard" />
             <p>
               Sample preview — revenue, invoices, parties, and dues the way Argus surfaces them
             </p>

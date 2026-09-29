@@ -3,6 +3,7 @@
 import { Building2, Globe, Mail } from "lucide-react";
 import { FormEvent, useState } from "react";
 import { Reveal, Stagger, StaggerItem } from "./Reveal";
+import { AnimatedHeading } from "./AnimatedHeading";
 
 export function Contact() {
   const [submitted, setSubmitted] = useState(false);
@@ -50,7 +51,7 @@ export function Contact() {
         <Reveal>
           <div className="section-header">
             <span className="eyebrow">Contact</span>
-            <h2>Talk to a human</h2>
+            <AnimatedHeading text="Talk to a human" />
             <p>Questions about GST, pricing, or moving from another tool? We&apos;re here to help.</p>
           </div>
         </Reveal>

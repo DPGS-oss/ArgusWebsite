@@ -2,7 +2,18 @@
 @tailwind components;
 @tailwind utilities;
 
+@property --border-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
 @layer base {
+  :root {
+    /* Lets <details> animate to height:auto (progressive enhancement). */
+    interpolate-size: allow-keywords;
+  }
+
   html {
     scroll-behavior: smooth;
     -webkit-font-smoothing: antialiased;
@@ -94,6 +105,62 @@
 
   .card {
     @apply rounded-card-lg border border-bone bg-white transition duration-300 hover:-translate-y-0.5 hover:border-brand-violet/25 hover:shadow-lift;
+  }
+
+  /* Cursor-following glow; --mx/--my set by <CardSpotlight />. */
+  .card {
+    position: relative;
+    isolation: isolate;
+  }
+  .card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    background: radial-gradient(260px circle at var(--mx, 50%) var(--my, 50%), rgba(102, 71, 240, 0.1), transparent 70%);
+    pointer-events: none;
+  }
+  .card:hover::before {
+    opacity: 1;
+  }
+
+  /* Rotating gradient border for the featured plan. */
+  .glow-border {
+    border: 2px solid transparent;
+    background:
+      linear-gradient(#fff, #fff) padding-box,
+      conic-gradient(from var(--border-angle), #6647f0, #0091ff, #6ee7b7, #6647f0) border-box;
+    animation: border-spin 6s linear infinite;
+  }
+  @keyframes border-spin {
+    to {
+      --border-angle: 360deg;
+    }
+  }
+
+  /* Smooth FAQ open/close where supported (::details-content). */
+  details::details-content {
+    height: 0;
+    overflow: clip;
+    transition: height 0.35s ease, content-visibility 0.35s allow-discrete;
+  }
+  details[open]::details-content {
+    height: auto;
+  }
+
+  .marquee {
+    mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
+  }
+  .marquee-track {
+    animation: marquee 32s linear infinite;
+  }
+  @keyframes marquee {
+    to {
+      transform: translateX(-50%);
+    }
   }
 
   .gradient-text {

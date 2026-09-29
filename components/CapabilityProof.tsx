@@ -2,6 +2,17 @@
 
 import { Reveal, Stagger, StaggerItem } from "./Reveal";
 
+const trades = [
+  "Kirana & general stores",
+  "Hardware & paints",
+  "Pharmacies",
+  "Textiles & garments",
+  "Electronics & mobiles",
+  "Distributors & wholesalers",
+  "Service businesses",
+  "CA firms",
+];
+
 const stats = [
   { value: "₹0", label: "Unlimited invoices on Android" },
   { value: "14 days", label: "Full Business trial, no card" },
@@ -26,6 +37,18 @@ export function CapabilityProof() {
             </StaggerItem>
           ))}
         </Stagger>
+        <div className="marquee mt-10 overflow-hidden" aria-label={`Used by ${trades.join(", ")}`}>
+          <div className="marquee-track flex w-max gap-3" aria-hidden>
+            {[...trades, ...trades].map((t, i) => (
+              <span
+                key={i}
+                className="whitespace-nowrap rounded-full border border-bone bg-mist px-4 py-2 text-sm font-medium text-slate"
+              >
+                {t}
+              </span>
+            ))}
+          </div>
+        </div>
       </div>
     </section>
   );

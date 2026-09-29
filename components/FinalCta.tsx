@@ -1,5 +1,6 @@
 import { ArrowRight } from "lucide-react";
 import { Reveal } from "./Reveal";
+import { AnimatedHeading } from "./AnimatedHeading";
 
 export function FinalCta() {
   return (
@@ -14,9 +15,7 @@ export function FinalCta() {
             aria-hidden
             className="pointer-events-none absolute -top-32 left-1/2 h-80 w-[900px] -translate-x-1/2 rounded-full bg-[radial-gradient(closest-side,rgba(102,71,240,0.6),transparent)] blur-3xl"
           />
-          <h2 className="relative mx-auto max-w-2xl text-4xl font-bold tracking-tightest md:text-5xl">
-            Close this month&apos;s GST with confidence
-          </h2>
+          <AnimatedHeading className="relative mx-auto max-w-2xl text-4xl font-bold tracking-tightest md:text-5xl" text="Close this month’s GST with confidence" />
           <p className="relative mx-auto mt-4 max-w-xl text-white/70">
             Try the full Business suite free for 14 days. No card required.
           </p>

@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/auth-provider";
 import { startRazorpayCheckout, validatePromoCode, type PromoOffer } from "@/lib/razorpay";
 import { startBusinessTrial } from "@/lib/subscription";
 import { Reveal, Stagger, StaggerItem } from "./Reveal";
+import { AnimatedHeading } from "./AnimatedHeading";
 
 type BillingInterval = "monthly" | "yearly";
 
@@ -169,7 +170,7 @@ export function Pricing() {
           <Reveal>
             <div className="section-header">
               <span className="eyebrow">Pricing</span>
-              <h2>Simple, honest pricing</h2>
+              <AnimatedHeading text="Simple, honest pricing" />
               <p>
                 Start free on the phone, or try 14 days of Business on web — then subscribe from
                 ₹500/month or buy Lifetime once.
@@ -207,7 +208,7 @@ export function Pricing() {
                 key={plan.key}
                 className={`relative flex flex-col rounded-card-lg border p-8 ${
                   plan.featured
-                    ? "border-brand-violet/50 bg-white shadow-glow lg:-my-4 lg:py-12"
+                    ? "glow-border bg-white shadow-glow lg:-my-4 lg:py-12"
                     : "border-bone bg-white"
                 }`}
               >

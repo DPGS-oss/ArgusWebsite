@@ -10,6 +10,7 @@ import { Download } from "@/components/Download";
 import { Contact } from "@/components/Contact";
 import { Footer } from "@/components/Footer";
 import { Navbar } from "@/components/Navbar";
+import { CardSpotlight } from "@/components/CardSpotlight";
 import { Faq } from "@/components/Faq";
 import { FinalCta } from "@/components/FinalCta";
 import { AuthModal } from "@/components/AuthModal";
@@ -33,6 +34,7 @@ export default function HomePage() {
     <>
       <HomeJsonLd />
       <Navbar />
+      <CardSpotlight />
       <main>
         <Hero />
         <CapabilityProof />

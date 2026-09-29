@@ -1,5 +1,6 @@
 import { ShieldCheck, Target, Zap } from "lucide-react";
 import { Reveal, Stagger, StaggerItem } from "./Reveal";
+import { AnimatedHeading } from "./AnimatedHeading";
 
 export function About() {
   return (
@@ -7,9 +8,7 @@ export function About() {
       <div className="container-page grid items-center gap-12 lg:grid-cols-2">
         <Reveal>
           <span className="eyebrow">About us</span>
-          <h2 className="mb-6 text-4xl font-bold tracking-tightest text-ink md:text-5xl">
-            About B&amp;L Softwares and Logistics
-          </h2>
+          <AnimatedHeading className="mb-6 text-4xl font-bold tracking-tightest text-ink md:text-5xl" text="About B&L Softwares and Logistics" />
         </Reveal>
         <Reveal delay={0.1}>
           <p className="text-slate lg:text-right">
