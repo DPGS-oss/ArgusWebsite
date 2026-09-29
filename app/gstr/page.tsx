@@ -4,7 +4,7 @@ import { MarketingPage, PageCtas } from "@/components/MarketingPage";
 import { HINDI_LINE, pageMetadata } from "@/lib/seo";
 
 export const metadata: Metadata = pageMetadata({
-  title: "GSTR-1, 2B, 3B from daily bills | Argus",
+  title: "GSTR-1, 2B, 3B from daily bills",
   description:
     "Invoice once. Get GSTR-1, GSTR-2B, and GSTR-3B style summaries from the same books. Check them with your CA before you file.",
   path: "/gstr/",

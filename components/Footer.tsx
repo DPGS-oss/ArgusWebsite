@@ -54,7 +54,7 @@ export function Footer() {
           </div>
           {columns.map((col) => (
             <div key={col.title}>
-              <h4 className="mb-4 text-sm font-bold text-ink">{col.title}</h4>
+              <h2 className="mb-4 text-sm font-bold tracking-normal text-ink">{col.title}</h2>
               <ul className="space-y-2.5 text-sm text-slate">
                 {col.links.map((link) => (
                   <li key={link.href}>

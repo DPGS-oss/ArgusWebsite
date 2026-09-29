@@ -7,7 +7,7 @@ import { Footer } from "@/components/Footer";
 import { Markdown } from "@/lib/render-markdown";
 
 export const metadata: Metadata = {
-  title: "User Guide | Argus GST Billing",
+  title: "User Guide",
   description:
     "A plain-English guide to getting the most out of Argus, your GST billing and invoicing app.",
 };

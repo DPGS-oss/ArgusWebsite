@@ -38,7 +38,7 @@ export function About() {
                   <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-brand-violet/15 to-signal-blue/15 text-brand-violet">
                     <Icon className="h-5 w-5" />
                   </div>
-                  <h4 className="mb-1 font-bold text-ink">{title}</h4>
+                  <h3 className="mb-1 font-bold text-ink">{title}</h3>
                   <p className="text-sm text-slate">{text}</p>
                 </StaggerItem>
               ))}
