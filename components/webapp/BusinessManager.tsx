@@ -210,7 +210,7 @@ export function BusinessManager({ data, onSaved }: BusinessManagerProps) {
               )}
               <h3 className="text-lg text-starlight">{b.name}</h3>
               <p className="text-sm text-silver">GSTIN: {b.gstin || "N/A"}</p>
-              <p className="text-sm text-silver">{b.city}, {b.state}</p>
+              <p className="text-sm text-silver">{[b.city, b.state].filter(Boolean).join(", ")}</p>
               <p className="text-sm text-silver">{b.phone}</p>
               <div className="mt-4 flex gap-2">
                 {data.activeBusinessId !== b.id && (
