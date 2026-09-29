@@ -4,6 +4,7 @@ const { onSchedule } = require('firebase-functions/v2/scheduler');
 const crypto = require('crypto');
 const { verifyToken, getUser, createUser, updateUser, getDb, getAuth } = require('./_shared/firebase-admin');
 const { getPlan, getAllPlans, getExpiryIsoForPlan } = require('./_shared/plans');
+const { buildSubscriptionRecord } = require('./_shared/subscription-billing');
 const { apiCa } = require('./ca');
 exports.apiCa = apiCa;
 const { apiAdmin } = require('./admin');
@@ -42,6 +43,10 @@ const {
   verifyWebhookSignature,
 } = require('./_shared/razorpay-subscriptions');
 const { getRazorpayCredentials } = require('./_shared/razorpay-client');
+const {
+  activeEntitlement: activeRevenueCatEntitlement,
+  fetchSubscriber: fetchRevenueCatSubscriber,
+} = require('./_shared/revenuecat');
 const { applySubscriptionCharge, transitionIntroToStandard } = require('./_shared/subscription-sync');
 const { hasActiveBusinessSubscription } = require('./_shared/subscription-utils');
 const { sendEmail } = require('./_shared/resend-client');
@@ -243,6 +248,93 @@ exports.apiSubscriptionCancel = onRequest(
       updated_at: now,
     });
     return res.status(200).json({ cancelled: true, access_until: sub.expiry_date || null });
+  }
+);
+
+// ==================== /api/payment/verify-iap ====================
+// Google Play purchases (Android app). The app buys through RevenueCat while
+// logged in as the Firebase uid; we ask RevenueCat which entitlement is active
+// and only then write the subscription. Client input never grants access.
+exports.apiPaymentVerifyIap = onRequest(
+  { region: 'us-central1', maxInstances: 10, secrets: FIREBASE_SECRETS },
+  async (req, res) => {
+    if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+    const token = extractToken(req);
+    if (!token) return res.status(401).json({ error: 'Unauthorized' });
+    let decoded;
+    try {
+      decoded = await verifyToken(token);
+    } catch (err) {
+      return res.status(401).json({ error: 'Invalid or expired token' });
+    }
+    const uid = decoded.uid;
+    const rl = await checkRateLimit(uid, 'payment_verify');
+    if (!rl.allowed) {
+      return res.status(429).json({ valid: false, reason: 'Too many attempts. Try again shortly.' });
+    }
+
+    const rcKey = String(process.env.REVENUECAT_PUBLIC_SDK_KEY || '').trim();
+    if (!rcKey) {
+      console.error('verify-iap: REVENUECAT_PUBLIC_SDK_KEY is not configured');
+      return res.status(503).json({ valid: false, reason: 'Store verification is not configured yet.' });
+    }
+
+    const body = req.body || {};
+    let entitlement;
+    try {
+      const subscriber = await fetchRevenueCatSubscriber(uid, rcKey);
+      entitlement = activeRevenueCatEntitlement(subscriber, String(body.product_id || ''));
+    } catch (error) {
+      console.error('verify-iap: RevenueCat lookup failed', error.status, error.details || error.message);
+      return res.status(502).json({ valid: false, reason: 'Could not reach the store. Please try Restore in a minute.' });
+    }
+    if (!entitlement) {
+      return res.status(200).json({
+        valid: false,
+        reason: 'No active Play subscription for this account. Buy while signed in, then tap Restore.',
+      });
+    }
+
+    const planConfig = getPlan(entitlement.planKey);
+    const nowIso = new Date().toISOString();
+    // A website plan that runs longer (e.g. Lifetime) must not be shortened by a Play purchase.
+    const user = await getUser(uid);
+    const current = user && user.subscription;
+    const currentExpiry = current && current.expiry_date ? new Date(current.expiry_date) : null;
+    const playExpiry = entitlement.expiryIso ? new Date(entitlement.expiryIso) : null;
+    const keepCurrent =
+      current && current.active && current.source && !String(current.source).startsWith('google_play') &&
+      currentExpiry && playExpiry && currentExpiry > playExpiry;
+
+    const subscription = keepCurrent
+      ? current
+      : {
+          ...buildSubscriptionRecord({
+            planKey: entitlement.planKey,
+            label: planConfig && planConfig.label,
+            expiryIso: entitlement.expiryIso,
+            source: 'google_play',
+            autoRenew: entitlement.autoRenew,
+          }),
+          store_product_id: entitlement.productId,
+          billing_issue: entitlement.billingIssue,
+        };
+
+    await updateUser(uid, { subscription, updated_at: nowIso });
+    await getDb().collection('subscriptions').doc(uid).set(
+      {
+        user_id: uid,
+        plan: subscription.plan,
+        plan_key: subscription.plan_key,
+        active: true,
+        source: subscription.source,
+        store: keepCurrent ? 'web' : 'google_play',
+        expiry_date: subscription.expiry_date,
+        updated_at: nowIso,
+      },
+      { merge: true }
+    );
+    return res.status(200).json({ valid: true, subscription });
   }
 );
 

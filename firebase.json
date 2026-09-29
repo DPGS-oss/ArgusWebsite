@@ -21,6 +21,7 @@
         { "source": "/api/payment/create-subscription", "function": "apiPaymentCreateSubscription" },
         { "source": "/api/payment/verify", "function": "apiPaymentVerify" },
         { "source": "/api/payment/verify-subscription", "function": "apiPaymentVerifySubscription" },
+        { "source": "/api/payment/verify-iap", "function": "apiPaymentVerifyIap" },
         { "source": "/api/webhooks/razorpay", "function": "apiRazorpayWebhook" },
         { "source": "/api/promo/validate", "function": "apiPromoValidate" },
         { "source": "/api/promo/seed", "function": "apiPromoSeed" },
