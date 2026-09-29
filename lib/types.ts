@@ -113,6 +113,11 @@ export interface Invoice {
   reverseCharge?: boolean;
   totalCess?: number;
   recurring?: RecurringConfig;
+  /**
+   * Total mode: the GST-inclusive amount the user typed. Present on bills saved
+   * after the double-GST fix; its absence marks older total-mode bills to review.
+   */
+  enteredTotal?: number;
   irn?: string;
   ackNo?: string;
   ackDate?: string;

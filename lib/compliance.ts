@@ -2,7 +2,8 @@ import type { AppData, Invoice, Purchase } from "./types";
 import { isRegisteredGstin, isValidGstin } from "./gstin";
 import { generateGstnJson, notesAsInvoices, purchaseTax } from "./gst";
 
-export type Issue = { severity: "error" | "warn"; title: string; detail: string };
+/** Owner-facing wording is plain language; `law` is a short reference for the CA. */
+export type Issue = { severity: "error" | "warn"; title: string; detail: string; law?: string };
 
 const GST20 = new Date("2025-09-22T00:00:00");
 const HISTORICAL = new Set([12, 28]);
@@ -42,8 +43,9 @@ export function checkBooks(data: AppData, today: Date = new Date()): Issue[] {
   if (seller && !isValidGstin(seller)) {
     issues.push({
       severity: "error",
-      title: "Seller GSTIN is not valid",
-      detail: "The GSTIN format or check digit is wrong. Fix it in Business before you file.",
+      title: "Your GSTIN has a typo",
+      detail: "Check the GST number in Business settings. Bills with a wrong GSTIN can be rejected.",
+      law: "GSTIN format / check digit",
     });
   }
 
@@ -56,13 +58,14 @@ export function checkBooks(data: AppData, today: Date = new Date()): Issue[] {
     const b2b = isRegisteredGstin(inv.partyGstin);
 
     if (!number) {
-      issues.push({ severity: "error", title: "Invoice has no number", detail: "Rule 46 requires a unique invoice number." });
+      issues.push({ severity: "error", title: "A bill has no number", detail: "Every bill needs its own number.", law: "Rule 46(b)" });
     } else {
       if (number.length > 16) {
         issues.push({
           severity: "error",
-          title: "Invoice number longer than 16 characters",
-          detail: `${number} will be rejected on the GST portal and for IRN (Rule 46(b)).`,
+          title: "Bill number is too long",
+          detail: `${number} is over 16 characters. The GST portal will reject it. Use a shorter number.`,
+          law: "Rule 46(b)",
         });
       }
       // Numbers only need to be unique within a financial year (Apr–Mar).
@@ -73,16 +76,18 @@ export function checkBooks(data: AppData, today: Date = new Date()): Issue[] {
     if (inv.partyGstin && inv.partyGstin !== "URP" && !b2b) {
       issues.push({
         severity: "error",
-        title: "Buyer GSTIN looks wrong",
-        detail: `${number}: ${inv.partyGstin} fails the GSTIN check digit. The buyer will not get ITC.`,
+        title: "Customer's GST number looks wrong",
+        detail: `${number}: ${inv.partyGstin} has a typo. Your customer won't get their GST back on this bill.`,
+        law: "GSTIN check digit; buyer ITC",
       });
     }
 
     if (!inv.placeOfSupply && inv.totalTax > 0) {
       issues.push({
         severity: "warn",
-        title: "Missing place of supply",
-        detail: `${number} needs place of supply so CGST/SGST vs IGST is clear (Rule 46(n)).`,
+        title: "Customer's state is missing",
+        detail: `${number}: add the customer's state so the right tax (CGST+SGST or IGST) is charged.`,
+        law: "Place of supply, Rule 46(n)",
       });
     }
 
@@ -90,8 +95,9 @@ export function checkBooks(data: AppData, today: Date = new Date()): Issue[] {
     if (!b2b && !isNote(inv) && inv.grandTotal > 50000 && (!inv.partyName?.trim() || !inv.placeOfSupply)) {
       issues.push({
         severity: "warn",
-        title: "Buyer details missing on a large B2C bill",
-        detail: `${number} is above ₹50,000; Rule 46(e) needs the buyer's name, address, and state.`,
+        title: "Big bill needs the customer's details",
+        detail: `${number} is above ₹50,000. Add the customer's name, address, and state.`,
+        law: "Rule 46(e)",
       });
     }
 
@@ -106,8 +112,9 @@ export function checkBooks(data: AppData, today: Date = new Date()): Issue[] {
         hsnFlagged = true;
         issues.push({
           severity: "warn",
-          title: `HSN too short on ${number}`,
-          detail: `Use at least ${minHsn} digits${above5 ? " (turnover above ₹5 crore)" : " on B2B invoices"}.`,
+          title: `Item code (HSN) too short on ${number}`,
+          detail: `Use at least ${minHsn} digits for each item${above5 ? "" : " on bills to GST-registered customers"}.`,
+          law: above5 ? "HSN 6 digits, AATO > ₹5 cr" : "HSN 4 digits on B2B, AATO ≤ ₹5 cr",
         });
       }
       if (!rateFlagged && !isNote(inv) && afterGst20(inv.date) && HISTORICAL.has(item.gstRate)) {
@@ -115,7 +122,8 @@ export function checkBooks(data: AppData, today: Date = new Date()): Issue[] {
         issues.push({
           severity: "error",
           title: "Old GST rate on a new bill",
-          detail: `${number} uses ${item.gstRate}%. From 22 Sep 2025 use 0, 5, 18, or 40.`,
+          detail: `${number} uses ${item.gstRate}%. Since 22 Sep 2025 the rates are 0, 5, 18, or 40%.`,
+          law: "GST 2.0 rate notification",
         });
       }
       if (hsnFlagged && rateFlagged) break;
@@ -125,18 +133,38 @@ export function checkBooks(data: AppData, today: Date = new Date()): Issue[] {
       const age = ageInDays(inv.date, today);
       issues.push({
         severity: age > 30 ? "error" : "warn",
-        title: age > 30 ? "IRN reporting window passed" : "IRN not recorded",
+        title: age > 30 ? "E-invoice is overdue" : "E-invoice number not saved",
+        law: "E-invoicing, 30-day reporting limit (AATO ≥ ₹10 cr)",
         detail:
           age > 30
-            ? `${number} is ${age} days old. Taxpayers with turnover of ₹10 crore or more cannot report an IRN after 30 days.`
-            : `${number}: generate the IRN on the e-invoice portal and save it here.`,
+            ? `${number} is ${age} days old. If your yearly sales are ₹10 crore or more, the e-invoice portal won't accept it after 30 days.`
+            : `${number}: create the e-invoice on the government portal and save its number (IRN) here.`,
       });
     }
     if (!isNote(inv) && inv.grandTotal >= 50000 && !inv.ewayBillNo) {
       issues.push({
         severity: "warn",
-        title: "E-way bill not recorded",
-        detail: `${number} is ₹50,000 or more. Record the e-way number if goods are moving.`,
+        title: "E-way bill number not saved",
+        detail: `${number} is ₹50,000 or more. If goods are being transported, save the e-way bill number.`,
+        law: "E-way bill, ₹50,000 threshold",
+      });
+    }
+  }
+
+  // Bills saved in "total including GST" mode before the fix had GST added on top
+  // of the amount typed in (₹1,180 incl. 18% was saved as ₹1,392).
+  for (const inv of data.invoices) {
+    if (!inv.isTotalMode || inv.enteredTotal !== undefined || inv.status === "draft" || inv.status === "cancelled") continue;
+    const item = inv.items[0];
+    if (!item || inv.items.length !== 1 || !item.gstRate) continue;
+    const typed = Math.round(item.rate * item.quantity * (1 - (item.discount || 0) / 100) * 100) / 100;
+    const extra = Math.round((inv.grandTotal - typed) * 100) / 100;
+    if (extra >= 1) {
+      issues.push({
+        severity: "error",
+        title: "This bill may charge GST twice",
+        detail: `${inv.invoiceNumber}: you typed ₹${typed.toFixed(2)} including GST, but the bill shows ₹${inv.grandTotal.toFixed(2)}. If the customer should pay ₹${typed.toFixed(2)}, issue a credit note for ₹${extra.toFixed(2)} and tell your CA.`,
+        law: "Total-mode double-GST bug (fixed Sep 2026); correct via credit note, Section 34",
       });
     }
   }
@@ -146,21 +174,28 @@ export function checkBooks(data: AppData, today: Date = new Date()): Issue[] {
       const number = key.slice(key.indexOf("|") + 1);
       issues.push({
         severity: "error",
-        title: "Duplicate invoice number",
-        detail: `${number} is used more than once. Numbers must be unique in a financial year.`,
+        title: "Two bills have the same number",
+        detail: `${number} is used more than once this year (April–March). Each bill needs its own number.`,
+        law: "Rule 46(b)",
       });
     }
   }
 
   for (const p of data.purchases || []) {
     if (p.supplierGstin && !isValidGstin(p.supplierGstin)) {
-      issues.push({ severity: "error", title: "Supplier GSTIN looks wrong", detail: `${p.supplierName}: ${p.supplierGstin}` });
+      issues.push({
+        severity: "error",
+        title: "Supplier's GST number looks wrong",
+        detail: `${p.supplierName}: ${p.supplierGstin} has a typo. You can't claim GST back until it's fixed.`,
+        law: "GSTIN check digit",
+      });
     }
     if (p.itcEligible !== false && !p.supplierGstin) {
       issues.push({
         severity: "warn",
-        title: "ITC claimed without supplier GSTIN",
-        detail: `${p.purchaseNumber} needs the supplier GSTIN and their invoice number.`,
+        title: "Add the supplier's GST number",
+        detail: `${p.purchaseNumber}: add the supplier's GST number and bill number to claim the GST you paid.`,
+        law: "ITC, Section 16(2)",
       });
     }
     // Rule 37 / Section 16(2): pay the supplier within 180 days or reverse the ITC.
@@ -170,8 +205,9 @@ export function checkBooks(data: AppData, today: Date = new Date()): Issue[] {
     if (p.itcEligible !== false && p.supplierGstin && unpaid > 0.5 && age > 180) {
       issues.push({
         severity: "error",
-        title: "Unpaid supplier bill past 180 days",
-        detail: `${p.purchaseNumber} (${p.supplierName}) is ${age} days old with ₹${unpaid.toFixed(2)} unpaid. Reverse the ITC in GSTR-3B (Rule 37) until you pay.`,
+        title: "Supplier not paid for over 6 months",
+        detail: `${p.purchaseNumber} (${p.supplierName}): ₹${unpaid.toFixed(2)} unpaid for ${age} days. You must give back the GST you claimed on it until you pay. Tell your CA.`,
+        law: "Rule 37 / Section 16(2): reverse ITC after 180 days",
       });
     }
   }
@@ -184,8 +220,9 @@ export function checkBooks(data: AppData, today: Date = new Date()): Issue[] {
     if (original && deadline && cnDate > deadline && (cn.totalGstAmount || 0) > 0) {
       issues.push({
         severity: "error",
-        title: "Credit note after the Section 34 deadline",
-        detail: `${cn.creditNoteNumber} is dated after ${deadline}; it cannot reduce GST on ${original.invoiceNumber}.`,
+        title: "Credit note is too late to lower your GST",
+        detail: `${cn.creditNoteNumber} is after ${deadline}, so it can't reduce the GST on ${original.invoiceNumber}.`,
+        law: "Section 34(2) deadline",
       });
     }
   }
@@ -195,8 +232,9 @@ export function checkBooks(data: AppData, today: Date = new Date()): Issue[] {
     if (!note.partyGstin && !note.placeOfSupply) {
       issues.push({
         severity: "warn",
-        title: `${note.type === "credit_note" ? "Credit" : "Debit"} note not linked to a bill`,
-        detail: `${note.invoiceNumber} should point at the original invoice so GSTR-1 reports it correctly.`,
+        title: `${note.type === "credit_note" ? "Credit" : "Debit"} note isn't linked to a bill`,
+        detail: `${note.invoiceNumber}: pick the original bill so the GST return shows it correctly.`,
+        law: "GSTR-1 CDNR/CDNUR",
       });
     }
   }
@@ -246,12 +284,12 @@ export function purchaseMatch(purchases: Purchase[], recipientGstin = "") {
   return (purchases || []).map((p) => {
     const tax = purchaseTax(p, recipientGstin);
     const base = { purchase: p, tax: Math.round((tax.iamt + tax.camt + tax.samt) * 100) / 100 };
-    if (p.itcEligible === false) return { ...base, status: "blocked", reason: "Marked not eligible for ITC" };
-    if (!p.supplierGstin) return { ...base, status: "missing", reason: "Add supplier GSTIN" };
-    if (!isValidGstin(p.supplierGstin)) return { ...base, status: "missing", reason: "Supplier GSTIN fails the check digit" };
-    if (!p.supplierInvoiceNumber) return { ...base, status: "missing", reason: "Add supplier invoice number to match 2B" };
-    if (p.reverseCharge) return { ...base, status: "eligible", reason: "RCM: pay tax in cash, then claim ITC" };
-    return { ...base, status: "eligible", reason: "Ready to match on GSTIN + invoice number" };
+    if (p.itcEligible === false) return { ...base, status: "blocked", reason: "Marked as not claimable" };
+    if (!p.supplierGstin) return { ...base, status: "missing", reason: "Add the supplier's GST number" };
+    if (!isValidGstin(p.supplierGstin)) return { ...base, status: "missing", reason: "Supplier's GST number has a typo" };
+    if (!p.supplierInvoiceNumber) return { ...base, status: "missing", reason: "Add the supplier's bill number" };
+    if (p.reverseCharge) return { ...base, status: "eligible", reason: "You pay this GST for the supplier, then claim it back" };
+    return { ...base, status: "eligible", reason: "Ready to claim" };
   });
 }
 

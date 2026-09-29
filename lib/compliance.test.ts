@@ -32,7 +32,7 @@ describe("checkBooks", () => {
       books([invoice({ partyGstin: "27AAPFU0939F1ZV", items: [{ hsn: "12", gstRate: 12 }] as Invoice["items"] })])
     );
     const titles = issues.map((i) => i.title);
-    expect(titles.some((t) => t.startsWith("HSN too short"))).toBe(true);
+    expect(titles.some((t) => t.startsWith("Item code (HSN) too short"))).toBe(true);
     expect(titles).toContain("Old GST rate on a new bill");
   });
 
@@ -43,7 +43,7 @@ describe("checkBooks", () => {
         invoice({ id: "b", invoiceNumber: "INV-1", date: "2026-04-02" }),
       ])
     );
-    expect(issues.find((i) => i.title === "Duplicate invoice number")).toBeUndefined();
+    expect(issues.find((i) => i.title === "Two bills have the same number")).toBeUndefined();
   });
 
   it("flags duplicates within one financial year", () => {
@@ -53,7 +53,7 @@ describe("checkBooks", () => {
         invoice({ id: "b", invoiceNumber: "inv-1", date: "2027-03-30" }),
       ])
     );
-    const dup = issues.find((i) => i.title === "Duplicate invoice number");
+    const dup = issues.find((i) => i.title === "Two bills have the same number");
     expect(dup?.detail).toContain("INV-1");
   });
 });
@@ -78,17 +78,17 @@ describe("checkBooks: Indian GST rules", () => {
 
   it("does not demand HSN on small B2C bills (turnover up to ₹5 crore)", () => {
     const d = books([invoice({ partyGstin: "", items: [{ hsn: "", gstRate: 18 }] as Invoice["items"] })]);
-    expect(titles(d).some((t) => t.startsWith("HSN too short"))).toBe(false);
+    expect(titles(d).some((t) => t.startsWith("Item code (HSN) too short"))).toBe(false);
   });
 
   it("catches a buyer GSTIN with a bad check digit", () => {
     const d = books([invoice({ partyGstin: "27AAPFU0939F1ZX" })]);
-    expect(titles(d)).toContain("Buyer GSTIN looks wrong");
+    expect(titles(d)).toContain("Customer's GST number looks wrong");
   });
 
   it("asks for buyer details on B2C bills above ₹50,000 (Rule 46(e))", () => {
     const d = books([invoice({ partyGstin: "", partyName: "", grandTotal: 60000 })]);
-    expect(titles(d)).toContain("Buyer details missing on a large B2C bill");
+    expect(titles(d)).toContain("Big bill needs the customer's details");
   });
 
   it("flags unpaid supplier bills past 180 days for ITC reversal (Rule 37)", () => {
@@ -98,9 +98,9 @@ describe("checkBooks: Indian GST rules", () => {
       paidAmount: 0, items: [],
     } as unknown as Purchase;
     const d = { ...books([]), purchases: [purchase] } as AppData;
-    expect(titles(d)).toContain("Unpaid supplier bill past 180 days");
+    expect(titles(d)).toContain("Supplier not paid for over 6 months");
     const paid = { ...d, purchases: [{ ...purchase, paidAmount: 1180 }] } as AppData;
-    expect(titles(paid)).not.toContain("Unpaid supplier bill past 180 days");
+    expect(titles(paid)).not.toContain("Supplier not paid for over 6 months");
   });
 
   it("rejects credit notes after the Section 34 deadline", () => {
@@ -113,7 +113,7 @@ describe("checkBooks: Indian GST rules", () => {
         createdAt: "2025-12-15T00:00:00.000Z", updatedAt: "",
       }],
     } as AppData;
-    expect(titles(d)).toContain("Credit note after the Section 34 deadline");
+    expect(titles(d)).toContain("Credit note is too late to lower your GST");
   });
 });
 
@@ -126,5 +126,28 @@ describe("gstr3b period summary", () => {
     const may = gstr3b(d, "2026-05-01", "2026-05-31");
     expect(may.taxable).toBe(1000);
     expect(may.cash).toBe(180);
+  });
+});
+
+describe("legacy double-GST bills", () => {
+  const today = new Date("2026-09-29T00:00:00");
+  const legacy = {
+    isTotalMode: true,
+    grandTotal: 1392.4,
+    items: [{ hsn: "8471", gstRate: 18, rate: 1180, quantity: 1, discount: 0 }] as Invoice["items"],
+  };
+  it("flags old total-mode bills with the exact extra amount", () => {
+    const issue = checkBooks(books([invoice(legacy)]), today).find((i) => i.title === "This bill may charge GST twice");
+    expect(issue?.detail).toContain("₹1180.00");
+    expect(issue?.detail).toContain("credit note for ₹212.40");
+  });
+  it("leaves bills saved after the fix alone", () => {
+    const fixed = invoice({
+      isTotalMode: true,
+      enteredTotal: 1180,
+      grandTotal: 1180,
+      items: [{ hsn: "8471", gstRate: 18, rate: 1000, quantity: 1, discount: 0 }] as Invoice["items"],
+    });
+    expect(checkBooks(books([fixed]), today).some((i) => i.title === "This bill may charge GST twice")).toBe(false);
   });
 });

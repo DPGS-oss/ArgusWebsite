@@ -39,27 +39,27 @@ export function Compliance({ data, onSaved }: Props) {
   }
 
   const figures: [string, number, string?][] = [
-    ["Outward taxable value", summary.taxable],
-    ["Nil / exempt", summary.nil],
-    ["CGST", summary.cgst],
-    ["SGST", summary.sgst],
-    ["IGST", summary.igst],
-    ["Eligible ITC", summary.eligible, "Purchases with supplier GSTIN, net of ineligible"],
-    ["Ineligible ITC", summary.blocked, "Section 17(5) / marked not eligible"],
-    ["Reverse charge tax", summary.rcm, "Paid in cash; cannot use ITC"],
+    ["Sales before tax", summary.taxable],
+    ["Sales with no GST", summary.nil],
+    ["CGST collected", summary.cgst],
+    ["SGST collected", summary.sgst],
+    ["IGST collected", summary.igst],
+    ["GST you can claim back", summary.eligible, "GST you paid on purchases from GST-registered suppliers"],
+    ["GST you can't claim back", summary.blocked, "Purchases marked as not claimable"],
+    ["GST you pay for suppliers", summary.rcm, "Reverse charge: pay this in cash"],
   ];
 
   return (
     <div>
       <h1 className="mb-2 text-2xl font-bold text-ink">GST check</h1>
       <p className="mb-4 text-sm text-slate">
-        Checks your books against GST rules (Rule 46, Rule 37, Sections 16 and 34, GST 2.0 rates) and
-        prepares GSTR-3B figures. It is a checklist. File on the GST portal and confirm with your CA.
+        Finds mistakes in your bills before you file, and shows how much GST you owe this month.
+        Share it with your CA, then file on the GST portal.
       </p>
 
       <div className="mb-6 flex flex-wrap items-center gap-4">
         <label className="flex items-center gap-2 text-sm text-ink">
-          Tax period
+          Month
           <input
             type="month"
             className="input-field !w-auto"
@@ -73,20 +73,20 @@ export function Compliance({ data, onSaved }: Props) {
             checked={!!data.settings.turnoverAbove5Cr}
             onChange={(e) => setTurnover(e.target.checked)}
           />
-          Turnover above ₹5 crore (6-digit HSN, e-invoice)
+          My yearly sales are above ₹5 crore
         </label>
       </div>
 
       <div className="mb-6 grid gap-3 sm:grid-cols-2">
         <div className="rounded-xl border border-bone bg-white p-4">
-          <div className="text-xs text-ash">Cash to pay for {period}</div>
+          <div className="text-xs text-ash">GST to pay for {period}</div>
           <div className="text-2xl font-bold text-ink">{formatCurrency(summary.cash)}</div>
-          <div className="text-xs text-slate">Output tax minus ITC, plus reverse-charge tax</div>
+          <div className="text-xs text-slate">GST collected, minus GST you can claim back</div>
         </div>
         <div className="rounded-xl border border-bone bg-white p-4">
-          <div className="text-xs text-ash">ITC carried forward</div>
+          <div className="text-xs text-ash">GST credit left over</div>
           <div className="text-2xl font-bold text-ink">{formatCurrency(summary.carryForward)}</div>
-          <div className="text-xs text-slate">Credit left after this period</div>
+          <div className="text-xs text-slate">Carries into next month</div>
         </div>
       </div>
 
@@ -104,9 +104,9 @@ export function Compliance({ data, onSaved }: Props) {
 
       <div className="mb-3 rounded-xl border border-bone bg-white p-4">
         <div className="font-medium text-ink">
-          {issues.length === 0 ? "Nothing to fix" : `${errors} must-fix · ${issues.length - errors} to review`}
+          {issues.length === 0 ? "All good, nothing to fix" : `${errors} to fix · ${issues.length - errors} to check`}
         </div>
-        <div className="text-sm text-slate">Across all your books, not only this period.</div>
+        <div className="text-sm text-slate">Across all your bills, not only this month.</div>
       </div>
 
       <div className="space-y-2">
@@ -123,18 +123,19 @@ export function Compliance({ data, onSaved }: Props) {
                   e.severity === "error" ? "bg-red-50 text-red-700" : "bg-amber-50 text-amber-700"
                 }`}
               >
-                {e.severity === "error" ? "Must fix" : "Review"}
+                {e.severity === "error" ? "Fix" : "Check"}
               </span>
               {e.title}
             </div>
             <div className="text-sm text-slate">{e.detail}</div>
+            {e.law ? <div className="mt-1 text-xs text-ash">For your CA: {e.law}</div> : null}
           </div>
         ))}
       </div>
 
       {rows.length > 0 && (
         <div className="mt-8">
-          <h2 className="mb-2 text-lg font-semibold text-ink">Purchase ITC match</h2>
+          <h2 className="mb-2 text-lg font-semibold text-ink">Purchases: can you claim the GST back?</h2>
           <div className="space-y-2">
             {rows.map((row) => (
               <div key={row.purchase.id} className="flex items-center justify-between gap-3 rounded-xl border border-bone bg-white px-4 py-3">
@@ -149,7 +150,7 @@ export function Compliance({ data, onSaved }: Props) {
                       row.status === "eligible" ? "text-emerald-700" : row.status === "blocked" ? "text-red-700" : "text-amber-700"
                     }
                   >
-                    {row.status}
+                    {row.status === "eligible" ? "Can claim" : row.status === "blocked" ? "Can't claim" : "Needs details"}
                   </div>
                 </div>
               </div>

@@ -443,6 +443,7 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
       signedQr: editingInvoice?.signedQr,
       ewayBillNo: editingInvoice?.ewayBillNo,
       ewayBillDate: editingInvoice?.ewayBillDate,
+      enteredTotal: isTotalMode ? totalAmount : undefined,
     };
 
     onSave(invoice);
