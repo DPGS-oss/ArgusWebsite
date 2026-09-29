@@ -238,42 +238,109 @@ function isInter(inv) {
   return (inv.totalIgst || 0) > 0;
 }
 
+/**
+ * GSTR-1 Table 5 (B2CL) cut-off for inter-state B2C invoices. Notification
+ * 12/2024-CT lowered it from ₹2.5 lakh to ₹1 lakh for supplies from 1 Aug 2024.
+ */
+function b2clThreshold(date) {
+  return String(date || '').slice(0, 10) >= '2024-08-01' ? 100000 : B2CL_THRESHOLD;
+}
+
+function isLargeB2c(inv) {
+  return isInter(inv) && round2(inv.grandTotal || 0) > b2clThreshold(inv.date);
+}
+
+/**
+ * GSTN offline-tool GSTR-1 JSON for one month (or an explicit from/to range).
+ *
+ * - B2B / B2CL invoices carry rate-wise items; B2CS is aggregated per
+ *   supply type + place of supply + rate.
+ * - Credit/debit notes: registered buyers go to CDNR; unregistered large
+ *   inter-state notes go to CDNUR; small unregistered notes are netted into
+ *   B2CS (credit negative, debit positive), as the portal expects.
+ * - Table 12 HSN is split into hsn_b2b / hsn_b2c and is net of notes.
+ * - Table 13 counts cancelled documents in the issued series.
+ */
 function buildGstr1Json(input) {
-  const { from, to, fp } = monthBounds(input.month);
-  const invoices = (input.invoices || []).filter((inv) => isOpen(inv) && inMonth(inv, from, to));
+  const bounds = monthBounds(input.month);
+  const from = input.from || bounds.from;
+  const to = input.to || bounds.to;
+  const fp = input.fp || bounds.fp;
+  const inPeriod = (input.invoices || []).filter((inv) => inv.status !== 'draft' && inMonth(inv, from, to));
+  const invoices = inPeriod.filter(isOpen);
 
   const b2bMap = new Map();
   const b2clMap = new Map();
   const b2csMap = new Map();
   const cdnrMap = new Map();
-  const hsnMap = new Map();
+  const cdnur = [];
+  const hsnB2b = new Map();
+  const hsnB2c = new Map();
 
-  const docs = { inv: [], cn: [], dn: [] };
+  function addB2cs(inv, sign) {
+    const pos = posOf(inv);
+    const sply_ty = isInter(inv) ? 'INTER' : 'INTRA';
+    for (const det of itemRows(inv)) {
+      const key = `${sply_ty}|${pos}|${det.rt}`;
+      const cur = b2csMap.get(key) || {
+        sply_ty, pos, typ: 'OE', rt: det.rt, txval: 0, iamt: 0, camt: 0, samt: 0, csamt: 0,
+      };
+      cur.txval = round2(cur.txval + sign * det.txval);
+      cur.iamt = round2(cur.iamt + sign * det.iamt);
+      cur.camt = round2(cur.camt + sign * det.camt);
+      cur.samt = round2(cur.samt + sign * det.samt);
+      cur.csamt = round2(cur.csamt + sign * det.csamt);
+      b2csMap.set(key, cur);
+    }
+  }
+
+  function addHsn(map, inv, sign) {
+    for (const item of inv.items || []) {
+      const hsn_sc = String(item.hsn || '').trim() || '0000';
+      const uqc = String(item.uqc || item.unit || 'NOS').trim().toUpperCase() || 'NOS';
+      const rt = Number(item.gstRate) || 0;
+      const key = `${hsn_sc}|${rt}|${uqc}`;
+      const cur = map.get(key) || {
+        num: 0, hsn_sc, desc: item.description || '', uqc, qty: 0, rt,
+        txval: 0, iamt: 0, camt: 0, samt: 0, csamt: 0,
+      };
+      cur.qty = round2(cur.qty + sign * (item.quantity || 0));
+      cur.txval = round2(cur.txval + sign * (item.taxableAmount || 0));
+      cur.iamt = round2(cur.iamt + sign * (item.igst || 0));
+      cur.camt = round2(cur.camt + sign * (item.cgst || 0));
+      cur.samt = round2(cur.samt + sign * (item.sgst || 0));
+      cur.csamt = round2(cur.csamt + sign * (item.cess || 0));
+      map.set(key, cur);
+    }
+  }
 
   for (const inv of invoices) {
-    if (isCreditNote(inv)) docs.cn.push(inv.invoiceNumber);
-    else if (isDebitNote(inv)) docs.dn.push(inv.invoiceNumber);
-    else docs.inv.push(inv.invoiceNumber);
-
     const registered = isRegisteredGstin(inv.partyGstin);
-    const note = isCreditNote(inv) || isDebitNote(inv);
+    const credit = isCreditNote(inv);
+    const note = credit || isDebitNote(inv);
+    const sign = credit ? -1 : 1;
+
+    addHsn(registered ? hsnB2b : hsnB2c, inv, sign);
 
     if (note) {
+      const noteRow = {
+        ntty: credit ? 'C' : 'D',
+        nt_num: inv.invoiceNumber,
+        nt_dt: gstDate(inv.date),
+        val: round2(inv.grandTotal || 0),
+        pos: posOf(inv),
+        rchrg: rchrg(inv),
+        itms: toItms(itemRows(inv)),
+      };
       if (registered) {
-        const ntty = isCreditNote(inv) ? 'C' : 'D';
         const ctin = normalizeGstin(inv.partyGstin);
         const list = cdnrMap.get(ctin) || [];
-        list.push({
-          ntty,
-          nt_num: inv.invoiceNumber,
-          nt_dt: gstDate(inv.date),
-          val: round2(inv.grandTotal || 0),
-          pos: posOf(inv),
-          rchrg: rchrg(inv),
-          inv_typ: 'R',
-          itms: toItms(itemRows(inv)),
-        });
+        list.push({ ...noteRow, inv_typ: 'R' });
         cdnrMap.set(ctin, list);
+      } else if (isLargeB2c(inv)) {
+        cdnur.push({ ...noteRow, typ: 'B2CL' });
+      } else {
+        addB2cs(inv, sign);
       }
       continue;
     }
@@ -283,84 +350,44 @@ function buildGstr1Json(input) {
       const list = b2bMap.get(ctin) || [];
       list.push(toInv(inv));
       b2bMap.set(ctin, list);
-    } else if (isInter(inv) && round2(inv.grandTotal || 0) > B2CL_THRESHOLD) {
+    } else if (isLargeB2c(inv)) {
       const pos = posOf(inv);
       const list = b2clMap.get(pos) || [];
-      list.push(toInv(inv));
+      const { pos: _pos, rchrg: _rchrg, inv_typ: _typ, ...b2clInv } = toInv(inv);
+      list.push(b2clInv);
       b2clMap.set(pos, list);
     } else {
-      for (const det of itemRows(inv)) {
-        const pos = posOf(inv);
-        const sply_ty = isInter(inv) ? 'INTER' : 'INTRA';
-        const key = `${sply_ty}|${pos}|${det.rt}`;
-        const cur = b2csMap.get(key) || {
-          sply_ty,
-          pos,
-          typ: 'OE',
-          rt: det.rt,
-          txval: 0,
-          iamt: 0,
-          camt: 0,
-          samt: 0,
-          csamt: 0,
-        };
-        cur.txval = round2(cur.txval + det.txval);
-        cur.iamt = round2(cur.iamt + det.iamt);
-        cur.camt = round2(cur.camt + det.camt);
-        cur.samt = round2(cur.samt + det.samt);
-        cur.csamt = round2(cur.csamt + det.csamt);
-        b2csMap.set(key, cur);
-      }
-    }
-
-    for (const item of inv.items || []) {
-      const hsn_sc = String(item.hsn || '').trim() || '0000';
-      const uqc = String(item.uqc || item.unit || 'NOS').trim() || 'NOS';
-      const rt = Number(item.gstRate) || 0;
-      const key = `${hsn_sc}|${rt}|${uqc}`;
-      const cur = hsnMap.get(key) || {
-        num: 0,
-        hsn_sc,
-        desc: item.description || '',
-        uqc,
-        qty: 0,
-        rt,
-        txval: 0,
-        iamt: 0,
-        camt: 0,
-        samt: 0,
-        csamt: 0,
-      };
-      cur.qty = round2(cur.qty + (item.quantity || 0));
-      cur.txval = round2(cur.txval + (item.taxableAmount || 0));
-      cur.iamt = round2(cur.iamt + (item.igst || 0));
-      cur.camt = round2(cur.camt + (item.cgst || 0));
-      cur.samt = round2(cur.samt + (item.sgst || 0));
-      cur.csamt = round2(cur.csamt + (item.cess || 0));
-      hsnMap.set(key, cur);
+      addB2cs(inv, 1);
     }
   }
 
-  const hsnData = [...hsnMap.values()].map((row, i) => ({ ...row, num: i + 1 }));
+  const numbered = (map) => [...map.values()].map((row, i) => ({ ...row, num: i + 1 }));
 
-  function docBlock(doc_num, doc_typ, numbers) {
-    const sorted = [...numbers].filter(Boolean).sort();
+  function docBlock(doc_num, doc_typ, rows) {
+    const numbers = rows.map((r) => r.invoiceNumber).filter(Boolean).sort();
+    const cancel = rows.filter((r) => r.status === 'cancelled').length;
     return {
       doc_num,
       doc_typ,
       docs: [
         {
           num: 1,
-          from: sorted[0] || '',
-          to: sorted[sorted.length - 1] || '',
-          totnum: sorted.length,
-          cancel: 0,
-          net_issue: sorted.length,
+          from: numbers[0] || '',
+          to: numbers[numbers.length - 1] || '',
+          totnum: numbers.length,
+          cancel,
+          net_issue: numbers.length - cancel,
         },
       ],
     };
   }
 
+  const docs = { inv: [], cn: [], dn: [] };
+  for (const inv of inPeriod) {
+    if (isCreditNote(inv)) docs.cn.push(inv);
+    else if (isDebitNote(inv)) docs.dn.push(inv);
+    else docs.inv.push(inv);
+  }
   const doc_det = [];
   if (docs.inv.length) doc_det.push(docBlock(1, 'Invoices for outward supply', docs.inv));
   if (docs.dn.length) doc_det.push(docBlock(4, 'Debit Note', docs.dn));
@@ -373,11 +400,70 @@ function buildGstr1Json(input) {
     cur_gt: 0,
     b2b: [...b2bMap.entries()].map(([ctin, inv]) => ({ ctin, inv })),
     b2cl: [...b2clMap.entries()].map(([pos, inv]) => ({ pos, inv })),
-    b2cs: [...b2csMap.values()],
+    b2cs: [...b2csMap.values()].filter((r) => r.txval !== 0 || r.iamt !== 0 || r.camt !== 0 || r.samt !== 0),
     cdnr: [...cdnrMap.entries()].map(([ctin, nt]) => ({ ctin, nt })),
-    hsn: { data: hsnData },
+    cdnur,
+    hsn: { hsn_b2b: numbered(hsnB2b), hsn_b2c: numbered(hsnB2c) },
     doc_issue: { doc_det },
   };
+}
+
+/**
+ * Credit / debit notes from the Notes screens as GST documents, so GSTR-1/3B,
+ * the GST check, and the CA portal all count them. A note inherits the buyer
+ * GSTIN, place of supply, and intra/inter-state split of the invoice it amends.
+ */
+function notesAsInvoices(data) {
+  const invoices = (data && data.invoices) || [];
+  const byId = new Map(invoices.map((i) => [i.id, i]));
+  function build(kind, id, number, invoiceId, customerName, createdAt, status, items, taxable, gst) {
+    const base = (invoiceId && byId.get(invoiceId)) || null;
+    const inter = !!(base && base.isInterState);
+    let lines = Array.isArray(items) && items.length ? items : [];
+    if (!lines.length) {
+      const rate = taxable > 0 ? round2((gst / taxable) * 100) : 0;
+      const half = round2(gst / 2);
+      lines = [{
+        id: `${id}-line`, description: 'Adjustment',
+        hsn: (base && base.items && base.items[0] && base.items[0].hsn) || '',
+        quantity: 1, unit: 'NOS', uqc: 'NOS', rate: taxable, discount: 0, gstRate: rate,
+        taxableAmount: round2(taxable), cgst: inter ? 0 : half, sgst: inter ? 0 : round2(gst - half),
+        igst: inter ? round2(gst) : 0, cess: 0, total: round2(taxable + gst),
+      }];
+    }
+    const sum = (k) => round2(lines.reduce((t, l) => t + (Number(l[k]) || 0), 0));
+    return {
+      ...(base || {}),
+      id: `${kind}:${id}`,
+      invoiceNumber: number,
+      type: kind,
+      documentType: kind === 'credit_note' ? 'CRN' : 'DBN',
+      status: status === 'cancelled' ? 'cancelled' : 'unpaid',
+      partyName: customerName || (base && base.partyName) || '',
+      partyGstin: (base && base.partyGstin) || '',
+      placeOfSupply: (base && base.placeOfSupply) || '',
+      isInterState: inter,
+      date: String(createdAt || '').slice(0, 10),
+      items: lines,
+      subtotal: sum('taxableAmount'),
+      totalDiscount: 0,
+      totalTaxable: sum('taxableAmount'),
+      totalCgst: sum('cgst'),
+      totalSgst: sum('sgst'),
+      totalIgst: sum('igst'),
+      totalTax: round2(sum('cgst') + sum('sgst') + sum('igst')),
+      grandTotal: sum('total'),
+      reverseCharge: !!(base && base.reverseCharge),
+    };
+  }
+  return [
+    ...((data && data.creditNotes) || []).map((n) =>
+      build('credit_note', n.id, n.creditNoteNumber, n.invoiceId, n.customerName, n.createdAt, n.status, n.items,
+        round2((n.totalAmount || 0) - (n.totalGstAmount || 0)), n.totalGstAmount || 0)),
+    ...((data && data.debitNotes) || []).map((n) =>
+      build('debit_note', n.id, n.debitNoteNumber, n.invoiceId, n.customerName, n.createdAt, n.status, null,
+        n.subtotal || round2((n.totalAmount || 0) - (n.totalGstAmount || 0)), n.totalGstAmount || 0)),
+  ];
 }
 
 function xmlEscape(value) {
@@ -499,7 +585,9 @@ function companyNameFromAppData(appData) {
 
 module.exports = {
   B2CL_THRESHOLD,
+  b2clThreshold,
   buildGstr1Json,
+  notesAsInvoices,
   buildTallyXml,
   sellerGstinFromAppData,
   companyNameFromAppData,

@@ -9,7 +9,7 @@ import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
 const impl = require("../functions/_shared/ca-exports.js") as {
-  buildGstr1Json: (input: { gstin: string; month: string; invoices: unknown[] }) => Gstr1Json;
+  buildGstr1Json: (input: { gstin: string; month?: string; from?: string; to?: string; fp?: string; invoices: unknown[] }) => Gstr1Json;
   buildTallyXml: (input: { companyName: string; month: string; invoices: unknown[] }) => string;
   sellerGstinFromAppData: (appData: unknown) => string;
   companyNameFromAppData: (appData: unknown) => string;
@@ -35,6 +35,20 @@ export type Gstr1Inv = {
   rchrg: "Y" | "N";
   inv_typ: string;
   itms: Array<{ num: number; itm_det: Gstr1ItemDet }>;
+};
+
+export type Gstr1HsnRow = {
+  num: number;
+  hsn_sc: string;
+  desc: string;
+  uqc: string;
+  qty: number;
+  rt: number;
+  txval: number;
+  iamt: number;
+  camt: number;
+  samt: number;
+  csamt: number;
 };
 
 export type Gstr1Json = {
@@ -68,20 +82,20 @@ export type Gstr1Json = {
       itms: Array<{ num: number; itm_det: Gstr1ItemDet }>;
     }>;
   }>;
+  cdnur: Array<{
+    ntty: "C" | "D";
+    nt_num: string;
+    nt_dt: string;
+    val: number;
+    pos: string;
+    rchrg: "Y" | "N";
+    typ: "B2CL";
+    itms: Array<{ num: number; itm_det: Gstr1ItemDet }>;
+  }>;
+  /** Table 12, split B2B / B2C (GSTN Phase III). Net of credit / debit notes. */
   hsn: {
-    data: Array<{
-      num: number;
-      hsn_sc: string;
-      desc: string;
-      uqc: string;
-      qty: number;
-      rt: number;
-      txval: number;
-      iamt: number;
-      camt: number;
-      samt: number;
-      csamt: number;
-    }>;
+    hsn_b2b: Gstr1HsnRow[];
+    hsn_b2c: Gstr1HsnRow[];
   };
   doc_issue: {
     doc_det: Array<{

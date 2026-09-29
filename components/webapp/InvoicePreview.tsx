@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import { ArrowLeft, FileJson, FileText, Edit, FileDown } from "lucide-react";
-import { useAuth } from "@/lib/auth-provider";
+import { hasValidSubscription, useAuth } from "@/lib/auth-provider";
 import type { BusinessProfile, Invoice, StockItem } from "@/lib/types";
-import { formatCurrency, formatDate, generateInvoiceHTML } from "@/lib/gst";
-import { saveInvoiceToFile, saveInvoiceAsHTML, saveInvoiceAsPDF, downloadInvoiceFile, downloadInvoiceHTML, downloadInvoicePDF, isUsingFileSystem } from "@/lib/storage";
+import { formatCurrency, formatDate, generateInvoiceHTML, placeOfSupplyLabel } from "@/lib/gst";
+import { saveInvoice, saveInvoiceToFile, saveInvoiceAsHTML, saveInvoiceAsPDF, downloadInvoiceFile, downloadInvoiceHTML, downloadInvoicePDF, isUsingFileSystem } from "@/lib/storage";
 import { InvoiceShareActions } from "./InvoiceShareActions";
 
 type InvoicePreviewProps = {
@@ -16,11 +16,16 @@ type InvoicePreviewProps = {
   onEdit: (invoice: Invoice) => void;
   onMarkPaid?: () => void;
   onAddUpi?: () => void;
+  onSaved?: () => void;
 };
 
-export function InvoicePreview({ invoice, business, stock = [], onBack, onEdit, onMarkPaid, onAddUpi }: InvoicePreviewProps) {
-  const { token, firebaseUser } = useAuth();
+export function InvoicePreview({ invoice, business, stock = [], onBack, onEdit, onMarkPaid, onAddUpi, onSaved }: InvoicePreviewProps) {
+  const { token, firebaseUser, user } = useAuth();
+  // Argus branding is a Free-plan mark only; Business and trial invoices stay unbranded.
+  const showArgusBranding = !hasValidSubscription(user);
   const [savingPDF, setSavingPDF] = useState(false);
+  const [irn, setIrn] = useState(invoice.irn || "");
+  const [eway, setEway] = useState(invoice.ewayBillNo || "");
   const [savingEinvoice, setSavingEinvoice] = useState(false);
 
   async function handleDownloadEinvoice() {
@@ -63,7 +68,7 @@ export function InvoicePreview({ invoice, business, stock = [], onBack, onEdit, 
 
   async function handleSaveHTML() {
     if (!business) return;
-    const html = generateInvoiceHTML(invoice, business);
+    const html = generateInvoiceHTML(invoice, business, { showArgusBranding });
     if (isUsingFileSystem()) {
       await saveInvoiceAsHTML(invoice, business.name, html);
       alert(`Invoice saved to folder as ${invoice.invoiceNumber}.html`);
@@ -92,7 +97,7 @@ export function InvoicePreview({ invoice, business, stock = [], onBack, onEdit, 
   }
 
   async function generatePDFBlob(inv: Invoice, biz: BusinessProfile): Promise<Blob> {
-    const html = generateInvoiceHTML(inv, biz);
+    const html = generateInvoiceHTML(inv, biz, { showArgusBranding });
     const container = document.createElement("div");
     container.style.position = "absolute";
     container.style.left = "-9999px";
@@ -113,19 +118,25 @@ export function InvoicePreview({ invoice, business, stock = [], onBack, onEdit, 
     return pdfBlob;
   }
 
+  function savePortalRefs() {
+    saveInvoice({ ...invoice, irn: irn.trim(), ewayBillNo: eway.trim(), updatedAt: new Date().toISOString() });
+    onSaved?.();
+    alert("IRN and e-way bill saved. File them on the GST portal — Argus only stores the numbers.");
+  }
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <button onClick={onBack} className="rounded-lg p-2 text-silver hover:bg-graphite hover:text-starlight">
             <ArrowLeft className="h-5 w-5" />
           </button>
-          <h1 className="text-2xl text-starlight">{invoice.invoiceNumber}</h1>
+          <h1 className="whitespace-nowrap text-2xl text-starlight">{invoice.invoiceNumber}</h1>
         </div>
         <div className="flex flex-wrap gap-2">
           {onMarkPaid && invoice.status !== "paid" ? (
             <button onClick={onMarkPaid} className="btn-primary !py-2">
-              I got it
+              Mark as paid
             </button>
           ) : null}
           <InvoiceShareActions
@@ -170,15 +181,24 @@ export function InvoicePreview({ invoice, business, stock = [], onBack, onEdit, 
       <div className="rounded-lg border border-lead/20 bg-white p-8 text-gray-800">
         <div className="mb-6 flex justify-between border-b-2 border-[#5266eb] pb-4">
           <div>
-            <h1 className="text-2xl font-bold text-[#5266eb]">Argus</h1>
             {business && (
               <>
-                <h2 className="text-lg font-semibold">{business.name}</h2>
+                <h2 className="text-2xl font-bold text-[#5266eb]">{business.name}</h2>
                 <p className="text-sm text-gray-600">
-                  {business.address}<br />
-                  {business.city}, {business.state} - {business.pincode}<br />
-                  GSTIN: {business.gstin}<br />
-                  {business.phone} | {business.email}
+                  {[
+                    business.address,
+                    [[business.city, business.state].filter(Boolean).join(", "), business.pincode]
+                      .filter(Boolean)
+                      .join(" - "),
+                    business.gstin ? `GSTIN: ${business.gstin}` : "",
+                    [business.phone, business.email].filter(Boolean).join(" | "),
+                  ]
+                    .filter(Boolean)
+                    .map((line) => (
+                      <span key={line} className="block">
+                        {line}
+                      </span>
+                    ))}
                 </p>
               </>
             )}
@@ -204,9 +224,9 @@ export function InvoicePreview({ invoice, business, stock = [], onBack, onEdit, 
             <p className="font-semibold">{invoice.partyName || "—"}</p>
             {invoice.partyPhone && <p className="text-sm text-gray-600">Phone: {invoice.partyPhone}</p>}
             <p className="text-sm text-gray-600">GSTIN: {invoice.partyGstin === "URP" || !invoice.partyGstin ? "URP (Unregistered)" : invoice.partyGstin}</p>
-            <p className="text-sm text-gray-600">Place of Supply: {invoice.placeOfSupply}</p>
+            <p className="text-sm text-gray-600">Place of Supply: {placeOfSupplyLabel(invoice.placeOfSupply)}</p>
             {invoice.documentType && <p className="text-sm text-gray-600">Document: {invoice.documentType}</p>}
-            {invoice.reverseCharge && <p className="text-sm text-gray-600">Reverse Charge: Yes</p>}
+            <p className="text-sm text-gray-600">Reverse Charge: {invoice.reverseCharge ? "Yes" : "No"}</p>
           </div>
           {(invoice.shipToAddress || (invoice.shipToGstin && invoice.shipToGstin !== invoice.partyGstin)) && (
             <div>
@@ -321,10 +341,24 @@ export function InvoicePreview({ invoice, business, stock = [], onBack, onEdit, 
           <div className="mt-1 text-xs text-gray-600"><strong>Terms:</strong> {invoice.terms}</div>
         )}
 
-        <div className="mt-6 border-t border-gray-200 pt-4 text-center text-xs text-gray-400">
-          <p>This is a computer-generated invoice from Argus GST Billing App</p>
-          <p>© {new Date().getFullYear()} {business?.name}</p>
+        {/* Rule 46(q): supplier signature block. */}
+        <div className="mt-8 text-right text-sm text-gray-700">
+          <p>For <strong>{business?.name}</strong></p>
+          <p className="mt-10 inline-block border-t border-gray-400 pt-1">Authorised Signatory</p>
         </div>
+
+        <div className="mt-6 border-t border-gray-200 pt-4 text-center text-xs text-gray-400">
+          <p>This is a computer-generated invoice.</p>
+          {showArgusBranding ? <p>Made with Argus · argusinvoicing.com</p> : null}
+        </div>
+      </div>
+      <div className="rounded-xl border border-bone bg-white p-4 print:hidden">
+        <div className="mb-2 text-sm font-medium text-ink">GST portal numbers</div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <input className="input-field" placeholder="IRN" value={irn} onChange={(e) => setIrn(e.target.value)} />
+          <input className="input-field" placeholder="E-way bill number" value={eway} onChange={(e) => setEway(e.target.value)} />
+        </div>
+        <button className="btn-secondary mt-3" onClick={savePortalRefs}>Save IRN / e-way</button>
       </div>
     </div>
   );

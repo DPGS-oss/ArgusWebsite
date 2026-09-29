@@ -2,7 +2,6 @@
 
 import { Building2, Globe, Mail } from "lucide-react";
 import { FormEvent, useState } from "react";
-import { BrandLogo } from "./BrandLogo";
 import { Reveal, Stagger, StaggerItem } from "./Reveal";
 
 export function Contact() {
@@ -46,15 +45,13 @@ export function Contact() {
   }
 
   return (
-    <section id="contact" className="py-20 md:py-28">
+    <section id="contact" className="mb-24 border-y border-bone bg-mist py-24 md:mb-32 md:py-32">
       <div className="container-page">
         <Reveal>
           <div className="section-header">
-            <div className="mb-4 flex items-center justify-center gap-3">
-              <BrandLogo href={null} size={32} />
-              <h2 className="!mb-0">Contact us</h2>
-            </div>
-            <p>Have questions? We&apos;re here to help</p>
+            <span className="eyebrow">Contact</span>
+            <h2>Talk to a human</h2>
+            <p>Questions about GST, pricing, or moving from another tool? We&apos;re here to help.</p>
           </div>
         </Reveal>
         <div className="grid gap-10 lg:grid-cols-2">
@@ -64,25 +61,31 @@ export function Contact() {
                 icon: Mail,
                 title: "Email",
                 value: "support@argusinvoicing.com",
+                href: "mailto:support@argusinvoicing.com",
               },
               {
                 icon: Globe,
                 title: "Website",
-                value: "https://argusinvoicing.com",
+                value: "argusinvoicing.com",
+                href: "https://argusinvoicing.com",
               },
               {
                 icon: Building2,
                 title: "Company",
                 value: "B&L Softwares and Logistics",
               },
-            ].map(({ icon: Icon, title, value }) => (
-              <StaggerItem key={title} className="flex gap-4">
-                <div className="rounded-full bg-brand-violet/10 p-3 text-brand-violet">
+            ].map(({ icon: Icon, title, value, href }: { icon: typeof Mail; title: string; value: string; href?: string }) => (
+              <StaggerItem key={title} className="card flex items-center gap-4 p-5">
+                <div className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-brand-violet/15 to-signal-blue/15 text-brand-violet">
                   <Icon className="h-5 w-5" />
                 </div>
                 <div>
-                  <h4 className="font-bold text-ink">{title}</h4>
-                  <p className="text-slate">{value}</p>
+                  <h4 className="text-sm font-bold text-ink">{title}</h4>
+                  {href ? (
+                    <a href={href} className="text-slate hover:text-brand-violet">{value}</a>
+                  ) : (
+                    <p className="text-slate">{value}</p>
+                  )}
                 </div>
               </StaggerItem>
             ))}
@@ -91,35 +94,35 @@ export function Contact() {
           <Reveal delay={0.2} y={50}>
             <form
               onSubmit={handleSubmit}
-              className="space-y-4 rounded-card border border-bone bg-mist p-6"
+              className="space-y-4 rounded-card-lg border border-bone bg-white p-6 shadow-lift md:p-8"
             >
               <input
                 name="name"
                 type="text"
                 placeholder="Your Name"
                 required
-                className="w-full rounded-input border border-bone bg-white px-4 py-3 text-ink outline-none focus:border-signal-blue"
+                className="input-field !py-3"
               />
               <input
                 name="email"
                 type="email"
                 placeholder="Your Email"
                 required
-                className="w-full rounded-input border border-bone bg-white px-4 py-3 text-ink outline-none focus:border-signal-blue"
+                className="input-field !py-3"
               />
               <input
                 name="subject"
                 type="text"
                 placeholder="Subject"
                 required
-                className="w-full rounded-input border border-bone bg-white px-4 py-3 text-ink outline-none focus:border-signal-blue"
+                className="input-field !py-3"
               />
               <textarea
                 name="message"
                 placeholder="Your Message"
                 rows={5}
                 required
-                className="w-full rounded-input border border-bone bg-white px-4 py-3 text-ink outline-none focus:border-signal-blue"
+                className="input-field !py-3"
               />
               {error ? <p className="text-sm text-red-600">{error}</p> : null}
               {submitted ? (

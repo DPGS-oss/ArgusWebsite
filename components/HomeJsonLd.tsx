@@ -5,6 +5,7 @@ import {
   SITE_URL,
   SUPPORT_EMAIL,
 } from "@/lib/seo";
+import { HOME_FAQ } from "@/lib/faq";
 
 export function HomeJsonLd() {
   const graph = {
@@ -33,6 +34,14 @@ export function HomeJsonLd() {
           "@type": "Organization",
           name: ORG_NAME,
         },
+      },
+      {
+        "@type": "FAQPage",
+        mainEntity: HOME_FAQ.map(({ q, a }) => ({
+          "@type": "Question",
+          name: q,
+          acceptedAnswer: { "@type": "Answer", text: a },
+        })),
       },
     ],
   };

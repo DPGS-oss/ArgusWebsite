@@ -1,53 +1,28 @@
 "use client";
 
-import { BookOpen, FileSpreadsheet, Smartphone, Users } from "lucide-react";
 import { Reveal, Stagger, StaggerItem } from "./Reveal";
 
-const proofs = [
-  {
-    icon: BookOpen,
-    title: "Full books, not just bills",
-    text: "Sales, purchases, stock, khata, and GST summaries in one workspace.",
-  },
-  {
-    icon: FileSpreadsheet,
-    title: "GST-ready every day",
-    text: "Invoice once — GSTR-1, 2B, and 3B style summaries stay ready for your portal filing.",
-  },
-  {
-    icon: Users,
-    title: "CA portal included",
-    text: "Invite your accountant with a free read-only link. No extra seats.",
-  },
-  {
-    icon: Smartphone,
-    title: "Phone + web, same login",
-    text: "Start free on Android (unlimited invoices). Unlock the full suite on web when you grow.",
-  },
+const stats = [
+  { value: "₹0", label: "Unlimited invoices on Android" },
+  { value: "14 days", label: "Full Business trial, no card" },
+  { value: "0·5·18·40%", label: "GST 2.0 slabs, validated per bill" },
+  { value: "Free", label: "Read-only seat for your CA" },
 ];
 
 export function CapabilityProof() {
   return (
-    <section className="border-y border-bone bg-mist py-14 md:py-16">
+    <section className="relative border-b border-bone bg-white py-14 md:py-16">
       <div className="container-page">
         <Reveal>
-          <div className="mb-10 text-center">
-            <p className="mb-2 text-xs font-semibold tracking-widest text-brand-violet uppercase">
-              Built for Indian shops
-            </p>
-            <h2 className="text-2xl font-bold tracking-tight text-ink md:text-3xl">
-              Accounting that matches how you actually work
-            </h2>
-          </div>
+          <p className="mb-10 text-center text-sm font-medium text-slate">
+            Built for kirana stores, distributors, and service businesses across India
+          </p>
         </Reveal>
-        <Stagger className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4" stagger={0.08}>
-          {proofs.map(({ icon: Icon, title, text }) => (
-            <StaggerItem key={title} className="rounded-card border border-bone bg-white p-5">
-              <div className="mb-3 inline-flex rounded-full bg-brand-violet/10 p-2.5 text-brand-violet">
-                <Icon className="h-5 w-5" />
-              </div>
-              <h3 className="mb-1.5 text-base font-bold text-ink">{title}</h3>
-              <p className="text-sm leading-relaxed text-slate">{text}</p>
+        <Stagger className="grid grid-cols-2 gap-px overflow-hidden rounded-card-lg border border-bone bg-bone lg:grid-cols-4" stagger={0.08}>
+          {stats.map(({ value, label }) => (
+            <StaggerItem key={label} y={16} className="bg-white px-6 py-8 text-center">
+              <div className="gradient-text whitespace-nowrap font-display text-2xl font-bold tracking-tight sm:text-3xl xl:text-4xl">{value}</div>
+              <p className="mt-2 text-sm text-slate">{label}</p>
             </StaggerItem>
           ))}
         </Stagger>

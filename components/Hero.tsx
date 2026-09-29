@@ -1,200 +1,178 @@
 "use client";
 
-import { useState } from "react";
-import { ArrowRight, Menu, X } from "lucide-react";
-import { BrandLogo } from "./BrandLogo";
+import { motion, useReducedMotion } from "framer-motion";
+import { ArrowRight, CheckCircle2, FileText, IndianRupee, MessageCircle, ShieldCheck } from "lucide-react";
 import { ShinyText } from "./ShinyText";
-import { getInitials, useAuth } from "@/lib/auth-provider";
 
-const navLinks = [
-  { label: "Home", href: "#" },
-  { label: "Features", href: "#features" },
-  { label: "Pricing", href: "#pricing" },
-  { label: "About", href: "#about" },
-  { label: "Download", href: "#download" },
-  { label: "Contact us", href: "#contact" },
-];
+const trust = ["GST 2.0 rates built in", "Free CA access", "Same login on Android & web"];
 
 export function Hero() {
-  const { user, setShowAuthModal, setShowProfileModal } = useAuth();
-  const [mobileOpen, setMobileOpen] = useState(false);
-
-  function closeMobile() {
-    setMobileOpen(false);
-  }
+  const reduce = useReducedMotion();
+  const rise = (delay: number) =>
+    reduce
+      ? {}
+      : {
+          initial: { opacity: 0, y: 24 },
+          animate: { opacity: 1, y: 0 },
+          transition: { duration: 0.8, delay, ease: [0.16, 1, 0.3, 1] as const },
+        };
 
   return (
-    <section className="relative h-screen w-full overflow-hidden bg-black">
-      <video
-        autoPlay
-        loop
-        muted
-        playsInline
-        className="absolute inset-0 h-full w-full object-cover"
-      >
-        <source
-          src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260328_105406_16f4600d-7a92-4292-b96e-b19156c7830a.mp4"
-          type="video/mp4"
-        />
-      </video>
+    <section className="relative isolate overflow-hidden bg-onyx pb-20 pt-32 text-white md:pb-28 md:pt-40">
+      {/* Aurora backdrop */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
+        <div className="bg-grid absolute inset-0 [mask-image:radial-gradient(ellipse_at_top,black_30%,transparent_75%)]" />
+        <div className="absolute -top-40 left-1/2 h-[640px] w-[1100px] -translate-x-1/2 animate-aurora rounded-full bg-[radial-gradient(closest-side,rgba(102,71,240,0.55),transparent)] blur-3xl" />
+        <div className="absolute right-[-10%] top-40 h-[420px] w-[520px] animate-aurora rounded-full bg-[radial-gradient(closest-side,rgba(0,145,255,0.35),transparent)] blur-3xl [animation-delay:-6s]" />
+        <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-b from-transparent to-onyx" />
+      </div>
 
-      <div className="absolute inset-0 bg-black/40" />
+      <div className="container-page flex flex-col items-center text-center">
+        <motion.a
+          href="#features"
+          {...rise(0)}
+          className="group mb-8 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 py-1 pl-1 pr-3 text-xs text-white/80 backdrop-blur hover:border-white/30"
+        >
+          <span className="rounded-full bg-gradient-to-r from-brand-violet to-signal-blue px-2 py-0.5 font-semibold text-white">
+            New
+          </span>
+          GST 2.0 checklist for 0 / 5 / 18 / 40% rates
+          <ArrowRight className="h-3 w-3 transition group-hover:translate-x-0.5" />
+        </motion.a>
 
-      <div className="relative z-10 flex h-full flex-col">
-        <nav className="w-full px-4 py-4 md:px-6">
-          <div className="mx-auto flex max-w-7xl items-center justify-between">
-            <BrandLogo size={32} priority />
+        <motion.h1
+          {...rise(0.08)}
+          className="max-w-4xl font-display text-5xl font-semibold leading-[0.95] tracking-tightest md:text-7xl xl:text-[5.5rem]"
+        >
+          Accounting{" "}
+          <ShinyText text="made clear." baseColor="#8fb8ff" shineColor="#ffffff" duration={4} />
+        </motion.h1>
 
-            <div className="hidden items-center gap-1 rounded-full border border-gray-700 px-2 py-1.5 lg:flex">
-              {navLinks.map((link) => (
-                <a
-                  key={link.label}
-                  href={link.href}
-                  className="flex items-center gap-1 rounded-full px-3 py-1.5 text-sm text-white/80 transition hover:text-white"
-                >
-                  {link.label}
-                  {link.label === "Contact us" && (
-                    <ArrowRight className="h-3.5 w-3.5" />
-                  )}
-                </a>
-              ))}
-            </div>
+        <motion.p {...rise(0.16)} className="mt-6 max-w-2xl text-base leading-relaxed text-white/70 md:text-lg">
+          Bill customers, track stock and dues, prepare GSTR summaries, and share books with your CA
+          — one workspace for Indian shops, on your phone and in the browser.
+        </motion.p>
 
-            <div className="hidden items-center gap-3 lg:flex">
-              <a
-                href="/app/"
-                className="rounded-full bg-white px-4 py-1.5 text-sm font-semibold text-black transition hover:bg-white/90"
-              >
-                Launch Web App
-              </a>
-              {!user ? (
-                <button
-                  onClick={() => setShowAuthModal(true)}
-                  className="rounded-full border border-white/30 px-4 py-1.5 text-sm text-white/80 transition hover:border-white hover:text-white"
-                >
-                  Sign In
-                </button>
-              ) : (
-                <button
-                  onClick={() => setShowProfileModal(true)}
-                  className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-xs font-bold text-black"
-                >
-                  {getInitials(user.name)}
-                </button>
-              )}
-            </div>
+        <motion.div {...rise(0.24)} className="mt-10 flex flex-wrap items-center justify-center gap-3">
+          <a
+            href="/app/"
+            className="group inline-flex items-center gap-2 rounded-full bg-white px-7 py-3.5 text-sm font-bold text-ink shadow-glow hover:bg-white/90 md:text-base"
+          >
+            Start 14-day free trial
+            <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
+          </a>
+          <a
+            href="#workflow"
+            className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-7 py-3.5 text-sm font-semibold text-white backdrop-blur hover:border-white/40 hover:bg-white/10 md:text-base"
+          >
+            See how it works
+          </a>
+        </motion.div>
 
-            <button
-              type="button"
-              className="text-white/80 transition hover:text-white lg:hidden"
-              aria-label={mobileOpen ? "Close menu" : "Open menu"}
-              aria-expanded={mobileOpen}
-              onClick={() => setMobileOpen((o) => !o)}
-            >
-              {mobileOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-            </button>
-          </div>
+        <motion.ul {...rise(0.32)} className="mt-8 flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-white/60">
+          {trust.map((t) => (
+            <li key={t} className="inline-flex items-center gap-1.5">
+              <CheckCircle2 className="h-4 w-4 text-mint" />
+              {t}
+            </li>
+          ))}
+        </motion.ul>
 
-          {mobileOpen ? (
-            <div className="mt-3 rounded-card border border-white/15 bg-black/80 p-4 backdrop-blur lg:hidden">
-              <div className="flex flex-col gap-1">
-                {navLinks.map((link) => (
-                  <a
-                    key={link.label}
-                    href={link.href}
-                    onClick={closeMobile}
-                    className="rounded-full px-3 py-2.5 text-sm text-white/90 hover:bg-white/10"
-                  >
-                    {link.label}
-                  </a>
-                ))}
-              </div>
-              <div className="mt-3 flex flex-col gap-2 border-t border-white/10 pt-3">
-                <a
-                  href="/app/"
-                  onClick={closeMobile}
-                  className="rounded-full bg-white px-4 py-2.5 text-center text-sm font-semibold text-black"
-                >
-                  Launch Web App
-                </a>
-                {!user ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      closeMobile();
-                      setShowAuthModal(true);
-                    }}
-                    className="rounded-full border border-white/30 px-4 py-2.5 text-sm text-white"
-                  >
-                    Sign In
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      closeMobile();
-                      setShowProfileModal(true);
-                    }}
-                    className="rounded-full border border-white/30 px-4 py-2.5 text-sm text-white"
-                  >
-                    Profile
-                  </button>
-                )}
-              </div>
-            </div>
-          ) : null}
-        </nav>
-
-        <div className="mx-auto w-full max-w-7xl px-4 pt-6 md:px-6">
-          <p className="max-w-2xl text-sm text-white/80 md:text-base">
-            Books, GST, inventory, and collections for Indian businesses —
-            one login on phone and web.
-          </p>
-        </div>
-
-        <div className="flex flex-1 flex-col items-center justify-center px-4 text-center">
-          <p className="mb-6 text-xs tracking-tight text-white/80 sm:text-sm">
-            COMPLETE ACCOUNTING FOR INDIAN SHOPS
-          </p>
-
-          <h1 className="text-5xl font-medium leading-[0.85] tracking-tighter text-white md:text-7xl xl:text-8xl">
-            Accounting
-            <br />
-            <ShinyText
-              text="Made Clear."
-              baseColor="#64CEFB"
-              shineColor="#ffffff"
-              duration={3}
-              className="font-medium"
-            />
-          </h1>
-
-          <p className="mx-auto mt-6 max-w-lg text-sm text-white/75 md:text-base">
-            Bill customers, track stock and dues, prepare GST summaries, and share
-            books with your CA — without juggling five tools. Web app works best
-            in Chrome or Edge.
-          </p>
-
-          <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
-            <a
-              href="/app/"
-              className="group inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-semibold text-black transition hover:bg-white/90 md:px-8 md:py-4 md:text-base"
-            >
-              Start free trial
-              <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
-            </a>
-            <a
-              href="#download"
-              className="group inline-flex items-center gap-2 rounded-full border border-white/40 bg-black/40 px-6 py-3 text-sm text-white transition hover:border-white hover:bg-black/60 md:px-8 md:py-4 md:text-base"
-            >
-              Download App
-            </a>
-          </div>
-          <p className="mt-4 text-xs text-white/60">
-            14-day Business trial on web · Free unlimited billing on Android
-          </p>
-        </div>
+        <HeroPreview reduce={Boolean(reduce)} />
       </div>
     </section>
+  );
+}
+
+/** Illustrative invoice card — sample data only. */
+function HeroPreview({ reduce }: { reduce: boolean }) {
+  return (
+    <motion.div
+      initial={reduce ? false : { opacity: 0, y: 48, rotateX: 12 }}
+      animate={{ opacity: 1, y: 0, rotateX: 0 }}
+      transition={{ duration: 1.1, delay: 0.4, ease: [0.16, 1, 0.3, 1] }}
+      style={{ transformPerspective: 1200 }}
+      className="relative mt-16 w-full max-w-4xl"
+      aria-hidden
+    >
+      <div className="rounded-[22px] border border-white/10 bg-white/[0.04] p-2 shadow-[0_40px_120px_-40px_rgba(102,71,240,0.6)] backdrop-blur">
+        <div className="overflow-hidden rounded-2xl bg-white text-left text-ink">
+          <div className="flex items-center justify-between border-b border-bone px-5 py-3">
+            <div className="flex items-center gap-2">
+              <span className="h-2.5 w-2.5 rounded-full bg-red-400" />
+              <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
+              <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
+            </div>
+            <span className="rounded-full bg-mist px-3 py-1 font-mono text-[11px] text-slate">
+              argusinvoicing.com/app
+            </span>
+            <span className="w-10" />
+          </div>
+          <div className="grid gap-4 p-5 md:grid-cols-[1.4fr_1fr] md:p-6">
+            <div>
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wider text-ash">Tax invoice</p>
+                  <p className="font-display text-xl font-bold">INV-2026-0142</p>
+                  <p className="text-sm text-slate">Sharma Traders · 27AAPFU0939F1ZV</p>
+                </div>
+                <span className="rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-bold text-emerald-700">Paid</span>
+              </div>
+              <div className="mt-5 space-y-2 text-sm">
+                {[
+                  ["Steel almirah · HSN 9403", "₹9,000.00"],
+                  ["Installation · SAC 9954", "₹1,576.27"],
+                ].map(([label, value]) => (
+                  <div key={label} className="flex justify-between border-b border-bone/70 pb-2">
+                    <span className="text-slate">{label}</span>
+                    <span className="font-medium">{value}</span>
+                  </div>
+                ))}
+                <div className="flex justify-between text-slate">
+                  <span>CGST 9% + SGST 9%</span>
+                  <span>₹1,903.73</span>
+                </div>
+                <div className="flex justify-between pt-1 font-display text-lg font-bold">
+                  <span>Total</span>
+                  <span>₹12,480.00</span>
+                </div>
+              </div>
+            </div>
+            <div className="flex flex-col gap-3">
+              <div className="rounded-xl border border-bone bg-mist p-4">
+                <p className="text-xs text-ash">This month</p>
+                <p className="font-display text-2xl font-bold">₹1,24,500</p>
+                <div className="mt-3 flex h-12 items-end gap-1">
+                  {[35, 52, 44, 60, 48, 72, 66, 84, 70, 92].map((h, i) => (
+                    <span
+                      key={i}
+                      style={{ height: `${h}%` }}
+                      className="flex-1 rounded-sm bg-gradient-to-t from-brand-violet to-signal-blue opacity-80"
+                    />
+                  ))}
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-xs font-bold">
+                <span className="inline-flex items-center justify-center gap-1.5 rounded-full bg-green-600 py-2.5 text-white">
+                  <MessageCircle className="h-3.5 w-3.5" /> WhatsApp
+                </span>
+                <span className="inline-flex items-center justify-center gap-1.5 rounded-full bg-ink py-2.5 text-white">
+                  <IndianRupee className="h-3.5 w-3.5" /> Collect UPI
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="absolute -left-10 top-10 hidden animate-float-slow items-center gap-2 rounded-2xl border border-white/15 bg-onyx/85 px-4 py-3 text-sm text-white shadow-xl backdrop-blur-md lg:flex">
+        <FileText className="h-4 w-4 text-mint" />
+        GSTR-1 ready
+      </div>
+      <div className="absolute -bottom-6 -right-10 hidden animate-float-slow items-center gap-2 rounded-2xl border border-white/15 bg-onyx/85 px-4 py-3 text-sm text-white shadow-xl backdrop-blur-md [animation-delay:-3s] lg:flex">
+        <ShieldCheck className="h-4 w-4 text-mint" />
+        CA invited · read-only
+      </div>
+    </motion.div>
   );
 }

@@ -21,6 +21,7 @@ import {
   buildInvoiceDocument,
   openHistoricalInvoice,
   stateCodeFromPlaceOfSupply,
+  exclusiveRateFromInclusive,
 } from "@/lib/gst";
 import { generateId, generateInvoiceNumber } from "@/lib/storage";
 import { BarcodeScannerModal } from "./BarcodeScannerModal";
@@ -371,7 +372,9 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
         quantity: 1,
         unit: "NOS",
         uqc: "NOS",
-        rate: totalAmount,
+        // Store the pre-tax rate: buildInvoiceDocument recomputes lines from rate
+        // as tax-exclusive, so storing the inclusive amount would add GST twice.
+        rate: exclusiveRateFromInclusive(totalAmount, totalGstRate),
         discount: totalDiscount,
         gstRate: totalGstRate,
         taxableAmount: taxable,
@@ -390,7 +393,7 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
       }));
     }
 
-    const invoice = buildInvoiceDocument({
+    const built = buildInvoiceDocument({
       id: editingInvoice?.id || generateId(),
       invoiceNumber,
       type: invoiceType,
@@ -431,6 +434,17 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
           }
         : undefined,
     });
+    // buildInvoiceDocument only knows billing fields; keep GST portal references on edit.
+    const invoice: Invoice = {
+      ...built,
+      irn: editingInvoice?.irn,
+      ackNo: editingInvoice?.ackNo,
+      ackDate: editingInvoice?.ackDate,
+      signedQr: editingInvoice?.signedQr,
+      ewayBillNo: editingInvoice?.ewayBillNo,
+      ewayBillDate: editingInvoice?.ewayBillDate,
+      enteredTotal: isTotalMode ? totalAmount : undefined,
+    };
 
     onSave(invoice);
   }
@@ -889,7 +903,8 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
             <h2 className="mb-4 text-lg text-starlight">Summary</h2>
             <div className="space-y-2 text-sm">
               <div className="flex justify-between text-silver">
-                <span>Subtotal</span>
+                {/* In total mode the entered amount already includes GST. */}
+                <span>{isTotalMode ? "Amount entered (incl. GST)" : "Subtotal"}</span>
                 <span>{formatCurrency(totals.subtotal)}</span>
               </div>
               {totals.totalDiscount > 0 && (

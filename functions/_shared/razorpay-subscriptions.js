@@ -135,6 +135,22 @@ async function fetchRazorpaySubscription(subscriptionId) {
   return razorpayFetch(`/v1/subscriptions/${subscriptionId}`);
 }
 
+/** Stop future renewals; access continues until the current paid cycle ends. */
+async function cancelRazorpaySubscriptionAtCycleEnd(subscriptionId) {
+  return razorpayFetch(`/v1/subscriptions/${encodeURIComponent(subscriptionId)}/cancel`, {
+    method: 'POST',
+    body: JSON.stringify({ cancel_at_cycle_end: 1 }),
+  });
+}
+
+/** Immediate cancel, used when the account itself is being deleted. */
+async function cancelRazorpaySubscriptionNow(subscriptionId) {
+  return razorpayFetch(`/v1/subscriptions/${encodeURIComponent(subscriptionId)}/cancel`, {
+    method: 'POST',
+    body: JSON.stringify({ cancel_at_cycle_end: 0 }),
+  });
+}
+
 async function fetchRazorpayPayment(paymentId) {
   return razorpayFetch(`/v1/payments/${paymentId}`);
 }
@@ -155,6 +171,8 @@ function verifyWebhookSignature(rawBody, signature, secret) {
 
 module.exports = {
   PLAN_CATALOG,
+  cancelRazorpaySubscriptionAtCycleEnd,
+  cancelRazorpaySubscriptionNow,
   ensureRazorpayPlan,
   getOrCreateRazorpayCustomer,
   createRazorpaySubscription,

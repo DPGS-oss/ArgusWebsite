@@ -2,6 +2,7 @@
 
 import Script from "next/script";
 import { useState } from "react";
+import { Check, Sparkles } from "lucide-react";
 import { useAuth } from "@/lib/auth-provider";
 import { startRazorpayCheckout, validatePromoCode, type PromoOffer } from "@/lib/razorpay";
 import { startBusinessTrial } from "@/lib/subscription";
@@ -17,10 +18,10 @@ const plans = [
     suffix: "",
     featured: false,
     features: [
-      "✓ Unlimited invoices on Android",
-      "✓ Customers & basic billing",
-      "✓ UPI payment links",
-      "✓ Upgrade anytime for full books + web",
+      "Unlimited invoices on Android",
+      "Customers & basic billing",
+      "UPI payment links",
+      "Upgrade anytime for full books + web",
     ],
     cta: "Get Started",
     buttonClass: "btn-outline w-full",
@@ -34,13 +35,13 @@ const plans = [
     suffixYearly: "/year",
     featured: true,
     features: [
-      "✓ Unlimited invoices on phone & web",
-      "✓ Full books: purchases, stock, khata",
-      "✓ GSTR-1, 2B, 3B summaries",
-      "✓ Quotes, credit notes & challans",
-      "✓ Reports, recurring & CA portal",
-      "✓ Local folder backup on web",
-      "✓ Auto-renews monthly or yearly",
+      "Unlimited invoices on phone & web",
+      "Full books: purchases, stock, khata",
+      "GSTR-1, 2B, 3B summaries",
+      "Quotes, credit notes & challans",
+      "Reports, recurring & CA portal",
+      "Local folder backup on web",
+      "Auto-renews monthly or yearly",
     ],
     cta: "Subscribe Now",
     buttonClass: "btn-primary w-full",
@@ -52,11 +53,11 @@ const plans = [
     suffix: " once",
     featured: false,
     features: [
-      "✓ Same Business suite for the current product generation",
-      "✓ Buy once on this website only (max 25 years or earlier sunset)",
-      "✓ Unlocks Android + web (same login)",
-      "✓ Not sold inside the Play app",
-      "✓ Add-ons & major overhauls not included — see Terms",
+      "Same Business suite for the current product generation",
+      "Buy once on this website only (max 25 years or earlier sunset)",
+      "Unlocks Android + web (same login)",
+      "Not sold inside the Play app",
+      "Add-ons & major overhauls not included — see Terms",
     ],
     cta: "Buy Lifetime",
     buttonClass: "btn-outline w-full",
@@ -163,11 +164,12 @@ export function Pricing() {
   return (
     <>
       <Script src="https://checkout.razorpay.com/v1/checkout.js" strategy="lazyOnload" />
-      <section id="pricing" className="py-20 md:py-28">
+      <section id="pricing" className="relative border-y border-bone bg-mist py-24 md:py-32">
         <div className="container-page">
           <Reveal>
             <div className="section-header">
-              <h2>Simple Pricing</h2>
+              <span className="eyebrow">Pricing</span>
+              <h2>Simple, honest pricing</h2>
               <p>
                 Start free on the phone, or try 14 days of Business on web — then subscribe from
                 ₹500/month or buy Lifetime once.
@@ -175,43 +177,48 @@ export function Pricing() {
             </div>
           </Reveal>
           <Reveal delay={0.05}>
-            <div className="mx-auto mb-10 max-w-xl rounded-card border border-emerald-500/30 bg-emerald-500/5 p-6 text-center">
+            <div className="mx-auto mb-14 flex max-w-3xl flex-col items-center gap-4 rounded-card-lg border border-emerald-500/25 bg-gradient-to-r from-emerald-500/[0.07] to-signal-blue/[0.05] p-6 text-center md:flex-row md:text-left">
+              <div className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-700">
+                <Sparkles className="h-5 w-5" />
+              </div>
+              <div className="flex-1">
               <h3 className="text-lg font-bold text-ink">14-day Business trial</h3>
-              <p className="mt-2 text-sm text-slate">
+              <p className="mt-1 text-sm text-slate">
                 Full web suite + same login on Android. One trial per account, device, and
                 network — no card required.
               </p>
+              {trialMessage ? (
+                <p className="mt-2 text-sm font-medium text-ink">{trialMessage}</p>
+              ) : null}
+              </div>
               <button
                 type="button"
-                className="btn-primary mt-4"
+                className="btn-primary shrink-0"
                 disabled={trialLoading}
                 onClick={handleStartTrial}
               >
                 {trialLoading ? "Starting…" : "Start free trial"}
               </button>
-              {trialMessage ? (
-                <p className="mt-3 text-sm text-slate">{trialMessage}</p>
-              ) : null}
             </div>
           </Reveal>
           <Stagger className="mx-auto grid max-w-5xl gap-6 sm:grid-cols-2 lg:grid-cols-3" stagger={0.1}>
             {plans.map((plan) => (
               <StaggerItem
                 key={plan.key}
-                className={`relative rounded-card border p-8 ${
+                className={`relative flex flex-col rounded-card-lg border p-8 ${
                   plan.featured
-                    ? "border-brand-violet bg-mist shadow-subtle"
+                    ? "border-brand-violet/50 bg-white shadow-glow lg:-my-4 lg:py-12"
                     : "border-bone bg-white"
                 }`}
               >
                 {plan.featured && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-brand-violet px-4 py-1 text-xs font-bold text-white">
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-gradient-to-r from-brand-violet to-signal-blue px-4 py-1 text-xs font-bold text-white shadow-glow">
                     Most Popular
                   </div>
                 )}
                 <div className="mb-6">
                   <h3 className="mb-2 text-2xl font-bold text-ink">{plan.name}</h3>
-                  <div className="text-4xl font-bold text-ink">
+                  <div className="font-display text-4xl font-bold tracking-tight text-ink">
                     {plan.key === "business" ? businessPriceDisplay() : plan.price}
                     {plan.key === "business" ? (
                       <span className="text-base text-slate">{businessSuffixDisplay()}</span>
@@ -221,24 +228,33 @@ export function Pricing() {
                   </div>
                   {plan.key === "business" && promoOffer ? (
                     <p className="mt-2 text-sm text-brand-violet">{promoOffer.message}</p>
+                  ) : plan.key === "business_lifetime" ? (
+                    <p className="mt-2 text-sm text-slate">Incl. of all taxes. One-time payment, no renewal.</p>
                   ) : plan.key === "business" ? (
-                    <p className="mt-2 text-sm text-slate">Auto-renews until you cancel in Razorpay.</p>
+                    <p className="mt-2 text-sm text-slate">
+                      Incl. of all taxes. Auto-renews; cancel anytime in one click from your profile.
+                    </p>
                   ) : null}
                 </div>
-                <ul className="mb-8 space-y-3 text-sm text-slate">
+                <ul className="mb-8 flex-1 space-y-3 text-sm text-slate">
                   {plan.features.map((feature) => (
-                    <li key={feature}>{feature}</li>
+                    <li key={feature} className="flex gap-2.5">
+                      <Check
+                        className={`mt-0.5 h-4 w-4 shrink-0 ${plan.featured ? "text-brand-violet" : "text-emerald-600"}`}
+                      />
+                      <span>{feature}</span>
+                    </li>
                   ))}
                 </ul>
                 {plan.key === "business" ? (
                   <>
-                    <div className="mb-4 flex rounded-card border border-bone bg-white p-1">
+                    <div className="mb-4 flex rounded-full border border-bone bg-mist p-1">
                       <button
                         type="button"
-                        className={`flex-1 rounded-card px-3 py-2 text-sm font-medium ${
+                        className={`flex-1 rounded-full px-3 py-2 text-sm font-medium ${
                           billingInterval === "monthly"
-                            ? "bg-brand-violet text-white"
-                            : "text-slate"
+                            ? "bg-white text-ink shadow-subtle"
+                            : "text-slate hover:text-ink"
                         }`}
                         onClick={() => setBillingInterval("monthly")}
                       >
@@ -246,14 +262,17 @@ export function Pricing() {
                       </button>
                       <button
                         type="button"
-                        className={`flex-1 rounded-card px-3 py-2 text-sm font-medium ${
+                        className={`flex-1 rounded-full px-3 py-2 text-sm font-medium ${
                           billingInterval === "yearly"
-                            ? "bg-brand-violet text-white"
-                            : "text-slate"
+                            ? "bg-white text-ink shadow-subtle"
+                            : "text-slate hover:text-ink"
                         }`}
                         onClick={() => setBillingInterval("yearly")}
                       >
-                        Yearly
+                        Yearly{" "}
+                        <span className="ml-1 whitespace-nowrap rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">
+                          Save ₹1,000
+                        </span>
                       </button>
                     </div>
                     <div className="mb-4 space-y-2">
@@ -269,7 +288,7 @@ export function Pricing() {
                           }}
                           placeholder="Enter code"
                           autoComplete="off"
-                          className="mt-1 w-full rounded-card border border-bone bg-white px-4 py-2.5 text-sm text-ink outline-none focus:border-brand-violet"
+                          className="input-field mt-1"
                         />
                       </label>
                       <button
@@ -304,7 +323,7 @@ export function Pricing() {
             ))}
           </Stagger>
           <Reveal delay={0.2}>
-            <p className="mt-8 text-center text-sm text-slate">
+            <p className="mx-auto mt-12 max-w-3xl text-center text-sm leading-relaxed text-ash">
               Free covers everyday billing on Android (unlimited invoices). The web app is part of
               Business — so your books, GST summaries, and CA invite stay in one paid workspace.
               Same login unlocks both. Lifetime is a one-time licence for the current Business

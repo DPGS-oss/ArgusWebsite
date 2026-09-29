@@ -8,7 +8,8 @@ import {
   Monitor,
   X,
 } from "lucide-react";
-import { isFileSystemSupported } from "@/lib/storage";
+import { generateId, isFileSystemSupported, saveBusiness } from "@/lib/storage";
+import { stateCodeFromGstin } from "@/lib/gstin";
 
 const TUTORIAL_KEY_PREFIX = "argus_web_tutorial_done_";
 
@@ -56,26 +57,54 @@ function buildSteps(folderSupported: boolean): Step[] {
 type WebAppTutorialProps = {
   userId: string;
   onComplete: () => void;
-  onGoToBusiness?: () => void;
-  onGoToSettings?: () => void;
+  onCreateFirstInvoice?: () => void;
+  hasBusiness?: boolean;
 };
 
 export function WebAppTutorial({
   userId,
   onComplete,
-  onGoToBusiness,
-  onGoToSettings,
+  onCreateFirstInvoice,
+  hasBusiness = false,
 }: WebAppTutorialProps) {
   const [index, setIndex] = useState(0);
+  const [shopName, setShopName] = useState("");
+  const [gstin, setGstin] = useState("");
   const folderSupported = isFileSystemSupported();
   const steps = buildSteps(folderSupported);
   const step = steps[index];
   const last = index >= steps.length - 1;
   const Icon = step.icon;
 
-  function finish() {
+  function saveShopIfNeeded() {
+    const name = shopName.trim();
+    if (!name || hasBusiness) return;
+    const cleanGstin = gstin.trim().toUpperCase();
+    saveBusiness({
+      id: generateId(),
+      name,
+      gstin: cleanGstin,
+      pan: "",
+      email: "",
+      phone: "",
+      address: "",
+      city: "",
+      state: "",
+      stateCode: stateCodeFromGstin(cleanGstin) || "",
+      pincode: "",
+      bankName: "",
+      bankAccount: "",
+      bankIfsc: "",
+      bankBranch: "",
+      upiId: "",
+    });
+  }
+
+  function finish(andBill = false) {
+    saveShopIfNeeded();
     markTutorialComplete(userId);
     onComplete();
+    if (andBill) onCreateFirstInvoice?.();
   }
 
   function next() {
@@ -106,7 +135,7 @@ export function WebAppTutorial({
       <div className="relative w-full max-w-md overflow-hidden rounded-card border border-bone bg-white shadow-subtle">
         <button
           type="button"
-          onClick={finish}
+          onClick={() => finish()}
           className="absolute right-3 top-3 rounded-full p-2 text-slate hover:bg-mist hover:text-ink"
           aria-label="Skip tutorial"
         >
@@ -127,6 +156,23 @@ export function WebAppTutorial({
 
         <div className="px-6 py-5">
           <p className="text-sm leading-relaxed text-slate">{step.body}</p>
+          {index === 1 && !hasBusiness ? (
+            <div className="mt-4 space-y-2">
+              <input
+                value={shopName}
+                onChange={(e) => setShopName(e.target.value)}
+                placeholder="Shop name"
+                className="w-full rounded-btn border border-bone bg-mist px-3 py-2 text-sm text-ink outline-none focus:border-brand-violet"
+              />
+              <input
+                value={gstin}
+                onChange={(e) => setGstin(e.target.value.toUpperCase())}
+                placeholder="GSTIN (optional)"
+                maxLength={15}
+                className="w-full rounded-btn border border-bone bg-mist px-3 py-2 text-sm text-ink outline-none focus:border-brand-violet"
+              />
+            </div>
+          ) : null}
 
           <div className="mt-4 flex gap-1.5">
             {steps.map((_, i) => (
@@ -139,41 +185,32 @@ export function WebAppTutorial({
             ))}
           </div>
 
-          <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <button
-              type="button"
-              onClick={finish}
-              className="text-sm font-medium text-slate hover:text-ink"
-            >
-              Skip tour
-            </button>
-            <div className="flex gap-2">
-              {index === 2 && onGoToBusiness ? (
+          <div
+            className={`mt-6 flex gap-2 ${
+              last ? "flex-col-reverse" : "flex-col sm:flex-row sm:items-center sm:justify-between"
+            }`}
+          >
+            {!last ? (
+              <button
+                type="button"
+                onClick={() => finish()}
+                className="text-sm font-medium text-slate hover:text-ink"
+              >
+                Skip tour
+              </button>
+            ) : null}
+            <div className={`flex gap-2 ${last ? "flex-col sm:flex-row [&>button]:flex-1" : ""}`}>
+              {last && onCreateFirstInvoice ? (
                 <button
                   type="button"
-                  onClick={() => {
-                    finish();
-                    onGoToBusiness();
-                  }}
-                  className="btn-outline !py-2 !text-xs"
+                  onClick={() => finish(true)}
+                  className="btn-primary !py-2"
                 >
-                  Add business
+                  Create first invoice
                 </button>
               ) : null}
-              {index === 3 && onGoToSettings ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    finish();
-                    onGoToSettings();
-                  }}
-                  className="btn-outline !py-2 !text-xs"
-                >
-                  Open Settings
-                </button>
-              ) : null}
-              <button type="button" onClick={next} className="btn-primary !py-2">
-                {last ? "Get started" : "Next"}
+              <button type="button" onClick={next} className="btn-outline !py-2">
+                {last ? "Go to dashboard" : "Next"}
                 {!last ? <ArrowRight className="ml-1 h-4 w-4" /> : null}
               </button>
             </div>

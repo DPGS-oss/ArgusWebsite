@@ -4,9 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth-provider";
 import { AuthModal } from "@/components/AuthModal";
 import { BrandLogo } from "@/components/BrandLogo";
-import { generateGSTRReport, generateGstnJson, formatCurrency } from "@/lib/gst";
+import { generateGSTRReport, generateGstnJson, formatCurrency, notesAsInvoices } from "@/lib/gst";
 import { t } from "@/lib/i18n";
-import type { GSTRReport, GSTRReportType, Invoice, Purchase } from "@/lib/types";
+import type { CreditNote, DebitNote, GSTRReport, GSTRReportType, Invoice, Purchase } from "@/lib/types";
 import {
   decryptBooksPayload,
   loadCaShareKey,
@@ -50,6 +50,7 @@ type Books = {
   expenses?: Array<Record<string, unknown>>;
   khata?: Array<Record<string, unknown>>;
   creditNotes?: Array<Record<string, unknown>>;
+  debitNotes?: Array<Record<string, unknown>>;
   party_outstanding?: number;
 };
 
@@ -285,9 +286,11 @@ export default function CaPortalPage() {
   const gstReport = useMemo(() => {
     if (!books) return null;
     const invoices = filtered.invoices.map(coerceInvoice);
-    const notes = (books.creditNotes || [])
-      .filter((row) => inRange(row, from, to))
-      .map((row) => ({ ...coerceInvoice(row), type: "credit_note" as const }));
+    const notes = notesAsInvoices({
+      invoices,
+      creditNotes: (books.creditNotes || []) as unknown as CreditNote[],
+      debitNotes: (books.debitNotes || []) as unknown as DebitNote[],
+    });
     const purchases = filtered.purchases.map(coercePurchase);
     return generateGSTRReport([...invoices, ...notes], gstType, from, to, purchases);
   }, [books, filtered, from, to, gstType]);
@@ -470,9 +473,11 @@ export default function CaPortalPage() {
                       className="btn-outline"
                       onClick={() => {
                         const invoices = filtered.invoices.map(coerceInvoice);
-                        const notes = (books.creditNotes || [])
-                          .filter((row) => inRange(row, from, to))
-                          .map((row) => ({ ...coerceInvoice(row), type: "credit_note" as const }));
+                        const notes = notesAsInvoices({
+                          invoices,
+                          creditNotes: (books.creditNotes || []) as unknown as CreditNote[],
+                          debitNotes: (books.debitNotes || []) as unknown as DebitNote[],
+                        });
                         const purchases = filtered.purchases.map(coercePurchase);
                         const gstn = generateGstnJson(
                           [...invoices, ...notes],

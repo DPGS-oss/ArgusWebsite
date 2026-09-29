@@ -1,10 +1,11 @@
 import Link from "next/link";
+import { GRIEVANCE_OFFICER, LEGAL_ENTITY } from "@/lib/legal";
 import { LegalLayout } from "@/components/LegalLayout";
 
 export default function PrivacyPage() {
   return (
     <LegalLayout title="Privacy Policy">
-      <p className="text-sm text-slate">Last updated: 27 August 2026</p>
+      <p className="text-sm text-slate">Last updated: 28 September 2026</p>
 
       <p>
         <strong>Argus</strong> (website{" "}
@@ -127,8 +128,12 @@ export default function PrivacyPage() {
           and proof as we reasonably require
         </li>
         <li>
-          <strong>Grievance redressal</strong> — contact details below; we aim to respond within{" "}
-          <strong>30 days</strong>
+          <strong>Grievance redressal</strong> — contact details below. We acknowledge complaints
+          within <strong>48 hours</strong> and resolve them within <strong>30 days</strong>.
+        </li>
+        <li>
+          <strong>Complain to the Data Protection Board of India</strong> if you are not satisfied
+          with how we resolved your grievance (DPDP Act, section 13).
         </li>
       </ul>
       <p>
@@ -144,6 +149,9 @@ export default function PrivacyPage() {
       <p>
         We use HTTPS, authentication, server-side entitlement checks for cloud sync, rate limits,
         and encrypted CA shares. No method is perfect — keep strong passwords and your own backups.
+        If a personal data breach affects you, we will inform you and the Data Protection Board of
+        India as the DPDP Act and Rules require, with what happened, the likely impact, and the steps
+        you can take.
       </p>
 
       <h2 className="mt-8 text-xl font-semibold text-ink">9. GST / government portals</h2>
@@ -156,26 +164,41 @@ export default function PrivacyPage() {
 
       <h2 className="mt-8 text-xl font-semibold text-ink">10. Grievance Officer</h2>
       <p>
-        <strong>Designation:</strong> Grievance Officer
+        {GRIEVANCE_OFFICER.name ? (
+          <>
+            <strong>Name:</strong> {GRIEVANCE_OFFICER.name}
+            <br />
+          </>
+        ) : null}
+        <strong>Designation:</strong> {GRIEVANCE_OFFICER.designation}
         <br />
-        <strong>Organisation:</strong> B&amp;L Softwares and Logistics
+        <strong>Organisation:</strong> {LEGAL_ENTITY.name}
         <br />
         <strong>Email:</strong>{" "}
-        <a href="mailto:support@argusinvoicing.com?subject=DPDP%20Grievance">
-          support@argusinvoicing.com
-        </a>
+        <a href={`mailto:${GRIEVANCE_OFFICER.email}?subject=Grievance`}>{GRIEVANCE_OFFICER.email}</a>
         <br />
+        {GRIEVANCE_OFFICER.phone ? (
+          <>
+            <strong>Phone:</strong> {GRIEVANCE_OFFICER.phone}
+            <br />
+          </>
+        ) : null}
+        {LEGAL_ENTITY.address ? (
+          <>
+            <strong>Address:</strong> {LEGAL_ENTITY.address}
+            <br />
+          </>
+        ) : null}
         <strong>Country:</strong> India
         <br />
-        <strong>Postal address:</strong> Available on written request to the Grievance Officer
-        (email above) until published on this page.
+        We acknowledge grievances within 48 hours and resolve them within 30 days.
       </p>
 
       <h2 className="mt-8 text-xl font-semibold text-ink">11. Changes</h2>
       <p>
-        We may update this notice. The &quot;Last updated&quot; date will change. Material updates
-        may be notified in-product or by email. Continued use after the update means you accept the
-        revised notice.
+        We may update this notice. The &quot;Last updated&quot; date will change. For material
+        changes we ask you to review and accept the new version in the app before you continue; we
+        do not treat silence or continued use as consent.
       </p>
 
       <p className="mt-8 text-sm text-slate">

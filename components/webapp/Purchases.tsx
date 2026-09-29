@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Plus, Trash2, ShoppingCart } from "lucide-react";
 import type { AppData, GSTRate, InvoiceItem, Purchase } from "@/lib/types";
+import { GST_2_0_RATES } from "@/lib/types";
 import { savePurchase, deletePurchase, generateId, loadData } from "@/lib/storage";
 import { persistLedger, postPurchaseLedger } from "@/lib/books";
 import { round2 } from "@/lib/gst";
@@ -12,7 +13,7 @@ type Props = {
   onSaved: () => void;
 };
 
-const GST_RATES: GSTRate[] = [0, 3, 5, 12, 18, 28];
+const GST_RATES: GSTRate[] = GST_2_0_RATES;
 const PAYMENT_METHODS = ["Cash", "UPI", "Bank Transfer", "Cheque", "Card", "Credit"];
 
 function todayIso(): string {
@@ -28,9 +29,15 @@ function splitInclusive(total: number, gstRate: GSTRate) {
 export function Purchases({ data, onSaved }: Props) {
   const [showForm, setShowForm] = useState(false);
   const [supplierName, setSupplierName] = useState("");
+  const [supplierGstin, setSupplierGstin] = useState("");
+  const [supplierInvoiceNumber, setSupplierInvoiceNumber] = useState("");
+  const [reverseCharge, setReverseCharge] = useState(false);
+  const [itcEligible, setItcEligible] = useState(true);
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState(0);
-  const [gstRate, setGstRate] = useState<GSTRate>(data.settings.defaultGstRate || 18);
+  const [gstRate, setGstRate] = useState<GSTRate>(
+    GST_2_0_RATES.includes(data.settings.defaultGstRate) ? data.settings.defaultGstRate : 18,
+  );
   const [date, setDate] = useState(todayIso());
   const [paymentMethod, setPaymentMethod] = useState("Cash");
   const [paidAmount, setPaidAmount] = useState(0);
@@ -42,9 +49,13 @@ export function Purchases({ data, onSaved }: Props) {
   function resetForm() {
     setShowForm(false);
     setSupplierName("");
+    setSupplierGstin("");
+    setSupplierInvoiceNumber("");
+    setReverseCharge(false);
+    setItcEligible(true);
     setDescription("");
     setAmount(0);
-    setGstRate(data.settings.defaultGstRate || 18);
+    setGstRate(GST_2_0_RATES.includes(data.settings.defaultGstRate) ? data.settings.defaultGstRate : 18);
     setDate(todayIso());
     setPaymentMethod("Cash");
     setPaidAmount(0);
@@ -85,7 +96,10 @@ export function Purchases({ data, onSaved }: Props) {
       purchaseNumber: `PUR-${Date.now()}`,
       supplierName: supplierName.trim(),
       supplierId: supplier?.id,
-      supplierGstin: supplier?.gstin,
+      supplierGstin: supplierGstin.trim().toUpperCase() || supplier?.gstin,
+      supplierInvoiceNumber: supplierInvoiceNumber.trim(),
+      reverseCharge,
+      itcEligible,
       createdAt: date ? `${date}T00:00:00.000Z` : now,
       totalAmount: split.total,
       totalGstAmount: split.gst,
@@ -153,6 +167,22 @@ export function Purchases({ data, onSaved }: Props) {
                 ))}
               </datalist>
             </div>
+            <div>
+              <label className="mb-1 block text-sm text-slate">Supplier GSTIN</label>
+              <input className="input-field" value={supplierGstin} onChange={(e) => setSupplierGstin(e.target.value)} placeholder="Needed to claim ITC" />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm text-slate">Their invoice number</label>
+              <input className="input-field" value={supplierInvoiceNumber} onChange={(e) => setSupplierInvoiceNumber(e.target.value)} />
+            </div>
+            <label className="flex items-center gap-2 text-sm text-ink">
+              <input type="checkbox" checked={reverseCharge} onChange={(e) => setReverseCharge(e.target.checked)} />
+              Reverse charge
+            </label>
+            <label className="flex items-center gap-2 text-sm text-ink">
+              <input type="checkbox" checked={itcEligible} onChange={(e) => setItcEligible(e.target.checked)} />
+              Eligible for ITC
+            </label>
             <div>
               <label className="mb-1 block text-sm text-slate">Amount (₹, incl. GST)</label>
               <input

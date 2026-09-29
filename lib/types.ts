@@ -8,7 +8,7 @@ export type InvoiceStatus = "draft" | "paid" | "unpaid" | "cancelled";
 export type InvoiceType = "tax_invoice" | "bill_of_supply" | "credit_note" | "debit_note";
 
 /** GSTR/Tally document type. Keep in lockstep with Flutter. */
-export type GstDocumentType = "INV" | "CRN" | "CHL";
+export type GstDocumentType = "INV" | "CRN" | "DBN" | "CHL";
 
 export interface BusinessProfile {
   id: string;
@@ -113,6 +113,19 @@ export interface Invoice {
   reverseCharge?: boolean;
   totalCess?: number;
   recurring?: RecurringConfig;
+  /**
+   * Total mode: the GST-inclusive amount the user typed. Present on bills saved
+   * after the double-GST fix; its absence marks older total-mode bills to review.
+   */
+  enteredTotal?: number;
+  irn?: string;
+  ackNo?: string;
+  ackDate?: string;
+  signedQr?: string;
+  ewayBillNo?: string;
+  ewayBillDate?: string;
+  tdsSection?: string;
+  tcsSection?: string;
 }
 
 export interface HSNCode {
@@ -144,6 +157,8 @@ export interface AppData {
   invoiceCounter: number;
   settings: AppSettings;
   creditNotes: CreditNote[];
+  debitNotes: DebitNote[];
+  payroll: PayrollEntry[];
   deliveryChallans: DeliveryChallan[];
   expenses: Expense[];
   quotes: Quote[];
@@ -165,6 +180,8 @@ export interface AppSettings {
   roundOff: boolean;
   folderName: string;
   cloudSharing?: boolean;
+  /** Previous-year turnover above ₹5 crore: 6-digit HSN and IRN reminder. */
+  turnoverAbove5Cr?: boolean;
   /** When true, Ask Argus may include top party names in the cloud summary. */
   askArgusIncludeParties?: boolean;
 }
@@ -172,6 +189,37 @@ export interface AppSettings {
 export type GSTRReportType = "gstr1" | "gstr2b" | "gstr3b" | "gstr4";
 
 // ─── Credit Note ───────────────────────────────────────────────
+export interface PayrollEntry {
+  id: string;
+  employeeName: string;
+  role: string;
+  amount: number;
+  payDate: string;
+  periodLabel: string;
+  status: "pending" | "paid";
+  paidOn: string;
+  method: string;
+  note: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DebitNote {
+  id: string;
+  debitNoteNumber: string;
+  invoiceId?: string;
+  customerName: string;
+  customerId?: string;
+  reason: string;
+  subtotal: number;
+  totalGstAmount: number;
+  totalAmount: number;
+  notes: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface CreditNote {
   id: string;
   creditNoteNumber: string;
@@ -252,9 +300,16 @@ export interface Purchase {
   supplierName: string;
   supplierId?: string;
   supplierGstin?: string;
+  supplierInvoiceNumber?: string;
+  supplierInvoiceDate?: string;
+  reverseCharge?: boolean;
+  itcEligible?: boolean;
   createdAt: string;
   totalAmount: number;
   totalGstAmount: number;
+  totalCgst?: number;
+  totalSgst?: number;
+  totalIgst?: number;
   items: InvoiceItem[];
   paymentMethod?: string;
   paidAmount?: number;
@@ -268,6 +323,8 @@ export interface Payment {
   method: string;
   date: string;
   note?: string;
+  /** Optional UTR or cheque number. Not a bank feed. */
+  reference?: string;
 }
 
 // ─── Template ──────────────────────────────────────────────────
@@ -344,6 +401,9 @@ export type View =
   | "business"
   | "settings"
   | "credit-notes"
+  | "debit-notes"
+  | "payroll"
+  | "compliance"
   | "delivery-challans"
   | "expenses"
   | "quotes"

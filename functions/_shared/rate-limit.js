@@ -3,6 +3,7 @@ const { getDb } = require('./firebase-admin');
 const RATE_LIMITS = {
   auth_sync: { windowMs: 60 * 60 * 1000, maxCalls: 10 },
   user_profile_get: { windowMs: 60 * 1000, maxCalls: 10 },
+  subscription_cancel: { windowMs: 60 * 1000, maxCalls: 5 },
   user_profile_put: { windowMs: 60 * 1000, maxCalls: 5 },
   payment_create_order: { windowMs: 60 * 1000, maxCalls: 5 },
   payment_verify: { windowMs: 60 * 1000, maxCalls: 5 },

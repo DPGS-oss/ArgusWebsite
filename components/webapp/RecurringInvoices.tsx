@@ -12,7 +12,7 @@ type Props = {
   onSaved: () => void;
 };
 
-const GST_RATES: GSTRate[] = [0, 3, 5, 12, 18, 28];
+const GST_RATES: GSTRate[] = [0, 0.25, 3, 5, 18, 40];
 const FREQUENCIES = [
   { value: "weekly", label: "Weekly" },
   { value: "monthly", label: "Monthly" },

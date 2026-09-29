@@ -2,80 +2,142 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { ArrowRight, Menu, X } from "lucide-react";
 import { BrandLogo } from "./BrandLogo";
-import { ProfileDropdown } from "./ProfileDropdown";
-import { useAuth } from "@/lib/auth-provider";
+import { getInitials, useAuth } from "@/lib/auth-provider";
 
 const navLinks = [
   { href: "#features", label: "Features" },
   { href: "#pricing", label: "Pricing" },
-  { href: "/guide/", label: "User Guide" },
-  { href: "#about", label: "About" },
+  { href: "#faq", label: "FAQ" },
+  { href: "/guide/", label: "Guide" },
   { href: "#contact", label: "Contact" },
 ];
 
+/**
+ * Floating header for the home page. Sits transparent over the dark hero and
+ * turns into a light glass pill once the visitor scrolls past it.
+ */
 export function Navbar() {
-  const { user, setShowAuthModal } = useAuth();
+  const { user, setShowAuthModal, setShowProfileModal } = useAuth();
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 50);
-    window.addEventListener("scroll", onScroll);
+    const onScroll = () => setScrolled(window.scrollY > window.innerHeight * 0.6);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  return (
-    <nav
-      className={`fixed inset-x-0 top-0 z-50 border-b transition ${
-        scrolled
-          ? "border-bone bg-white/95 shadow-subtle backdrop-blur"
-          : "border-transparent bg-white/80 backdrop-blur"
-      }`}
-    >
-      <div className="container-page flex h-16 items-center justify-between">
-        <BrandLogo size={32} priority />
+  const light = scrolled || mobileOpen;
 
-        <div
-          className={`absolute left-0 right-0 top-16 flex flex-col gap-4 border-b border-bone bg-white p-4 md:static md:flex md:flex-row md:items-center md:border-0 md:bg-transparent md:p-0 ${
-            mobileOpen ? "flex" : "hidden md:flex"
-          }`}
-        >
+  return (
+    <header className="fixed inset-x-0 top-0 z-50 px-3 pt-3 md:px-6">
+      <nav
+        aria-label="Main"
+        className={`mx-auto flex max-w-6xl items-center justify-between rounded-full border px-3 py-2 transition-all duration-300 md:px-4 ${
+          light
+            ? "border-bone/80 bg-white/80 shadow-lift backdrop-blur-xl"
+            : "border-white/10 bg-white/[0.04] backdrop-blur-md"
+        }`}
+      >
+        <Link href="/" className="flex items-center gap-2 pl-1" aria-label="Argus home">
+          <BrandLogo href={null} size={28} priority />
+          <span className={`font-display text-base font-bold ${light ? "text-ink" : "text-white"}`}>
+            Argus
+          </span>
+        </Link>
+
+        <div className="hidden items-center gap-1 lg:flex">
           {navLinks.map((link) => (
             <a
               key={link.href}
               href={link.href}
-              className="text-sm text-slate transition hover:text-ink"
-              onClick={() => setMobileOpen(false)}
+              className={`rounded-full px-3.5 py-1.5 text-sm font-medium ${
+                light ? "text-slate hover:bg-mist hover:text-ink" : "text-white/70 hover:bg-white/10 hover:text-white"
+              }`}
             >
               {link.label}
             </a>
           ))}
+        </div>
+
+        <div className="hidden items-center gap-2 lg:flex">
           {!user ? (
-            <button className="btn-secondary !py-2" onClick={() => setShowAuthModal(true)}>
-              Sign In
+            <button
+              type="button"
+              onClick={() => setShowAuthModal(true)}
+              className={`rounded-full px-4 py-2 text-sm font-semibold ${
+                light ? "text-ink hover:bg-mist" : "text-white/85 hover:bg-white/10 hover:text-white"
+              }`}
+            >
+              Sign in
             </button>
           ) : (
-            <ProfileDropdown />
+            <button
+              type="button"
+              onClick={() => setShowProfileModal(true)}
+              aria-label="Open profile"
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-brand-violet to-signal-blue text-xs font-bold text-white"
+            >
+              {getInitials(user.name)}
+            </button>
           )}
-          <a href="#download" className="btn-secondary !py-2">
-            Download App
-          </a>
-          <Link href="/app/" className="btn-primary !py-2" onClick={() => setMobileOpen(false)}>
-            Launch Web App
+          <Link
+            href="/app/"
+            className={`group inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-bold ${
+              light ? "bg-ink text-white hover:bg-onyx" : "bg-white text-ink hover:bg-white/90"
+            }`}
+          >
+            Launch web app
+            <ArrowRight className="h-3.5 w-3.5 transition group-hover:translate-x-0.5" />
           </Link>
         </div>
 
         <button
-          className="flex flex-col gap-1.5 md:hidden"
-          aria-label="Toggle menu"
+          type="button"
+          className={`rounded-full p-2 lg:hidden ${light ? "text-ink hover:bg-mist" : "text-white hover:bg-white/10"}`}
+          aria-label={mobileOpen ? "Close menu" : "Open menu"}
+          aria-expanded={mobileOpen}
           onClick={() => setMobileOpen((open) => !open)}
         >
-          <span className="block h-0.5 w-6 bg-ink" />
-          <span className="block h-0.5 w-6 bg-ink" />
-          <span className="block h-0.5 w-6 bg-ink" />
+          {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
-      </div>
-    </nav>
+      </nav>
+
+      {mobileOpen ? (
+        <div className="mx-auto mt-2 max-w-6xl rounded-card-lg border border-bone bg-white/95 p-3 shadow-lift backdrop-blur-xl lg:hidden">
+          <div className="flex flex-col">
+            {navLinks.map((link) => (
+              <a
+                key={link.href}
+                href={link.href}
+                onClick={() => setMobileOpen(false)}
+                className="rounded-xl px-3 py-3 text-sm font-medium text-ink hover:bg-mist"
+              >
+                {link.label}
+              </a>
+            ))}
+          </div>
+          <div className="mt-2 grid gap-2 border-t border-bone pt-3">
+            <Link href="/app/" onClick={() => setMobileOpen(false)} className="btn-primary w-full">
+              Launch web app
+            </Link>
+            <button
+              type="button"
+              onClick={() => {
+                setMobileOpen(false);
+                if (user) setShowProfileModal(true);
+                else setShowAuthModal(true);
+              }}
+              className="btn-secondary w-full"
+            >
+              {user ? "Profile" : "Sign in"}
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </header>
   );
 }

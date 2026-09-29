@@ -15,11 +15,13 @@
         { "source": "/api/auth/plans", "function": "apiAuthPlans" },
         { "source": "/api/user/profile", "function": "apiUserProfile" },
         { "source": "/api/trial/start", "function": "apiTrialStart" },
+        { "source": "/api/subscription/cancel", "function": "apiSubscriptionCancel" },
         { "source": "/api/contact", "function": "apiContact" },
         { "source": "/api/payment/create-order", "function": "apiPaymentCreateOrder" },
         { "source": "/api/payment/create-subscription", "function": "apiPaymentCreateSubscription" },
         { "source": "/api/payment/verify", "function": "apiPaymentVerify" },
         { "source": "/api/payment/verify-subscription", "function": "apiPaymentVerifySubscription" },
+        { "source": "/api/payment/verify-iap", "function": "apiPaymentVerifyIap" },
         { "source": "/api/webhooks/razorpay", "function": "apiRazorpayWebhook" },
         { "source": "/api/promo/validate", "function": "apiPromoValidate" },
         { "source": "/api/promo/seed", "function": "apiPromoSeed" },
@@ -35,7 +37,22 @@
         { "source": "/api/admin/**", "function": "apiAdmin" },
         { "source": "/api/ask", "function": "apiAsk" }
       ],
-      "cleanUrls": true
+      "cleanUrls": true,
+      "headers": [
+        {
+          "source": "**",
+          "headers": [
+            { "key": "X-Content-Type-Options", "value": "nosniff" },
+            { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+            { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
+            { "key": "Permissions-Policy", "value": "camera=(self), microphone=(self), geolocation=()" }
+          ]
+        },
+        {
+          "source": "/_next/static/**",
+          "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
+        }
+      ]
     },
     {
       "site": "argusinvoicing-www",
@@ -59,6 +76,13 @@
   "functions": {
     "source": "functions",
     "runtime": "nodejs22"
+  },
+  "emulators": {
+    "auth": { "host": "127.0.0.1", "port": 9099 },
+    "functions": { "host": "127.0.0.1", "port": 5001 },
+    "firestore": { "host": "127.0.0.1", "port": 8080 },
+    "ui": { "enabled": false },
+    "singleProjectMode": true
   },
   "firestore": {
     "rules": "firestore.rules",

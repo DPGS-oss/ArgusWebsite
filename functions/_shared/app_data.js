@@ -37,6 +37,8 @@ function flutterPayloadToAppData(parsed) {
     invoiceCounter: parsed.invoiceCounter || invoices.length,
     settings: parsed.settings || {},
     creditNotes: parsed.creditNotes || [],
+    debitNotes: parsed.debitNotes || parsed.debit_notes || [],
+    payroll: parsed.payroll || parsed.payroll_entries || [],
     deliveryChallans: parsed.deliveryChallans || [],
     expenses: parsed.expenses || [],
     quotes: parsed.quotes || [],
@@ -114,6 +116,7 @@ function booksFromAppData(appData, scopes) {
     parties: data.parties || [],
     payments: data.payments || [],
     creditNotes: data.creditNotes || [],
+    debitNotes: data.debitNotes || [],
     scopes: Array.from(allowed),
   };
   return books;

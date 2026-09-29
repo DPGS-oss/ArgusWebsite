@@ -8,16 +8,33 @@
     -webkit-font-smoothing: antialiased;
   }
 
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+    }
+  }
+
   section[id],
   h1[id],
   h2[id],
   h3[id] {
-    scroll-margin-top: 1.5rem;
+    /* Clears the floating header when jumping to an anchor. */
+    scroll-margin-top: 5.5rem;
   }
 
   body {
     @apply bg-white text-ink antialiased;
     font-feature-settings: "calt" 0;
+  }
+
+  ::selection {
+    @apply bg-brand-violet/20 text-ink;
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -26,7 +43,11 @@
   }
 
   a, button {
-    transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, opacity 0.2s ease;
+    transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease, opacity 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  :focus-visible {
+    @apply outline-none ring-2 ring-brand-violet/60 ring-offset-2;
   }
 }
 
@@ -36,23 +57,31 @@
   }
 
   .btn-primary {
-    @apply inline-flex items-center justify-center rounded-full bg-ink px-6 py-3 text-sm font-bold text-white transition hover:bg-onyx;
+    @apply inline-flex items-center justify-center gap-2 rounded-full bg-ink px-6 py-3 text-sm font-bold text-white shadow-subtle transition hover:-translate-y-px hover:bg-onyx hover:shadow-lift disabled:pointer-events-none disabled:opacity-60;
   }
 
   .btn-secondary {
-    @apply inline-flex items-center justify-center rounded-full border border-bone bg-mist px-6 py-3 text-sm font-bold text-ink transition hover:border-cloud;
+    @apply inline-flex items-center justify-center gap-2 rounded-full border border-bone bg-white px-6 py-3 text-sm font-bold text-ink transition hover:border-cloud hover:bg-mist disabled:opacity-60;
   }
 
   .btn-outline {
-    @apply inline-flex items-center justify-center rounded-full border border-signal-blue px-6 py-3 text-sm font-bold text-signal-blue transition hover:bg-signal-blue/5;
+    @apply inline-flex items-center justify-center gap-2 rounded-full border border-brand-violet/40 px-6 py-3 text-sm font-bold text-brand-violet transition hover:border-brand-violet hover:bg-brand-violet/5 disabled:opacity-60;
+  }
+
+  .btn-brand {
+    @apply inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-brand-violet to-signal-blue px-6 py-3 text-sm font-bold text-white shadow-glow transition hover:-translate-y-px hover:brightness-110 disabled:opacity-60;
   }
 
   .input-field {
-    @apply w-full rounded-input border border-bone bg-white px-4 py-2.5 text-sm text-ink outline-none focus:border-signal-blue;
+    @apply w-full rounded-input border border-bone bg-white px-4 py-2.5 text-sm text-ink outline-none transition focus:border-brand-violet focus:ring-4 focus:ring-brand-violet/10;
+  }
+
+  .eyebrow {
+    @apply mb-4 inline-flex items-center gap-2 rounded-full border border-brand-violet/20 bg-brand-violet/5 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-brand-violet;
   }
 
   .section-header {
-    @apply mb-12 text-center;
+    @apply mx-auto mb-14 max-w-2xl text-center;
   }
 
   .section-header h2 {
@@ -60,10 +89,28 @@
   }
 
   .section-header p {
-    @apply text-lg text-slate;
+    @apply text-lg leading-relaxed text-slate;
+  }
+
+  .card {
+    @apply rounded-card-lg border border-bone bg-white transition duration-300 hover:-translate-y-0.5 hover:border-brand-violet/25 hover:shadow-lift;
   }
 
   .gradient-text {
     @apply bg-gradient-to-r from-brand-violet to-signal-blue bg-clip-text text-transparent;
+  }
+
+  .bg-grid {
+    background-image:
+      linear-gradient(to right, rgba(255, 255, 255, 0.06) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+    background-size: 56px 56px;
+  }
+
+  .bg-grid-light {
+    background-image:
+      linear-gradient(to right, rgba(32, 32, 32, 0.05) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(32, 32, 32, 0.05) 1px, transparent 1px);
+    background-size: 48px 48px;
   }
 }

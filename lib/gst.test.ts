@@ -4,6 +4,10 @@ import {
   buildInvoiceDocument,
   calculateItem,
   defaultGstRateForNew,
+  exclusiveRateFromInclusive,
+  generateInvoiceHTML,
+  b2clThreshold,
+  generateGstnJson,
   documentTypeFromInvoiceType,
   generateGSTRReport,
   gstRatePickerOptions,
@@ -14,7 +18,7 @@ import {
   stateCodeFromPlaceOfSupply,
 } from "./gst";
 import { isRegisteredGstin, normalizeGstin } from "./gstin";
-import type { Invoice, InvoiceItem } from "./types";
+import type { Invoice, InvoiceItem, Purchase } from "./types";
 
 const MH = "27";
 const KA = "29";
@@ -641,8 +645,8 @@ describe("GSTR-1 B2B vs B2C", () => {
       "2026-04-01",
       "2026-04-30"
     );
-    const b2b = report.sections.find((s) => s.section === "B2B");
-    const b2c = report.sections.find((s) => s.section === "B2C");
+    const b2b = report.sections.find((s) => s.section === "4A");
+    const b2c = report.sections.find((s) => s.section === "7");
     expect(b2b?.invoices.map((i) => i.id)).toEqual(["registered"]);
     expect(b2c?.invoices.map((i) => i.id).sort()).toEqual(["blank", "invalid", "urp"]);
   });
@@ -745,5 +749,206 @@ describe("invoice document shape", () => {
     });
     expect(invoice.partyGstin).toBe("URP");
     expect(invoice.shipToGstin).toBe("URP");
+  });
+});
+
+describe("GST-inclusive (total mode) invoices", () => {
+  function inclusiveInvoice(amount: number, gstRate: InvoiceItem["gstRate"], discount = 0) {
+    return buildInvoiceDocument({
+      id: "inv-total",
+      invoiceNumber: "INV-2026-0100",
+      type: "tax_invoice",
+      status: "unpaid",
+      businessId: "biz-1",
+      sellerGstin: MH_GSTIN,
+      sellerStateCode: MH,
+      partyId: "",
+      partyName: "Walk-in",
+      partyGstin: "",
+      partyPhone: "",
+      partyAddress: "",
+      partyStateCode: MH,
+      date: "2026-09-27",
+      dueDate: "2026-10-12",
+      items: [
+        line({
+          gstRate,
+          isInterState: false,
+          rate: exclusiveRateFromInclusive(amount, gstRate),
+          discount,
+        }),
+      ],
+      roundOffEnabled: false,
+      paidAmount: 0,
+      paymentMode: "",
+      notes: "",
+      terms: "",
+      reverseCharge: false,
+      isTotalMode: true,
+      createdAt: "2026-09-27T00:00:00.000Z",
+    });
+  }
+
+  it("keeps the entered ₹1,180 incl. 18% as the grand total, not GST on GST", () => {
+    const inv = inclusiveInvoice(1180, 18);
+    expect(inv.totalTaxable).toBe(1000);
+    expect(inv.totalCgst).toBe(90);
+    expect(inv.totalSgst).toBe(90);
+    expect(inv.grandTotal).toBe(1180);
+  });
+
+  it("reproduces awkward inclusive amounts within one paisa", () => {
+    // CGST/SGST halves are rounded per line, so an odd-paisa tax can land 0.01 high.
+    for (const [amount, rate] of [[1000, 18], [999, 5], [250, 40], [73.5, 18]] as const) {
+      expect(Math.abs(inclusiveInvoice(amount, rate).grandTotal - amount)).toBeLessThanOrEqual(0.0101);
+    }
+  });
+
+  it("applies discount before splitting out GST", () => {
+    expect(inclusiveInvoice(1180, 18, 10).grandTotal).toBeCloseTo(1062, 2);
+  });
+});
+
+describe("invoice HTML branding", () => {
+  const biz = {
+    name: "QA Traders",
+    gstin: MH_GSTIN,
+    address: "",
+    city: "Pune",
+    state: "Maharashtra",
+    pincode: "411001",
+    phone: "",
+    email: "",
+  };
+  const inv = {
+    id: "i1",
+    invoiceNumber: "INV-1",
+    type: "tax_invoice",
+    status: "unpaid",
+    date: "2026-09-27",
+    dueDate: "2026-10-12",
+    partyName: "",
+    items: [line({ gstRate: 18, isInterState: false })],
+    subtotal: 1000,
+    totalDiscount: 0,
+    totalTaxable: 1000,
+    totalCgst: 90,
+    totalSgst: 90,
+    totalIgst: 0,
+    totalTax: 180,
+    roundOff: 0,
+    grandTotal: 1180,
+    paidAmount: 0,
+    balanceDue: 1180,
+  } as unknown as Invoice;
+
+  it("leads with the shop name and has no Argus mark for paid plans", () => {
+    const html = generateInvoiceHTML(inv, biz);
+    expect(html).toContain("<h1>QA Traders</h1>");
+    expect(html).not.toMatch(/Made with Argus|<h1>Argus<\/h1>/);
+  });
+
+  it("adds a small Argus footer only for the Free plan", () => {
+    expect(generateInvoiceHTML(inv, biz, { showArgusBranding: true })).toContain("Made with Argus");
+  });
+
+  it("prints a clean em dash for a walk-in with no name", () => {
+    const html = generateInvoiceHTML(inv, biz);
+    expect(html).toContain("<strong>—</strong>");
+    expect(html).not.toContain("Ã");
+  });
+});
+
+describe("GSTR-1 B2CL threshold", () => {
+  it("uses ₹1 lakh from 1 Aug 2024 and ₹2.5 lakh before", () => {
+    expect(b2clThreshold("2024-07-31")).toBe(250000);
+    expect(b2clThreshold("2024-08-01")).toBe(100000);
+    expect(b2clThreshold("2026-09-27")).toBe(100000);
+  });
+});
+
+describe("GSTR-3B JSON", () => {
+  const sale = (p: Partial<Invoice> & { inter?: boolean; amount?: number }) => {
+    const inter = !!p.inter;
+    const item = line({ gstRate: 18, isInterState: inter, rate: p.amount ?? 1000 });
+    return {
+      id: p.id ?? "s",
+      invoiceNumber: p.invoiceNumber ?? "INV-1",
+      type: p.type ?? "tax_invoice",
+      status: "unpaid",
+      date: "2026-04-10",
+      partyGstin: p.partyGstin ?? "",
+      placeOfSupply: inter ? KA : MH,
+      isInterState: inter,
+      items: [item],
+      totalTaxable: item.taxableAmount,
+      totalIgst: item.igst,
+      totalCgst: item.cgst,
+      totalSgst: item.sgst,
+      totalTax: item.igst + item.cgst + item.sgst,
+      grandTotal: item.total,
+    } as unknown as Invoice;
+  };
+
+  it("reports inter-state IGST in 3.1(a), not as zero-rated, and nets credit notes", () => {
+    const json = generateGstnJson(
+      [
+        sale({ id: "a", inter: false }),
+        sale({ id: "b", inter: true }),
+        sale({ id: "c", type: "credit_note", inter: false, amount: 100 }),
+      ],
+      "gstr3b", "2026-04-01", "2026-04-30", [], MH_GSTIN
+    ) as { sup_details: Record<string, Record<string, number>>; inter_sup: { unreg_details: { pos: string; iamt: number }[] } };
+    expect(json.sup_details.osup_det).toMatchObject({ txval: 1900, iamt: 180, camt: 81, samt: 81 });
+    expect(json.sup_details.osup_zero.txval).toBe(0);
+    expect(json.inter_sup.unreg_details).toEqual([{ pos: KA, txval: 1000, iamt: 180 }]);
+  });
+
+  it("claims ITC with real amounts, separating reverse charge and ineligible credit", () => {
+    const purchase = (p: Partial<Purchase>) =>
+      ({
+        id: p.id ?? "p",
+        purchaseNumber: "PUR-1",
+        supplierName: "Supplier",
+        createdAt: "2026-04-05T10:00:00.000Z",
+        totalAmount: 1180,
+        totalGstAmount: 180,
+        items: [],
+        ...p,
+      }) as Purchase;
+    const json = generateGstnJson(
+      [],
+      "gstr3b", "2026-04-01", "2026-04-30",
+      [
+        purchase({ id: "1", supplierGstin: DL_GSTIN }),
+        purchase({ id: "2", supplierGstin: MH_GSTIN, reverseCharge: true }),
+        purchase({ id: "3", supplierGstin: MH_GSTIN, itcEligible: false }),
+        purchase({ id: "4" }),
+      ],
+      MH_GSTIN
+    ) as { itc_elg: { itc_avl: { ty: string; iamt: number; camt: number }[]; itc_net: { iamt: number; camt: number; samt: number } }; sup_details: { isup_rev: { txval: number } } };
+    const byTy = Object.fromEntries(json.itc_elg.itc_avl.map((r) => [r.ty, r]));
+    expect(byTy.OTH.iamt).toBe(180); // Delhi supplier → IGST
+    expect(byTy.ISRC.camt).toBe(90); // RCM, intra-state
+    expect(json.itc_elg.itc_net).toMatchObject({ iamt: 180, camt: 90, samt: 90 });
+    expect(json.sup_details.isup_rev.txval).toBe(1000);
+  });
+});
+
+describe("GSTR report totals", () => {
+  it("subtracts credit notes from GSTR-3B output tax", () => {
+    const mk = (id: string, type: Invoice["type"], rate: number) => {
+      const item = line({ gstRate: 18, isInterState: false, rate });
+      return {
+        id, invoiceNumber: id, type, status: "unpaid", date: "2026-04-10", partyGstin: "",
+        placeOfSupply: MH, isInterState: false, items: [item],
+        totalTaxable: item.taxableAmount, totalIgst: 0, totalCgst: item.cgst, totalSgst: item.sgst,
+        totalTax: item.cgst + item.sgst, grandTotal: item.total,
+      } as unknown as Invoice;
+    };
+    const r = generateGSTRReport([mk("a", "tax_invoice", 1000), mk("c", "credit_note", 100)], "gstr3b", "2026-04-01", "2026-04-30");
+    expect(r.totalTaxableValue).toBe(900);
+    expect(r.totalTax).toBe(162);
+    expect(r.sections.map((x) => x.section)).not.toContain("3.1(b)");
   });
 });

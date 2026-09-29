@@ -55,10 +55,11 @@ const workflowSteps = [
 
 export function ProductShowcase() {
   return (
-    <section id="workflow" className="bg-white py-20 md:py-28">
+    <section id="workflow" className="bg-white py-24 md:py-32">
       <div className="container-page">
         <Reveal>
           <div className="section-header">
+            <span className="eyebrow">Web app</span>
             <h2>Your shop, on one dashboard</h2>
             <p>
               Sample preview — revenue, invoices, parties, and dues the way Argus surfaces them
@@ -67,7 +68,7 @@ export function ProductShowcase() {
         </Reveal>
 
         <Reveal delay={0.1} y={60}>
-          <div className="mb-16 overflow-hidden rounded-card border border-bone bg-mist shadow-subtle">
+          <div className="mb-16 overflow-hidden rounded-card-lg border border-bone bg-mist shadow-lift">
           <div className="flex items-center gap-2 border-b border-bone bg-plaster px-4 py-3">
             <div className="h-3 w-3 rounded-full bg-red-400" />
             <div className="h-3 w-3 rounded-full bg-amber-400" />
@@ -165,13 +166,13 @@ export function ProductShowcase() {
           {workflowSteps.map((step, i) => (
             <StaggerItem
               key={step.title}
-              className="group relative rounded-card border border-bone bg-mist p-6 transition hover:border-brand-violet/30 hover:bg-plaster"
+              className="card group relative p-6"
             >
               <div className="mb-4 flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-violet/10 text-brand-violet">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-brand-violet/15 to-signal-blue/15 text-brand-violet">
                   <step.icon className="h-5 w-5" />
                 </div>
-                <span className="text-2xl font-bold text-bone">{i + 1}</span>
+                <span className="font-mono text-sm font-bold text-fog">0{i + 1}</span>
               </div>
               <h3 className="mb-2 text-base font-bold text-ink">{step.title}</h3>
               <p className="text-sm leading-relaxed text-slate">{step.description}</p>
@@ -183,7 +184,7 @@ export function ProductShowcase() {
           <div className="mt-12 text-center">
             <a
               href="/app/"
-              className="group inline-flex items-center gap-2 rounded-full bg-ink px-8 py-4 text-sm font-bold text-white transition hover:bg-brand-violet"
+              className="btn-primary group !px-8 !py-4"
             >
               Open the web app
               <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
