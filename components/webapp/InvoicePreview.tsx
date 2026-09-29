@@ -310,6 +310,9 @@ export function InvoicePreview({ invoice, business, stock = [], onBack, onEdit, 
               {invoice.roundOff !== 0 && (
                 <tr><td className="py-1 text-gray-600">Round Off</td><td className="py-1 text-right">{formatCurrency(invoice.roundOff)}</td></tr>
               )}
+              {invoice.deliveryReimbursement ? (
+                <tr><td className="py-1 text-gray-600">Delivery (reimbursement, no GST)</td><td className="py-1 text-right">{formatCurrency(invoice.deliveryReimbursement)}</td></tr>
+              ) : null}
               <tr className="bg-[#5266eb] text-white">
                 <td className="py-2 font-bold">Grand Total</td>
                 <td className="py-2 text-right font-bold">{formatCurrency(invoice.grandTotal)}</td>

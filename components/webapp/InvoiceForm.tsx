@@ -22,6 +22,7 @@ import {
   openHistoricalInvoice,
   stateCodeFromPlaceOfSupply,
   exclusiveRateFromInclusive,
+  deliveryItems,
 } from "@/lib/gst";
 import { generateId, generateInvoiceNumber } from "@/lib/storage";
 import { BarcodeScannerModal } from "./BarcodeScannerModal";
@@ -102,9 +103,18 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
   const [partyId, setPartyId] = useState(openedInvoice?.partyId || "");
   const [date, setDate] = useState(openedInvoice?.date || today);
   const [dueDateVal, setDueDateVal] = useState(openedInvoice?.dueDate || dueDate);
-  const [items, setItems] = useState<InvoiceItem[]>(
-    openedInvoice?.items || [emptyItem(business?.stateCode || "", "", newInvoiceGstRate)]
+  const [items, setItems] = useState<InvoiceItem[]>(() => {
+    const goods = (openedInvoice?.items || []).filter((i) => !i.isDelivery);
+    return goods.length ? goods : [emptyItem(business?.stateCode || "", "", newInvoiceGstRate)];
+  });
+  // Delivery is stored as its own taxed line(s); on edit, fold them back into the field.
+  const [deliveryAmount, setDeliveryAmount] = useState(() =>
+    round2(
+      (openedInvoice?.items || []).filter((i) => i.isDelivery).reduce((s, i) => s + (i.total || 0), 0) +
+        (openedInvoice?.deliveryReimbursement || 0)
+    )
   );
+  const [deliveryIsReimbursement, setDeliveryIsReimbursement] = useState(!!openedInvoice?.deliveryReimbursement);
   const [paymentMode, setPaymentMode] = useState(openedInvoice?.paymentMode || "");
   const [notes, setNotes] = useState(openedInvoice?.notes || data.settings.defaultNotes);
   const [terms, setTerms] = useState(openedInvoice?.terms || data.settings.defaultTerms);
@@ -113,7 +123,9 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
   const [hsnItemIdx, setHsnItemIdx] = useState<number | null>(null);
   const [aiSuggestions, setAiSuggestions] = useState<{ idx: number; suggestions: { code: string; description: string; gstRate: GSTRate }[] } | null>(null);
   const [isTotalMode, setIsTotalMode] = useState(openedInvoice?.isTotalMode ?? true);
-  const [totalAmount, setTotalAmount] = useState(openedInvoice?.isTotalMode ? openedInvoice.grandTotal : 0);
+  const [totalAmount, setTotalAmount] = useState(
+    openedInvoice?.isTotalMode ? openedInvoice.enteredTotal ?? openedInvoice.grandTotal : 0
+  );
   const [totalGstRate, setTotalGstRate] = useState<GSTRate>(openedInvoice?.isTotalMode ? (openedInvoice.items[0]?.gstRate || newInvoiceGstRate) : newInvoiceGstRate);
   const [totalDescription, setTotalDescription] = useState(openedInvoice?.isTotalMode ? (openedInvoice.items[0]?.description || "") : "");
   const [totalDiscount, setTotalDiscount] = useState(openedInvoice?.isTotalMode ? (openedInvoice.items[0]?.discount || 0) : 0);
@@ -170,7 +182,7 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
     ? (openedInvoice?.isInterState ?? computedInterState)
     : computedInterState;
 
-  const totals = useMemo(() => {
+  const baseTotals = useMemo(() => {
     if (isTotalMode) {
       const afterDiscount = round2(totalAmount * (1 - totalDiscount / 100));
       const taxable = round2(afterDiscount / (1 + totalGstRate / 100));
@@ -195,6 +207,30 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
     }
     return calculateInvoiceTotals(items, data.settings.roundOff);
   }, [isTotalMode, totalAmount, totalGstRate, totalDiscount, interState, data.settings.roundOff, items]);
+
+  // Delivery: taxed with the goods (s.15(2)(c)) unless it is a pure-agent reimbursement.
+  const totals = useMemo(() => {
+    const amount = deliveryAmount > 0 ? deliveryAmount : 0;
+    if (!amount) return { ...baseTotals, delivery: 0 };
+    const goods = isTotalMode
+      ? [{ total: round2(totalAmount * (1 - totalDiscount / 100)), gstRate: totalGstRate, hsn: "" } as InvoiceItem]
+      : items;
+    const extra = deliveryIsReimbursement ? [] : deliveryItems(goods, amount, interState);
+    const sum = (k: "taxableAmount" | "cgst" | "sgst" | "igst") => round2(extra.reduce((t, l) => t + l[k], 0));
+    const raw = round2(baseTotals.grandTotal - baseTotals.roundOff + amount);
+    const grandTotal = data.settings.roundOff ? Math.round(raw) : raw;
+    return {
+      ...baseTotals,
+      totalTaxable: round2(baseTotals.totalTaxable + sum("taxableAmount")),
+      totalCgst: round2(baseTotals.totalCgst + sum("cgst")),
+      totalSgst: round2(baseTotals.totalSgst + sum("sgst")),
+      totalIgst: round2(baseTotals.totalIgst + sum("igst")),
+      totalTax: round2(baseTotals.totalTax + sum("cgst") + sum("sgst") + sum("igst")),
+      roundOff: round2(grandTotal - raw),
+      grandTotal: round2(grandTotal),
+      delivery: amount,
+    };
+  }, [baseTotals, deliveryAmount, deliveryIsReimbursement, isTotalMode, totalAmount, totalDiscount, totalGstRate, items, interState, data.settings.roundOff]);
 
   function updateItem(idx: number, patch: Partial<InvoiceItem>) {
     setItems((prev) => {
@@ -392,6 +428,9 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
         cess: i.cess ?? 0,
       }));
     }
+    if (deliveryAmount > 0 && !deliveryIsReimbursement) {
+      invoiceItems = [...invoiceItems, ...deliveryItems(invoiceItems, deliveryAmount, interState)];
+    }
 
     const built = buildInvoiceDocument({
       id: editingInvoice?.id || generateId(),
@@ -445,6 +484,12 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
       ewayBillDate: editingInvoice?.ewayBillDate,
       enteredTotal: isTotalMode ? totalAmount : undefined,
     };
+    if (deliveryAmount > 0 && deliveryIsReimbursement) {
+      // Rule 33 pure agent: collected on the bill, outside taxable value.
+      invoice.deliveryReimbursement = round2(deliveryAmount);
+      invoice.grandTotal = round2(invoice.grandTotal + deliveryAmount);
+      invoice.balanceDue = round2(invoice.grandTotal - (invoice.paidAmount || 0));
+    }
 
     onSave(invoice);
   }
@@ -941,6 +986,38 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
                   <span>{formatCurrency(totals.totalCess)}</span>
                 </div>
               )}
+              <div className="border-t border-lead/20 pt-2">
+                <label className="flex items-center justify-between gap-3 text-silver">
+                  <span>
+                    Delivery charges
+                    <span className="block text-xs text-ash">
+                      {deliveryIsReimbursement ? "Added as-is, no GST" : "Amount the customer pays, GST included"}
+                    </span>
+                  </span>
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    inputMode="decimal"
+                    aria-label="Delivery charges"
+                    className="input-field !w-28 text-right"
+                    value={deliveryAmount || ""}
+                    placeholder="0"
+                    onChange={(e) => setDeliveryAmount(Math.max(0, parseFloat(e.target.value) || 0))}
+                  />
+                </label>
+                {deliveryAmount > 0 ? (
+                  <label className="mt-2 flex items-start gap-2 text-xs text-silver">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={deliveryIsReimbursement}
+                      onChange={(e) => setDeliveryIsReimbursement(e.target.checked)}
+                    />
+                    Only passing on the exact courier cost (the courier billed your customer)
+                  </label>
+                ) : null}
+              </div>
               {totals.roundOff !== 0 && (
                 <div className="flex justify-between text-silver">
                   <span>Round Off</span>

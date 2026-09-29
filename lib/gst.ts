@@ -512,6 +512,42 @@ export function suggestHSN(description: string): HSNCode[] {
 }
 
 /**
+ * Delivery charged by the seller is part of the value of supply (CGST Act
+ * s.15(2)(c)), so it is taxed at the rate of the goods it delivers. The amount
+ * typed is GST-inclusive (what the customer pays). On mixed-rate bills it is
+ * split by each rate's share of the goods value; each line carries the HSN of
+ * the principal item at that rate.
+ */
+export function deliveryItems(goods: InvoiceItem[], amountInclusive: number, interState: boolean): InvoiceItem[] {
+  const lines = goods.filter((i) => !i.isDelivery && (i.total || 0) > 0);
+  const weight = lines.reduce((s, i) => s + i.total, 0);
+  if (!(amountInclusive > 0) || weight <= 0) return [];
+  const byRate = new Map<number, { share: number; hsn: string; value: number }>();
+  for (const line of lines) {
+    const cur = byRate.get(line.gstRate) || { share: 0, hsn: line.hsn, value: 0 };
+    cur.value += line.total;
+    byRate.set(line.gstRate, cur);
+  }
+  const groups = [...byRate.entries()];
+  let allocated = 0;
+  return groups.map(([rate, g], idx) => {
+    const share = idx === groups.length - 1 ? round2(amountInclusive - allocated) : round2((amountInclusive * g.value) / weight);
+    allocated = round2(allocated + share);
+    const exclusive = exclusiveRateFromInclusive(share, rate);
+    const calc = calculateItem({ quantity: 1, rate: exclusive, discount: 0, gstRate: rate, isInterState: interState });
+    return {
+      id: `delivery-${rate}`,
+      description: groups.length > 1 ? `Delivery charges (${rate}%)` : "Delivery charges",
+      hsn: g.hsn,
+      unit: "NOS",
+      uqc: "NOS",
+      ...calc,
+      isDelivery: true,
+    } as InvoiceItem;
+  });
+}
+
+/**
  * GSTR-1 Table 5 (B2CL) cut-off for inter-state B2C invoices. Notification
  * 12/2024-CT lowered it from ₹2.5 lakh to ₹1 lakh for supplies from 1 Aug 2024.
  */
@@ -1251,6 +1287,7 @@ export function generateInvoiceHTML(invoice: Invoice, business: {
       ${invoice.totalIgst > 0 ? `<tr><td>IGST</td><td style="text-align:right">${formatCurrency(invoice.totalIgst)}</td></tr>` : ""}
       ${(invoice.totalCess || 0) > 0 ? `<tr><td>Cess</td><td style="text-align:right">${formatCurrency(invoice.totalCess || 0)}</td></tr>` : ""}
       ${invoice.roundOff !== 0 ? `<tr><td>Round Off</td><td style="text-align:right">${formatCurrency(invoice.roundOff)}</td></tr>` : ""}
+      ${invoice.deliveryReimbursement ? `<tr><td>Delivery (reimbursement, no GST)</td><td style="text-align:right">${formatCurrency(invoice.deliveryReimbursement)}</td></tr>` : ""}
       <tr class="grand-total"><td>Grand Total</td><td style="text-align:right">${formatCurrency(invoice.grandTotal)}</td></tr>
       ${invoice.paidAmount > 0 ? `<tr><td>Paid</td><td style="text-align:right">${formatCurrency(invoice.paidAmount)}</td></tr>` : ""}
       ${invoice.balanceDue > 0 ? `<tr><td>Balance Due</td><td style="text-align:right">${formatCurrency(invoice.balanceDue)}</td></tr>` : ""}
