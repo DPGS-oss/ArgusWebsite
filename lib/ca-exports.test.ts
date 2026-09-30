@@ -411,6 +411,17 @@ describe("GSTR-1 compliance details", () => {
     expect(docs).toMatchObject({ from: "INV-1", to: "INV-2", totnum: 2, cancel: 1, net_issue: 1 });
   });
 
+  it("lists each numbering series separately in Table 13, in serial order", () => {
+    const web9 = invoice({ id: "w9", invoiceNumber: "INV-2026-0009", items: [line({ gstRate: 18, isInterState: false })] });
+    const web10 = invoice({ id: "w10", invoiceNumber: "INV-2026-0010", items: [line({ gstRate: 18, isInterState: false })] });
+    const phone = invoice({ id: "p1", invoiceNumber: "INV/26-27/0001", items: [line({ gstRate: 18, isInterState: false })] });
+    const json = buildGstr1Json({ gstin: MH_GSTIN, month: "2026-04", invoices: [web10, phone, web9] });
+    const docs = json.doc_issue.doc_det[0].docs;
+    expect(docs).toHaveLength(2);
+    expect(docs[0]).toMatchObject({ num: 1, from: "INV-2026-0009", to: "INV-2026-0010", totnum: 2 });
+    expect(docs[1]).toMatchObject({ num: 2, from: "INV/26-27/0001", to: "INV/26-27/0001", totnum: 1 });
+  });
+
   it("flags reverse-charge B2B invoices and uses dd-mm-yyyy dates", () => {
     const rcm = invoice({ reverseCharge: true, items: [line({ gstRate: 18, isInterState: false })] });
     const json = buildGstr1Json({ gstin: MH_GSTIN, month: "2026-04", invoices: [rcm] });

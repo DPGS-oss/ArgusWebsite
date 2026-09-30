@@ -363,23 +363,32 @@ function buildGstr1Json(input) {
 
   const numbered = (map) => [...map.values()].map((row, i) => ({ ...row, num: i + 1 }));
 
+  // Table 13 wants one row per numbering series (the phone's INV/26-27/0001
+  // and the web's INV-2026-0001 are separate series), ordered by serial.
   function docBlock(doc_num, doc_typ, rows) {
-    const numbers = rows.map((r) => r.invoiceNumber).filter(Boolean).sort();
-    const cancel = rows.filter((r) => r.status === 'cancelled').length;
-    return {
-      doc_num,
-      doc_typ,
-      docs: [
-        {
-          num: 1,
-          from: numbers[0] || '',
-          to: numbers[numbers.length - 1] || '',
-          totnum: numbers.length,
-          cancel,
-          net_issue: numbers.length - cancel,
-        },
-      ],
-    };
+    const series = new Map();
+    for (const r of rows) {
+      const n = String(r.invoiceNumber || '').trim();
+      if (!n) continue;
+      const m = n.match(/^(.*?)(\d+)$/);
+      const key = m ? m[1] : n;
+      const serial = m ? Number(m[2]) : 0;
+      if (!series.has(key)) series.set(key, []);
+      series.get(key).push({ n, serial, cancelled: r.status === 'cancelled' });
+    }
+    const docsOut = [...series.keys()].sort().map((key, i) => {
+      const list = series.get(key).sort((x, y) => x.serial - y.serial);
+      const cancel = list.filter((x) => x.cancelled).length;
+      return {
+        num: i + 1,
+        from: list[0].n,
+        to: list[list.length - 1].n,
+        totnum: list.length,
+        cancel,
+        net_issue: list.length - cancel,
+      };
+    });
+    return { doc_num, doc_typ, docs: docsOut };
   }
 
   const docs = { inv: [], cn: [], dn: [] };
