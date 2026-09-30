@@ -1736,19 +1736,100 @@ exports.apiDataSave = onRequest({ region: 'us-central1', maxInstances: 10, secre
 
   const db = getDb();
   const now = new Date().toISOString();
+  const ref = db.collection('users').doc(uid).collection('app_data').doc('main');
 
   try {
-    await db.collection('users').doc(uid).collection('app_data').doc('main').set({
-      appData: body.appData,
-      updated_at: now,
-      version: body.version || 1,
-      device: body.device || 'unknown',
-    }, { merge: true });
+    // Optimistic concurrency: if the phone synced since this browser last
+    // loaded, refuse the overwrite so the browser merges first.
+    const conflict = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const current = snap.exists ? snap.data().updated_at || null : null;
+      if (body.base_updated_at !== undefined && current && body.base_updated_at !== current) {
+        return current;
+      }
+      tx.set(ref, {
+        appData: body.appData,
+        updated_at: now,
+        version: body.version || 1,
+        device: body.device || 'unknown',
+      }, { merge: true });
+      return null;
+    });
+    if (conflict) {
+      return res.status(409).json({ error: 'Cloud data changed on another device', updated_at: conflict });
+    }
 
     return res.status(200).json({ success: true, updated_at: now });
   } catch (error) {
     console.error('Data save error:', error);
     return res.status(500).json({ error: 'Failed to save data' });
+  }
+});
+
+// ==================== /api/data/phone-sync ====================
+// The Android app sends its invoices/customers/stock in its own format; the
+// server merges them into the web AppData and returns what the phone lacks.
+exports.apiDataPhoneSync = onRequest({ region: 'us-central1', maxInstances: 10, secrets: FIREBASE_SECRETS }, async (req, res) => {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const token = extractToken(req);
+  if (!token) return res.status(401).json({ error: 'Unauthorized' });
+
+  let decoded;
+  try {
+    decoded = await verifyToken(token);
+  } catch (err) {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+
+  const uid = decoded.uid;
+  const user = await getUser(uid);
+  if (!hasActiveBusinessSubscription(user)) {
+    return res.status(402).json({
+      error: 'Business subscription required for cloud sync',
+      requires_subscription: true,
+    });
+  }
+
+  const body = req.body || {};
+  const phone = {
+    invoices: Array.isArray(body.invoices) ? body.invoices : [],
+    customers: Array.isArray(body.customers) ? body.customers : [],
+    inventory: Array.isArray(body.inventory) ? body.inventory : [],
+  };
+  if (Buffer.byteLength(JSON.stringify(phone), 'utf8') > 4_000_000) {
+    return res.status(413).json({ error: 'Payload too large (max 4MB)' });
+  }
+
+  const rl = await checkRateLimit(uid, 'data_save');
+  if (!rl.allowed) {
+    return res.status(429).json({ error: 'Rate limit exceeded. Too many sync attempts.', retry_after_seconds: rl.retryAfterSeconds });
+  }
+
+  const db = getDb();
+  const ref = db.collection('users').doc(uid).collection('app_data').doc('main');
+  const { resolveAppData } = require('./_shared/app_data');
+  const { mergePhoneSync } = require('./_shared/phone_sync');
+
+  try {
+    const result = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const now = new Date().toISOString();
+      const current = snap.exists ? resolveAppData(snap.data()) : null;
+      const { appData, toPhone } = mergePhoneSync(current, phone, now);
+      tx.set(ref, {
+        appData,
+        updated_at: now,
+        version: 1,
+        device: 'flutter-android',
+        data_compressed: require('firebase-admin/firestore').FieldValue.delete(),
+      }, { merge: true });
+      return { toPhone, now };
+    });
+    return res.status(200).json({ success: true, updated_at: result.now, ...result.toPhone });
+  } catch (error) {
+    console.error('Phone sync error:', error);
+    return res.status(500).json({ error: 'Failed to sync' });
   }
 });
 
