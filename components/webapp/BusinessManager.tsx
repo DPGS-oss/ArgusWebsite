@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Plus, Edit2, Trash2, Building2, Check } from "lucide-react";
 import type { AppData, BusinessProfile } from "@/lib/types";
 import { INDIAN_STATES } from "@/lib/types";
-import { generateId, saveBusiness, setActiveBusiness, saveData } from "@/lib/storage";
+import { generateId, saveBusiness, setActiveBusiness, saveData, markDeleted } from "@/lib/storage";
 import { validateGstin } from "@/lib/gstin";
 
 type BusinessManagerProps = {
@@ -74,6 +74,7 @@ export function BusinessManager({ data, onSaved }: BusinessManagerProps) {
     }
     if (!confirm("Delete this business?")) return;
     const updated = { ...data, businesses: data.businesses.filter((b) => b.id !== id) };
+    markDeleted(updated, "businesses", id);
     if (updated.activeBusinessId === id) {
       updated.activeBusinessId = updated.businesses[0]?.id || null;
     }

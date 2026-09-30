@@ -170,7 +170,13 @@ export interface AppData {
   payments: Payment[];
   templates: Template[];
   khataEntries: KhataEntry[];
+  /** Tombstones: id -> deleted-at, per list, so sync does not resurrect deletions. */
+  deleted?: Partial<Record<DeletableKey, Record<string, string>>>;
 }
+
+export type DeletableKey =
+  | "businesses" | "parties" | "invoices" | "stock" | "creditNotes" | "debitNotes" | "payroll"
+  | "deliveryChallans" | "expenses" | "quotes" | "purchases" | "payments" | "templates" | "khataEntries";
 
 export interface AppSettings {
   theme: "dark" | "light";

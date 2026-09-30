@@ -1796,6 +1796,7 @@ exports.apiDataPhoneSync = onRequest({ region: 'us-central1', maxInstances: 10, 
     invoices: Array.isArray(body.invoices) ? body.invoices : [],
     customers: Array.isArray(body.customers) ? body.customers : [],
     inventory: Array.isArray(body.inventory) ? body.inventory : [],
+    deleted: body.deleted && typeof body.deleted === 'object' ? body.deleted : {},
   };
   if (Buffer.byteLength(JSON.stringify(phone), 'utf8') > 4_000_000) {
     return res.status(413).json({ error: 'Payload too large (max 4MB)' });

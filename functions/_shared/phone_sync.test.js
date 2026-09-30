@@ -105,3 +105,24 @@ test('output has no undefined values (Firestore rejects them)', () => {
   walk(appData);
   assert.equal(appData.stock[0].rate, 100);
 });
+
+test('a draft deleted on the phone disappears from the web and stays gone', () => {
+  const first = mergePhoneSync({}, { invoices: [phoneBill()], customers: [customer] });
+  const next = mergePhoneSync(first.appData, { invoices: [], customers: [customer], deleted: { invoices: ['inv-phone-1'] } });
+  assert.deepEqual(next.appData.invoices, []);
+  assert.ok(next.appData.deleted.invoices['inv-phone-1']);
+  // A second phone that still has it is told to drop it, and it is not re-added.
+  const other = mergePhoneSync(next.appData, { invoices: [phoneBill()] });
+  assert.deepEqual(other.appData.invoices, []);
+  assert.deepEqual(other.toPhone.deleted.invoices, ['inv-phone-1']);
+});
+
+test('a customer deleted on the web is removed from the phone', () => {
+  const first = mergePhoneSync({}, { customers: [customer] });
+  const web = JSON.parse(JSON.stringify(first.appData));
+  web.parties = [];
+  web.deleted = { ...(web.deleted || {}), parties: { c1: '2026-09-30T00:00:00Z' } };
+  const next = mergePhoneSync(web, { customers: [customer] });
+  assert.deepEqual(next.toPhone.deleted.customers, ['c1']);
+  assert.deepEqual(next.appData.parties, []);
+});

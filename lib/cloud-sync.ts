@@ -1,6 +1,6 @@
 "use client";
 
-import type { AppData } from "./types";
+import type { AppData, DeletableKey } from "./types";
 import { loadData, saveData, getDefaultData } from "./storage";
 
 const SYNC_VERSION = 1;
@@ -152,6 +152,21 @@ export function mergeData(local: AppData, cloud: AppData): AppData {
     templates: mergeById(local.templates ?? [], cloud.templates ?? []),
     khataEntries: mergeById(local.khataEntries ?? [], cloud.khataEntries ?? []),
   };
+
+  // Deletions on either side win over the other side's copy.
+  const deleted: NonNullable<AppData["deleted"]> = {};
+  for (const src of [local.deleted, cloud.deleted]) {
+    for (const [key, ids] of Object.entries(src || {}) as [DeletableKey, Record<string, string>][]) {
+      deleted[key] = { ...(deleted[key] || {}), ...(ids || {}) };
+    }
+  }
+  for (const [key, ids] of Object.entries(deleted) as [DeletableKey, Record<string, string>][]) {
+    const list = merged[key] as unknown as { id: string }[] | undefined;
+    if (Array.isArray(list)) {
+      (merged as unknown as Record<string, unknown>)[key] = list.filter((x) => !ids[x.id]);
+    }
+  }
+  if (Object.keys(deleted).length) merged.deleted = deleted;
 
   return merged;
 }

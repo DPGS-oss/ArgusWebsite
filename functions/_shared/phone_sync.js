@@ -11,7 +11,8 @@
  * `_sync: { p, w }` — fingerprints of the phone view and the web view at the
  * last sync. A side has "edited" a record when its current fingerprint no
  * longer matches. Web edits win when both sides changed the same record.
- * Deletions are not propagated (bills are cancelled, not deleted).
+ * Deletions travel as tombstones in `appData.deleted[webKey][id] = time`, so
+ * a record deleted on either side is not brought back by the other.
  */
 const crypto = require('crypto');
 
@@ -298,14 +299,25 @@ const KINDS = {
  */
 function mergePhoneSync(appData, phone, now = new Date().toISOString()) {
   const data = { ...emptyAppData(), ...(appData || {}) };
-  const out = {};
+  const deleted = {};
+  for (const [key, ids] of Object.entries(data.deleted || {})) deleted[key] = { ...(ids || {}) };
+  const out = { deleted: {} };
+  const phoneDeleted = (phone && phone.deleted) || {};
   for (const [kind, k] of Object.entries(KINDS)) {
-    const web = Array.isArray(data[k.webKey]) ? data[k.webKey].slice() : [];
+    const tomb = (deleted[k.webKey] = deleted[k.webKey] || {});
+    for (const id of Array.isArray(phoneDeleted[kind]) ? phoneDeleted[kind] : []) {
+      if (str(id)) tomb[str(id)] = tomb[str(id)] || now;
+    }
+    const web = (Array.isArray(data[k.webKey]) ? data[k.webKey] : []).filter((w) => !(w && tomb[str(w.id)]));
     const index = new Map(web.map((w, i) => [str(w && w.id), i]));
     const sent = new Map();
+    const goneOnPhone = [];
     for (const p of Array.isArray(phone[kind]) ? phone[kind] : []) {
-      if (p && str(p.id)) sent.set(str(p.id), p);
+      if (!p || !str(p.id)) continue;
+      if (tomb[str(p.id)]) goneOnPhone.push(str(p.id));
+      else sent.set(str(p.id), p);
     }
+    out.deleted[kind] = goneOnPhone;
     const toPhone = [];
 
     for (const [id, p] of sent) {
@@ -350,6 +362,7 @@ function mergePhoneSync(appData, phone, now = new Date().toISOString()) {
     if (!inv.businessId && data.activeBusinessId) inv.businessId = data.activeBusinessId;
   }
   data.invoiceCounter = Math.max(num(data.invoiceCounter), data.invoices.length);
+  data.deleted = deleted;
   return { appData: stripUndefined(data), toPhone: out };
 }
 
