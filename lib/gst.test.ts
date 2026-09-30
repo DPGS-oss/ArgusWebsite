@@ -8,6 +8,7 @@ import {
   generateInvoiceHTML,
   b2clThreshold,
   generateGstnJson,
+  deliveryItems,
   documentTypeFromInvoiceType,
   generateGSTRReport,
   gstRatePickerOptions,
@@ -950,5 +951,33 @@ describe("GSTR report totals", () => {
     expect(r.totalTaxableValue).toBe(900);
     expect(r.totalTax).toBe(162);
     expect(r.sections.map((x) => x.section)).not.toContain("3.1(b)");
+  });
+});
+
+describe("delivery charges (s.15(2)(c))", () => {
+  it("taxes delivery at the goods' rate, GST-inclusive", () => {
+    const goods = [line({ gstRate: 18, isInterState: false, rate: 1000 })];
+    const [d] = deliveryItems(goods, 118, false);
+    expect(d.isDelivery).toBe(true);
+    expect(d.gstRate).toBe(18);
+    expect(d.taxableAmount).toBe(100);
+    expect(d.cgst + d.sgst).toBe(18);
+    expect(d.total).toBe(118);
+  });
+
+  it("splits delivery across rates by goods value", () => {
+    const goods = [
+      line({ id: "a", gstRate: 5, isInterState: true, rate: 1000 }),
+      line({ id: "b", gstRate: 18, isInterState: true, rate: 1000 }),
+    ];
+    const lines = deliveryItems(goods, 200, true);
+    expect(lines.map((l) => l.gstRate).sort((x, y) => x - y)).toEqual([5, 18]);
+    expect(Math.abs(lines.reduce((s, l) => s + l.total, 0) - 200)).toBeLessThanOrEqual(0.02);
+    expect(lines.every((l) => l.igst > 0 && l.cgst === 0)).toBe(true);
+  });
+
+  it("adds nothing for zero delivery or an empty bill", () => {
+    expect(deliveryItems([], 100, false)).toEqual([]);
+    expect(deliveryItems([line({ gstRate: 18, isInterState: false })], 0, false)).toEqual([]);
   });
 });

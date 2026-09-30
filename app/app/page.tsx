@@ -142,11 +142,32 @@ export default function AppPage() {
       syncTimerRef.current = setTimeout(() => {
         setSyncStatus("syncing");
         syncToCloud(token).then((ok) => {
+          // A conflict merge may have brought in bills from the phone.
+          setData(loadData());
           setSyncStatus(ok ? "synced" : "error");
           setLastSync(getLastSyncTime());
         }).catch(() => setSyncStatus("error"));
       }, 2000);
     }
+  }, [token, user]);
+
+  // Pick up bills made on the phone when the owner comes back to this tab.
+  useEffect(() => {
+    if (!token || !user || !hasValidSubscription(user)) return;
+    let last = Date.now();
+    const onVisible = () => {
+      if (document.visibilityState !== "visible" || Date.now() - last < 30_000) return;
+      if (loadData().settings.cloudSharing === false) return;
+      last = Date.now();
+      syncFromCloud(token)
+        .then(({ data: synced }) => {
+          if (synced) setData(synced);
+          setLastSync(getLastSyncTime());
+        })
+        .catch(() => {});
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
   }, [token, user]);
 
   async function handleManualSync() {

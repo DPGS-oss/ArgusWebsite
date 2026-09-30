@@ -3,6 +3,7 @@
 import { Building2, Globe, Mail } from "lucide-react";
 import { FormEvent, useState } from "react";
 import { Reveal, Stagger, StaggerItem } from "./Reveal";
+import { AnimatedHeading } from "./AnimatedHeading";
 
 export function Contact() {
   const [submitted, setSubmitted] = useState(false);
@@ -50,7 +51,7 @@ export function Contact() {
         <Reveal>
           <div className="section-header">
             <span className="eyebrow">Contact</span>
-            <h2>Talk to a human</h2>
+            <AnimatedHeading text="Talk to a human" />
             <p>Questions about GST, pricing, or moving from another tool? We&apos;re here to help.</p>
           </div>
         </Reveal>
@@ -80,7 +81,7 @@ export function Contact() {
                   <Icon className="h-5 w-5" />
                 </div>
                 <div>
-                  <h4 className="text-sm font-bold text-ink">{title}</h4>
+                  <h3 className="text-sm font-bold text-ink">{title}</h3>
                   {href ? (
                     <a href={href} className="text-slate hover:text-brand-violet">{value}</a>
                   ) : (
@@ -100,6 +101,8 @@ export function Contact() {
                 name="name"
                 type="text"
                 placeholder="Your Name"
+                aria-label="Your name"
+                autoComplete="name"
                 required
                 className="input-field !py-3"
               />
@@ -107,6 +110,8 @@ export function Contact() {
                 name="email"
                 type="email"
                 placeholder="Your Email"
+                aria-label="Your email"
+                autoComplete="email"
                 required
                 className="input-field !py-3"
               />
@@ -114,12 +119,14 @@ export function Contact() {
                 name="subject"
                 type="text"
                 placeholder="Subject"
+                aria-label="Subject"
                 required
                 className="input-field !py-3"
               />
               <textarea
                 name="message"
                 placeholder="Your Message"
+                aria-label="Your message"
                 rows={5}
                 required
                 className="input-field !py-3"

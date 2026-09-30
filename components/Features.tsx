@@ -9,6 +9,7 @@ import {
   Workflow,
 } from "lucide-react";
 import { Reveal, Stagger, StaggerItem } from "./Reveal";
+import { AnimatedHeading } from "./AnimatedHeading";
 
 type Feature = {
   icon: typeof BookOpen;
@@ -75,7 +76,7 @@ export function Features() {
         <Reveal>
           <div className="section-header">
             <span className="eyebrow">Features</span>
-            <h2>Everything a shop needs</h2>
+            <AnimatedHeading text="Everything a shop needs" />
             <p>Argus is a full accounting workspace — billing is just the first step.</p>
           </div>
         </Reveal>

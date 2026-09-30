@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Plus, Edit2, Trash2, Building2, Check } from "lucide-react";
 import type { AppData, BusinessProfile } from "@/lib/types";
 import { INDIAN_STATES } from "@/lib/types";
-import { generateId, saveBusiness, setActiveBusiness, saveData } from "@/lib/storage";
+import { generateId, saveBusiness, setActiveBusiness, saveData, markDeleted } from "@/lib/storage";
 import { validateGstin } from "@/lib/gstin";
 
 type BusinessManagerProps = {
@@ -74,6 +74,7 @@ export function BusinessManager({ data, onSaved }: BusinessManagerProps) {
     }
     if (!confirm("Delete this business?")) return;
     const updated = { ...data, businesses: data.businesses.filter((b) => b.id !== id) };
+    markDeleted(updated, "businesses", id);
     if (updated.activeBusinessId === id) {
       updated.activeBusinessId = updated.businesses[0]?.id || null;
     }
@@ -210,7 +211,7 @@ export function BusinessManager({ data, onSaved }: BusinessManagerProps) {
               )}
               <h3 className="text-lg text-starlight">{b.name}</h3>
               <p className="text-sm text-silver">GSTIN: {b.gstin || "N/A"}</p>
-              <p className="text-sm text-silver">{b.city}, {b.state}</p>
+              <p className="text-sm text-silver">{[b.city, b.state].filter(Boolean).join(", ")}</p>
               <p className="text-sm text-silver">{b.phone}</p>
               <div className="mt-4 flex gap-2">
                 {data.activeBusinessId !== b.id && (

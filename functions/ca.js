@@ -455,11 +455,30 @@ async function handleTallyDownload(req, res, decoded, ownerId) {
   });
 }
 
+// Owner view: which accountants can currently read my books.
+async function handleOwnerAccountants(req, res, decoded) {
+  const db = getDb();
+  const q = await db.collection('links').where('owner_id', '==', decoded.uid).get();
+  const accountants = [];
+  for (const doc of q.docs) {
+    const link = doc.data();
+    if (link.status === 'revoked') continue;
+    const ca = (await getUser(link.accountant_id)) || {};
+    accountants.push({
+      accountant_id: link.accountant_id,
+      name: ca.name || ca.display_name || '',
+      email: ca.email || '',
+      since: link.created_at || null,
+    });
+  }
+  return res.status(200).json({ accountants });
+}
+
 async function handleRevoke(req, res, decoded) {
   const uid = decoded.uid;
   const body = req.body || {};
   const token = String(body.token || '').trim();
-  const accountantId = String(body.accountant_id || '').trim();
+  const accountantId = String(body.accountant_id || (req.query && req.query.accountant_id) || '').trim();
   const db = getDb();
   if (token) {
     const ref = db.collection('ca_invites').doc(sha256(token));
@@ -532,6 +551,9 @@ exports.apiCa = require('firebase-functions/v2/https').onRequest(
     }
     if (req.method === 'DELETE' && path.endsWith('/ca/invites')) {
       return handleRevoke(req, res, decoded);
+    }
+    if (req.method === 'GET' && path.endsWith('/ca/accountants')) {
+      return handleOwnerAccountants(req, res, decoded);
     }
     if (req.method === 'GET' && path.endsWith('/ca/clients')) {
       return handleClients(req, res, decoded);

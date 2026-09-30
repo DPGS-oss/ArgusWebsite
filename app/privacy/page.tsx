@@ -30,7 +30,12 @@ export default function PrivacyPage() {
         <li>Business profile: shop name, GSTIN, phone, address, bank/UPI details you enter</li>
         <li>Books you create: invoices, parties, purchases, stock, khata, expenses, reports</li>
         <li>Subscription and payment metadata (plan, expiry, Razorpay/Play references — not full card numbers)</li>
-        <li>Optional device inputs: camera/barcode, microphone (voice entry), files you import</li>
+        <li>
+          Optional device inputs: camera/barcode, microphone (voice entry), files you import. On
+          Android, voice is turned into text on your phone and audio never leaves it. On the web,
+          &ldquo;Speak the bill&rdquo; uses your browser&apos;s speech service (Chrome and Edge send
+          the audio to Google to convert it to text); Argus receives only the text.
+        </li>
         <li>Diagnostics and security logs when cloud features are used (IP-derived signals, device labels, error events)</li>
         <li>CA portal: encrypted book shares and invite metadata when you invite an accountant</li>
       </ul>

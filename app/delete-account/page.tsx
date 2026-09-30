@@ -135,6 +135,8 @@ export default function DeleteAccountPage() {
               onChange={(e) => setName(e.target.value)}
               className="mt-1 w-full rounded-input border border-bone bg-white px-4 py-3 text-ink outline-none focus:border-signal-blue"
               placeholder="Your name"
+              aria-label="Your name"
+              autoComplete="name"
             />
           </div>
 
@@ -149,6 +151,8 @@ export default function DeleteAccountPage() {
               onChange={(e) => setEmail(e.target.value)}
               className="mt-1 w-full rounded-input border border-bone bg-white px-4 py-3 text-ink outline-none focus:border-signal-blue"
               placeholder="you@example.com"
+              aria-label="Account email"
+              autoComplete="email"
             />
             {user && (
               <p className="mt-1 text-xs text-slate">
@@ -167,6 +171,7 @@ export default function DeleteAccountPage() {
               rows={3}
               className="mt-1 w-full rounded-input border border-bone bg-white px-4 py-3 text-ink outline-none focus:border-signal-blue"
               placeholder="Tell us why you're deleting your account (optional)"
+              aria-label="Reason for deleting (optional)"
             />
           </div>
 
@@ -181,6 +186,8 @@ export default function DeleteAccountPage() {
               onChange={(e) => setConfirmText(e.target.value)}
               className="mt-1 w-full rounded-input border border-bone bg-white px-4 py-3 text-ink outline-none focus:border-signal-blue"
               placeholder="DELETE"
+              aria-label="Type DELETE to confirm"
+              autoComplete="off"
             />
           </div>
 

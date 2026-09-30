@@ -1,6 +1,6 @@
 "use client";
 
-import type { AppData } from "./types";
+import type { AppData, DeletableKey } from "./types";
 import { loadData, saveData, getDefaultData } from "./storage";
 
 const SYNC_VERSION = 1;
@@ -45,7 +45,12 @@ export async function loadCloudData(token: string): Promise<AppData | null> {
   }
 }
 
-export async function saveCloudData(token: string, data: AppData): Promise<boolean> {
+/** "conflict": the phone (or another browser) saved since we last loaded. */
+export async function saveCloudData(
+  token: string,
+  data: AppData,
+  baseUpdatedAt: string | null = getCloudUpdatedAt()
+): Promise<boolean | "conflict"> {
   try {
     const device = getDeviceName();
     const response = await fetch("/api/data/save", {
@@ -58,9 +63,11 @@ export async function saveCloudData(token: string, data: AppData): Promise<boole
         appData: data,
         version: SYNC_VERSION,
         device,
+        base_updated_at: baseUpdatedAt,
       }),
     });
 
+    if (response.status === 409) return "conflict";
     if (!response.ok) return false;
 
     const result = await response.json();
@@ -112,8 +119,12 @@ export async function syncFromCloud(token: string): Promise<{
 }
 
 export async function syncToCloud(token: string, data?: AppData): Promise<boolean> {
-  const dataToSync = data || loadData();
-  return saveCloudData(token, dataToSync);
+  const first = await saveCloudData(token, data || loadData());
+  if (first !== "conflict") return first;
+  // Someone else saved first: pull and merge their changes, then save once more.
+  const { data: merged } = await syncFromCloud(token);
+  const retry = await saveCloudData(token, merged || loadData());
+  return retry === true;
 }
 
 export function mergeData(local: AppData, cloud: AppData): AppData {
@@ -141,6 +152,21 @@ export function mergeData(local: AppData, cloud: AppData): AppData {
     templates: mergeById(local.templates ?? [], cloud.templates ?? []),
     khataEntries: mergeById(local.khataEntries ?? [], cloud.khataEntries ?? []),
   };
+
+  // Deletions on either side win over the other side's copy.
+  const deleted: NonNullable<AppData["deleted"]> = {};
+  for (const src of [local.deleted, cloud.deleted]) {
+    for (const [key, ids] of Object.entries(src || {}) as [DeletableKey, Record<string, string>][]) {
+      deleted[key] = { ...(deleted[key] || {}), ...(ids || {}) };
+    }
+  }
+  for (const [key, ids] of Object.entries(deleted) as [DeletableKey, Record<string, string>][]) {
+    const list = merged[key] as unknown as { id: string }[] | undefined;
+    if (Array.isArray(list)) {
+      (merged as unknown as Record<string, unknown>)[key] = list.filter((x) => !ids[x.id]);
+    }
+  }
+  if (Object.keys(deleted).length) merged.deleted = deleted;
 
   return merged;
 }

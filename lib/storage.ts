@@ -1,6 +1,6 @@
 "use client";
 
-import type { AppData, AppSettings, BusinessProfile, Invoice, Party, StockItem, CreditNote, DebitNote, PayrollEntry, DeliveryChallan, Expense, Quote, Purchase, Payment, Template, KhataEntry } from "./types";
+import type { AppData, AppSettings, BusinessProfile, Invoice, Party, StockItem, CreditNote, DebitNote, PayrollEntry, DeliveryChallan, Expense, Quote, Purchase, Payment, Template, KhataEntry, DeletableKey } from "./types";
 
 declare global {
   interface Window {
@@ -612,9 +612,19 @@ export function saveInvoice(invoice: Invoice): void {
   saveData(data);
 }
 
+/**
+ * Remember a deletion so cloud sync (other browsers, the phone) cannot bring
+ * the record back. Tombstones merge by union in mergeData and on the server.
+ */
+export function markDeleted(data: AppData, key: DeletableKey, id: string): void {
+  const deleted = (data.deleted ||= {});
+  (deleted[key] ||= {})[id] = new Date().toISOString();
+}
+
 export function deleteInvoice(id: string): void {
   const data = loadData();
   data.invoices = data.invoices.filter((i) => i.id !== id);
+  markDeleted(data, "invoices", id);
   saveData(data);
 }
 
@@ -658,12 +668,14 @@ export function deductStockForInvoice(invoice: Invoice): void {
 export function deleteStockItem(id: string): void {
   const data = loadData();
   data.stock = data.stock.filter((s) => s.id !== id);
+  markDeleted(data, "stock", id);
   saveData(data);
 }
 
 export function deleteParty(id: string): void {
   const data = loadData();
   data.parties = data.parties.filter((p) => p.id !== id);
+  markDeleted(data, "parties", id);
   saveData(data);
 }
 
@@ -685,6 +697,7 @@ export function saveCreditNote(cn: CreditNote): void {
 export function deleteCreditNote(id: string): void {
   const data = loadData();
   data.creditNotes = data.creditNotes.filter((c) => c.id !== id);
+  markDeleted(data, "creditNotes", id);
   saveData(data);
 }
 
@@ -700,6 +713,7 @@ export function saveDebitNote(note: DebitNote): void {
 export function deleteDebitNote(id: string): void {
   const data = loadData();
   data.debitNotes = (data.debitNotes || []).filter((c) => c.id !== id);
+  markDeleted(data, "debitNotes", id);
   saveData(data);
 }
 
@@ -715,6 +729,7 @@ export function savePayrollEntry(entry: PayrollEntry): void {
 export function deletePayrollEntry(id: string): void {
   const data = loadData();
   data.payroll = (data.payroll || []).filter((c) => c.id !== id);
+  markDeleted(data, "payroll", id);
   saveData(data);
 }
 
@@ -730,6 +745,7 @@ export function saveDeliveryChallan(dc: DeliveryChallan): void {
 export function deleteDeliveryChallan(id: string): void {
   const data = loadData();
   data.deliveryChallans = data.deliveryChallans.filter((d) => d.id !== id);
+  markDeleted(data, "deliveryChallans", id);
   saveData(data);
 }
 
@@ -745,6 +761,7 @@ export function saveExpense(exp: Expense): void {
 export function deleteExpense(id: string): void {
   const data = loadData();
   data.expenses = data.expenses.filter((e) => e.id !== id);
+  markDeleted(data, "expenses", id);
   saveData(data);
 }
 
@@ -760,6 +777,7 @@ export function saveQuote(quote: Quote): void {
 export function deleteQuote(id: string): void {
   const data = loadData();
   data.quotes = data.quotes.filter((q) => q.id !== id);
+  markDeleted(data, "quotes", id);
   saveData(data);
 }
 
@@ -775,6 +793,7 @@ export function savePurchase(purchase: Purchase): void {
 export function deletePurchase(id: string): void {
   const data = loadData();
   data.purchases = data.purchases.filter((p) => p.id !== id);
+  markDeleted(data, "purchases", id);
   data.khataEntries = (data.khataEntries || []).filter((e) => e.sourceId !== id);
   saveData(data);
 }
@@ -791,6 +810,7 @@ export function savePayment(payment: Payment): void {
 export function deletePayment(id: string): void {
   const data = loadData();
   data.payments = data.payments.filter((p) => p.id !== id);
+  markDeleted(data, "payments", id);
   saveData(data);
 }
 
@@ -810,6 +830,7 @@ export function saveTemplate(template: Template): void {
 export function deleteTemplate(id: string): void {
   const data = loadData();
   data.templates = data.templates.filter((t) => t.id !== id);
+  markDeleted(data, "templates", id);
   saveData(data);
 }
 
@@ -825,5 +846,6 @@ export function saveKhataEntry(entry: KhataEntry): void {
 export function deleteKhataEntry(id: string): void {
   const data = loadData();
   data.khataEntries = data.khataEntries.filter((k) => k.id !== id);
+  markDeleted(data, "khataEntries", id);
   saveData(data);
 }

@@ -8,6 +8,7 @@ import { useAuth, hasValidSubscription } from "@/lib/auth-provider";
 import { syncFromCloud, syncToCloud, getLastSyncTime } from "@/lib/cloud-sync";
 import { encryptBooksPayload, generateCaShareKey } from "@/lib/ca-crypto";
 import { gstRatePickerOptions, gstRateLabel } from "@/lib/gst";
+import { CaAccessList } from "./CaAccessList";
 
 type SettingsProps = {
   data: AppData;
@@ -272,6 +273,7 @@ export function Settings({ data, onSaved }: SettingsProps) {
             </button>
           </div>
         ) : null}
+        <CaAccessList token={token} />
       </div>
       <div className="flex items-center justify-between">
         <h1 className="text-2xl text-ink">Settings</h1>

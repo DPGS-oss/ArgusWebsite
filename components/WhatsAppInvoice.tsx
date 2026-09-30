@@ -1,5 +1,6 @@
 import { IndianRupee, MessageCircle } from "lucide-react";
 import { Reveal } from "./Reveal";
+import { AnimatedHeading } from "./AnimatedHeading";
 
 export function WhatsAppInvoice() {
   return (
@@ -9,7 +10,7 @@ export function WhatsAppInvoice() {
         <Reveal>
           <div className="section-header">
             <span className="eyebrow">Get paid faster</span>
-            <h2>Send on WhatsApp. Collect on UPI.</h2>
+            <AnimatedHeading text="Send on WhatsApp. Collect on UPI." />
             <p>
               The invoice screen leads with your shop&apos;s WhatsApp and a{" "}
               <code className="rounded bg-bone px-1.5 py-0.5 text-sm">upi://pay</code> collect

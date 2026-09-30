@@ -1,6 +1,7 @@
 import { Plus } from "lucide-react";
 import { HOME_FAQ } from "@/lib/faq";
 import { Reveal } from "./Reveal";
+import { AnimatedHeading } from "./AnimatedHeading";
 
 export function Faq() {
   return (
@@ -9,9 +10,7 @@ export function Faq() {
         <Reveal>
           <div className="lg:sticky lg:top-28">
             <span className="eyebrow">FAQ</span>
-            <h2 className="mb-4 text-4xl font-bold tracking-tightest text-ink md:text-5xl">
-              Questions, answered
-            </h2>
+            <AnimatedHeading className="mb-4 text-4xl font-bold tracking-tightest text-ink md:text-5xl" text="Questions, answered" />
             <p className="text-lg text-slate">
               Can&apos;t find what you need?{" "}
               <a href="#contact" className="font-semibold text-brand-violet hover:underline">

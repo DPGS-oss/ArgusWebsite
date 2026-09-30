@@ -1,6 +1,9 @@
 "use client";
 
+import { isRegisteredGstin } from "@/lib/gstin";
 import { useState, useMemo } from "react";
+import { VoiceBill } from "./VoiceBill";
+import type { VoiceBill as VoiceBillResult } from "@/lib/voice-parser";
 import { Plus, Trash2, Sparkles, ArrowLeft, Save, ScanLine, Package, X } from "lucide-react";
 import type { AppData, BusinessProfile, Invoice, InvoiceItem, InvoiceType, InvoiceStatus, GSTRate, StockItem } from "@/lib/types";
 import { UNITS, PAYMENT_MODES, INDIAN_STATES } from "@/lib/types";
@@ -22,8 +25,9 @@ import {
   openHistoricalInvoice,
   stateCodeFromPlaceOfSupply,
   exclusiveRateFromInclusive,
+  deliveryItems,
 } from "@/lib/gst";
-import { generateId, generateInvoiceNumber } from "@/lib/storage";
+import { generateId, generateInvoiceNumber, saveBusiness } from "@/lib/storage";
 import { BarcodeScannerModal } from "./BarcodeScannerModal";
 import { validateGstin } from "@/lib/gstin";
 
@@ -89,7 +93,8 @@ function emptyItem(businessStateCode: string, partyStateCode: string, defaultGst
   };
 }
 
-export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: InvoiceFormProps) {
+export function InvoiceForm({ data, business: businessProp, editingInvoice, onSave, onBack }: InvoiceFormProps) {
+  const business = businessProp;
   const today = new Date().toISOString().split("T")[0];
   const dueDate = new Date(Date.now() + 15 * 86400000).toISOString().split("T")[0];
   const openedInvoice = editingInvoice ? openHistoricalInvoice(editingInvoice) : null;
@@ -102,9 +107,18 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
   const [partyId, setPartyId] = useState(openedInvoice?.partyId || "");
   const [date, setDate] = useState(openedInvoice?.date || today);
   const [dueDateVal, setDueDateVal] = useState(openedInvoice?.dueDate || dueDate);
-  const [items, setItems] = useState<InvoiceItem[]>(
-    openedInvoice?.items || [emptyItem(business?.stateCode || "", "", newInvoiceGstRate)]
+  const [items, setItems] = useState<InvoiceItem[]>(() => {
+    const goods = (openedInvoice?.items || []).filter((i) => !i.isDelivery);
+    return goods.length ? goods : [emptyItem(business?.stateCode || "", "", newInvoiceGstRate)];
+  });
+  // Delivery is stored as its own taxed line(s); on edit, fold them back into the field.
+  const [deliveryAmount, setDeliveryAmount] = useState(() =>
+    round2(
+      (openedInvoice?.items || []).filter((i) => i.isDelivery).reduce((s, i) => s + (i.total || 0), 0) +
+        (openedInvoice?.deliveryReimbursement || 0)
+    )
   );
+  const [deliveryIsReimbursement, setDeliveryIsReimbursement] = useState(!!openedInvoice?.deliveryReimbursement);
   const [paymentMode, setPaymentMode] = useState(openedInvoice?.paymentMode || "");
   const [notes, setNotes] = useState(openedInvoice?.notes || data.settings.defaultNotes);
   const [terms, setTerms] = useState(openedInvoice?.terms || data.settings.defaultTerms);
@@ -113,7 +127,9 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
   const [hsnItemIdx, setHsnItemIdx] = useState<number | null>(null);
   const [aiSuggestions, setAiSuggestions] = useState<{ idx: number; suggestions: { code: string; description: string; gstRate: GSTRate }[] } | null>(null);
   const [isTotalMode, setIsTotalMode] = useState(openedInvoice?.isTotalMode ?? true);
-  const [totalAmount, setTotalAmount] = useState(openedInvoice?.isTotalMode ? openedInvoice.grandTotal : 0);
+  const [totalAmount, setTotalAmount] = useState(
+    openedInvoice?.isTotalMode ? openedInvoice.enteredTotal ?? openedInvoice.grandTotal : 0
+  );
   const [totalGstRate, setTotalGstRate] = useState<GSTRate>(openedInvoice?.isTotalMode ? (openedInvoice.items[0]?.gstRate || newInvoiceGstRate) : newInvoiceGstRate);
   const [totalDescription, setTotalDescription] = useState(openedInvoice?.isTotalMode ? (openedInvoice.items[0]?.description || "") : "");
   const [totalDiscount, setTotalDiscount] = useState(openedInvoice?.isTotalMode ? (openedInvoice.items[0]?.discount || 0) : 0);
@@ -170,7 +186,7 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
     ? (openedInvoice?.isInterState ?? computedInterState)
     : computedInterState;
 
-  const totals = useMemo(() => {
+  const baseTotals = useMemo(() => {
     if (isTotalMode) {
       const afterDiscount = round2(totalAmount * (1 - totalDiscount / 100));
       const taxable = round2(afterDiscount / (1 + totalGstRate / 100));
@@ -195,6 +211,49 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
     }
     return calculateInvoiceTotals(items, data.settings.roundOff);
   }, [isTotalMode, totalAmount, totalGstRate, totalDiscount, interState, data.settings.roundOff, items]);
+
+  // Delivery: taxed with the goods (s.15(2)(c)) unless it is a pure-agent reimbursement.
+  const totals = useMemo(() => {
+    const amount = deliveryAmount > 0 ? deliveryAmount : 0;
+    if (!amount) return { ...baseTotals, delivery: 0 };
+    const goods = isTotalMode
+      ? [{ total: round2(totalAmount * (1 - totalDiscount / 100)), gstRate: totalGstRate, hsn: "" } as InvoiceItem]
+      : items;
+    const extra = deliveryIsReimbursement ? [] : deliveryItems(goods, amount, interState);
+    const sum = (k: "taxableAmount" | "cgst" | "sgst" | "igst") => round2(extra.reduce((t, l) => t + l[k], 0));
+    const raw = round2(baseTotals.grandTotal - baseTotals.roundOff + amount);
+    const grandTotal = data.settings.roundOff ? Math.round(raw) : raw;
+    return {
+      ...baseTotals,
+      totalTaxable: round2(baseTotals.totalTaxable + sum("taxableAmount")),
+      totalCgst: round2(baseTotals.totalCgst + sum("cgst")),
+      totalSgst: round2(baseTotals.totalSgst + sum("sgst")),
+      totalIgst: round2(baseTotals.totalIgst + sum("igst")),
+      totalTax: round2(baseTotals.totalTax + sum("cgst") + sum("sgst") + sum("igst")),
+      roundOff: round2(grandTotal - raw),
+      grandTotal: round2(grandTotal),
+      delivery: amount,
+    };
+  }, [baseTotals, deliveryAmount, deliveryIsReimbursement, isTotalMode, totalAmount, totalDiscount, totalGstRate, items, interState, data.settings.roundOff]);
+
+  // Voice: prices are what the customer pays (GST-inclusive), like the Android app.
+  function applyVoiceBill(bill: VoiceBillResult) {
+    if (bill.customerName && !partyId && !inlinePartyName.trim()) setInlinePartyName(bill.customerName);
+    if (bill.items.length) {
+      const voiceItems = bill.items.map((v) => {
+        const gstRate = v.gstRate as GSTRate;
+        const rate = exclusiveRateFromInclusive(v.price, gstRate);
+        return {
+          ...emptyItem(business?.stateCode || "", "", gstRate),
+          description: v.name,
+          ...calculateItem({ quantity: v.quantity, rate, discount: 0, gstRate, isInterState: interState }),
+        } as InvoiceItem;
+      });
+      setIsTotalMode(false);
+      setItems((prev) => [...prev.filter((i) => i.description.trim() || i.rate > 0), ...voiceItems]);
+    }
+    if (bill.delivery > 0) setDeliveryAmount((d) => round2(d + bill.delivery));
+  }
 
   function updateItem(idx: number, patch: Partial<InvoiceItem>) {
     setItems((prev) => {
@@ -318,9 +377,36 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
     setShipToStateCode(partyHasShipTo ? ship.shipToStateCode : "");
   }
 
-  function handleSave() {
+  // No shop profile yet: ask for the essentials right here instead of sending
+  // the owner away to Settings and losing the bill they just built.
+  const [shopSetupOpen, setShopSetupOpen] = useState(false);
+  const [shopName, setShopName] = useState("");
+  const [shopGstin, setShopGstin] = useState("");
+  const [shopState, setShopState] = useState("");
+  const [shopError, setShopError] = useState("");
+
+  function createShopAndSave() {
+    const gstin = shopGstin.trim().toUpperCase();
+    const stateCode = gstin && isRegisteredGstin(gstin) ? gstin.slice(0, 2) : shopState;
+    if (!shopName.trim()) return setShopError("Enter your shop's name.");
+    if (gstin && !isRegisteredGstin(gstin)) return setShopError("That GSTIN has a typo. Check it or leave it blank.");
+    if (!stateCode) return setShopError("Pick your shop's state.");
+    const state = INDIAN_STATES.find((st) => st.code === stateCode)?.name || "";
+    const shop: BusinessProfile = {
+      id: generateId(), name: shopName.trim(), gstin, pan: gstin ? gstin.slice(2, 12) : "", email: "", phone: "",
+      address: "", city: "", state, stateCode, pincode: "", bankName: "", bankAccount: "", bankIfsc: "",
+      bankBranch: "", upiId: "",
+    };
+    saveBusiness(shop);
+    setShopSetupOpen(false);
+    handleSave(shop);
+  }
+
+  function handleSave(shopOverride?: BusinessProfile) {
+    const business = shopOverride ?? businessProp;
     if (!business) {
-      alert("Please set up your business profile first in Settings.");
+      setShopError("");
+      setShopSetupOpen(true);
       return;
     }
 
@@ -392,6 +478,9 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
         cess: i.cess ?? 0,
       }));
     }
+    if (deliveryAmount > 0 && !deliveryIsReimbursement) {
+      invoiceItems = [...invoiceItems, ...deliveryItems(invoiceItems, deliveryAmount, interState)];
+    }
 
     const built = buildInvoiceDocument({
       id: editingInvoice?.id || generateId(),
@@ -445,6 +534,12 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
       ewayBillDate: editingInvoice?.ewayBillDate,
       enteredTotal: isTotalMode ? totalAmount : undefined,
     };
+    if (deliveryAmount > 0 && deliveryIsReimbursement) {
+      // Rule 33 pure agent: collected on the bill, outside taxable value.
+      invoice.deliveryReimbursement = round2(deliveryAmount);
+      invoice.grandTotal = round2(invoice.grandTotal + deliveryAmount);
+      invoice.balanceDue = round2(invoice.grandTotal - (invoice.paidAmount || 0));
+    }
 
     onSave(invoice);
   }
@@ -453,6 +548,44 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
 
   return (
     <div className="space-y-6">
+      {shopSetupOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setShopSetupOpen(false)}>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="shop-setup-title"
+            className="w-full max-w-md rounded-card-lg bg-white p-5 text-ink shadow-lift"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="shop-setup-title" className="text-lg font-bold">Add your shop to save this bill</h2>
+            <p className="mt-1 text-sm text-slate">This goes at the top of every bill. You can add your address, bank and UPI later in Business.</p>
+            <label className="mt-4 block text-sm text-slate">
+              Shop name
+              <input className="input-field mt-1" value={shopName} autoFocus onChange={(e) => setShopName(e.target.value)} />
+            </label>
+            <label className="mt-3 block text-sm text-slate">
+              GSTIN (leave blank if not registered)
+              <input className="input-field mt-1 uppercase" value={shopGstin} maxLength={15} onChange={(e) => setShopGstin(e.target.value)} />
+            </label>
+            {!isRegisteredGstin(shopGstin.trim().toUpperCase()) ? (
+              <label className="mt-3 block text-sm text-slate">
+                State
+                <select className="input-field mt-1" value={shopState} onChange={(e) => setShopState(e.target.value)}>
+                  <option value="">Choose your state</option>
+                  {INDIAN_STATES.map((st) => (
+                    <option key={st.code} value={st.code}>{st.name} ({st.code})</option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+            {shopError ? <p className="mt-3 text-sm text-red-600">{shopError}</p> : null}
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" className="btn-secondary !py-2" onClick={() => setShopSetupOpen(false)}>Cancel</button>
+              <button type="button" className="btn-primary !py-2" onClick={createShopAndSave}>Save shop and bill</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <button onClick={onBack} className="rounded-lg p-2 text-silver hover:bg-graphite hover:text-starlight">
@@ -462,7 +595,7 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
             {editingInvoice ? `Edit ${editingInvoice.invoiceNumber}` : "New Invoice"}
           </h1>
         </div>
-        <button onClick={handleSave} className="btn-primary">
+        <button onClick={() => handleSave()} className="btn-primary">
           <Save className="mr-1 h-4 w-4" /> Save Invoice
         </button>
       </div>
@@ -635,6 +768,7 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
                 >
                   {isTotalMode ? "Switch to Itemized" : "Switch to Total Mode"}
                 </button>
+                <VoiceBill onApply={applyVoiceBill} />
                 <button onClick={() => setShowStockPicker(true)} className="btn-secondary !py-2" disabled={data.stock.length === 0}>
                   <Package className="mr-1 h-4 w-4" /> Inventory
                 </button>
@@ -941,6 +1075,38 @@ export function InvoiceForm({ data, business, editingInvoice, onSave, onBack }: 
                   <span>{formatCurrency(totals.totalCess)}</span>
                 </div>
               )}
+              <div className="border-t border-lead/20 pt-2">
+                <label className="flex items-center justify-between gap-3 text-silver">
+                  <span>
+                    Delivery charges
+                    <span className="block text-xs text-ash">
+                      {deliveryIsReimbursement ? "Added as-is, no GST" : "Amount the customer pays, GST included"}
+                    </span>
+                  </span>
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    inputMode="decimal"
+                    aria-label="Delivery charges"
+                    className="input-field !w-28 text-right"
+                    value={deliveryAmount || ""}
+                    placeholder="0"
+                    onChange={(e) => setDeliveryAmount(Math.max(0, parseFloat(e.target.value) || 0))}
+                  />
+                </label>
+                {deliveryAmount > 0 ? (
+                  <label className="mt-2 flex items-start gap-2 text-xs text-silver">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={deliveryIsReimbursement}
+                      onChange={(e) => setDeliveryIsReimbursement(e.target.checked)}
+                    />
+                    Only passing on the exact courier cost (the courier billed your customer)
+                  </label>
+                ) : null}
+              </div>
               {totals.roundOff !== 0 && (
                 <div className="flex justify-between text-silver">
                   <span>Round Off</span>

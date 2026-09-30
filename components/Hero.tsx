@@ -1,13 +1,20 @@
 "use client";
 
-import { motion, useReducedMotion } from "framer-motion";
-import { ArrowRight, CheckCircle2, FileText, IndianRupee, MessageCircle, ShieldCheck } from "lucide-react";
+import { motion, useMotionTemplate, useMotionValue, useReducedMotion, useScroll, useSpring, useTransform } from "framer-motion";
+import { useRef } from "react";
+import { ArrowRight, CheckCircle2, FileText, ShieldCheck } from "lucide-react";
 import { ShinyText } from "./ShinyText";
+import { HeroDemo } from "./HeroDemo";
 
 const trust = ["GST 2.0 rates built in", "Free CA access", "Same login on Android & web"];
 
 export function Hero() {
   const reduce = useReducedMotion();
+  const mouseX = useMotionValue(-1000);
+  const mouseY = useMotionValue(-1000);
+  const sx = useSpring(mouseX, { stiffness: 120, damping: 20 });
+  const sy = useSpring(mouseY, { stiffness: 120, damping: 20 });
+  const spotlight = useMotionTemplate`radial-gradient(420px circle at ${sx}px ${sy}px, rgba(143,184,255,0.12), transparent 70%)`;
   const rise = (delay: number) =>
     reduce
       ? {}
@@ -18,7 +25,21 @@ export function Hero() {
         };
 
   return (
-    <section className="relative isolate overflow-hidden bg-onyx pb-20 pt-32 text-white md:pb-28 md:pt-40">
+    <section
+      onMouseMove={(e) => {
+        const r = e.currentTarget.getBoundingClientRect();
+        mouseX.set(e.clientX - r.left);
+        mouseY.set(e.clientY - r.top);
+      }}
+      className="relative isolate overflow-hidden bg-onyx pb-20 pt-32 text-white md:pb-28 md:pt-40"
+    >
+      {!reduce ? (
+        <motion.div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 -z-10"
+          style={{ background: spotlight }}
+        />
+      ) : null}
       {/* Aurora backdrop */}
       <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
         <div className="bg-grid absolute inset-0 [mask-image:radial-gradient(ellipse_at_top,black_30%,transparent_75%)]" />
@@ -86,14 +107,21 @@ export function Hero() {
 
 /** Illustrative invoice card — sample data only. */
 function HeroPreview({ reduce }: { reduce: boolean }) {
+  // Scroll-linked tilt: the preview lies back slightly and straightens as you scroll.
+  const ref = useRef<HTMLDivElement>(null);
+  const { scrollYProgress } = useScroll({ target: ref, offset: ["start end", "center center"] });
+  const rotateX = useTransform(scrollYProgress, [0, 1], reduce ? [0, 0] : [14, 0]);
+  const scale = useTransform(scrollYProgress, [0, 1], reduce ? [1, 1] : [0.94, 1]);
   return (
     <motion.div
-      initial={reduce ? false : { opacity: 0, y: 48, rotateX: 12 }}
-      animate={{ opacity: 1, y: 0, rotateX: 0 }}
+      ref={ref}
+      initial={reduce ? false : { opacity: 0, y: 48 }}
+      animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 1.1, delay: 0.4, ease: [0.16, 1, 0.3, 1] }}
-      style={{ transformPerspective: 1200 }}
+      style={{ transformPerspective: 1200, rotateX, scale }}
       className="relative mt-16 w-full max-w-4xl"
-      aria-hidden
+      aria-label="Sample: speak a bill in Hinglish, Argus builds the GST invoice, marks it paid and shares it on WhatsApp"
+      role="img"
     >
       <div className="rounded-[22px] border border-white/10 bg-white/[0.04] p-2 shadow-[0_40px_120px_-40px_rgba(102,71,240,0.6)] backdrop-blur">
         <div className="overflow-hidden rounded-2xl bg-white text-left text-ink">
@@ -108,60 +136,7 @@ function HeroPreview({ reduce }: { reduce: boolean }) {
             </span>
             <span className="w-10" />
           </div>
-          <div className="grid gap-4 p-5 md:grid-cols-[1.4fr_1fr] md:p-6">
-            <div>
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-wider text-ash">Tax invoice</p>
-                  <p className="font-display text-xl font-bold">INV-2026-0142</p>
-                  <p className="text-sm text-slate">Sharma Traders · 27AAPFU0939F1ZV</p>
-                </div>
-                <span className="rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-bold text-emerald-700">Paid</span>
-              </div>
-              <div className="mt-5 space-y-2 text-sm">
-                {[
-                  ["Steel almirah · HSN 9403", "₹9,000.00"],
-                  ["Installation · SAC 9954", "₹1,576.27"],
-                ].map(([label, value]) => (
-                  <div key={label} className="flex justify-between border-b border-bone/70 pb-2">
-                    <span className="text-slate">{label}</span>
-                    <span className="font-medium">{value}</span>
-                  </div>
-                ))}
-                <div className="flex justify-between text-slate">
-                  <span>CGST 9% + SGST 9%</span>
-                  <span>₹1,903.73</span>
-                </div>
-                <div className="flex justify-between pt-1 font-display text-lg font-bold">
-                  <span>Total</span>
-                  <span>₹12,480.00</span>
-                </div>
-              </div>
-            </div>
-            <div className="flex flex-col gap-3">
-              <div className="rounded-xl border border-bone bg-mist p-4">
-                <p className="text-xs text-ash">This month</p>
-                <p className="font-display text-2xl font-bold">₹1,24,500</p>
-                <div className="mt-3 flex h-12 items-end gap-1">
-                  {[35, 52, 44, 60, 48, 72, 66, 84, 70, 92].map((h, i) => (
-                    <span
-                      key={i}
-                      style={{ height: `${h}%` }}
-                      className="flex-1 rounded-sm bg-gradient-to-t from-brand-violet to-signal-blue opacity-80"
-                    />
-                  ))}
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-xs font-bold">
-                <span className="inline-flex items-center justify-center gap-1.5 rounded-full bg-green-600 py-2.5 text-white">
-                  <MessageCircle className="h-3.5 w-3.5" /> WhatsApp
-                </span>
-                <span className="inline-flex items-center justify-center gap-1.5 rounded-full bg-ink py-2.5 text-white">
-                  <IndianRupee className="h-3.5 w-3.5" /> Collect UPI
-                </span>
-              </div>
-            </div>
-          </div>
+          <HeroDemo />
         </div>
       </div>
 

@@ -70,6 +70,8 @@ export interface InvoiceItem {
   cess?: number;
   total: number;
   stockItemId?: string;
+  /** Delivery charge line (taxed with the goods, s.15(2)(c)); rebuilt from the delivery field on edit. */
+  isDelivery?: boolean;
 }
 
 export interface Invoice {
@@ -118,6 +120,8 @@ export interface Invoice {
    * after the double-GST fix; its absence marks older total-mode bills to review.
    */
   enteredTotal?: number;
+  /** Pure-agent courier reimbursement (Rule 33): added to the bill total, outside taxable value. */
+  deliveryReimbursement?: number;
   irn?: string;
   ackNo?: string;
   ackDate?: string;
@@ -166,7 +170,13 @@ export interface AppData {
   payments: Payment[];
   templates: Template[];
   khataEntries: KhataEntry[];
+  /** Tombstones: id -> deleted-at, per list, so sync does not resurrect deletions. */
+  deleted?: Partial<Record<DeletableKey, Record<string, string>>>;
 }
+
+export type DeletableKey =
+  | "businesses" | "parties" | "invoices" | "stock" | "creditNotes" | "debitNotes" | "payroll"
+  | "deliveryChallans" | "expenses" | "quotes" | "purchases" | "payments" | "templates" | "khataEntries";
 
 export interface AppSettings {
   theme: "dark" | "light";

@@ -4,7 +4,7 @@ import { MarketingPage, PageCtas } from "@/components/MarketingPage";
 import { HINDI_LINE, pageMetadata } from "@/lib/seo";
 
 export const metadata: Metadata = pageMetadata({
-  title: "Free CA portal for your shop books | Argus",
+  title: "Free CA portal for your shop books",
   description:
     "Give your accountant a read-only link. They see GST summaries and books. You keep billing. No extra paid seat.",
   path: "/ca/",
