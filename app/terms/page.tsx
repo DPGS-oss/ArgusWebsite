@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { LegalLayout } from "@/components/LegalLayout";
+import { GRIEVANCE_OFFICER, LEGAL_ENTITY } from "@/lib/legal";
 
 export default function TermsPage() {
   return (
@@ -166,10 +167,18 @@ export default function TermsPage() {
 
       <h2 className="mt-8 text-xl font-semibold text-ink">14. Contact / Grievance</h2>
       <p>
-        Support and Grievance Officer:{" "}
-        <a href="mailto:support@argusinvoicing.com">support@argusinvoicing.com</a>
+        Grievance Officer: {GRIEVANCE_OFFICER.name}
         <br />
-        B&amp;L Softwares and Logistics, India
+        Email:{" "}
+        <a href={`mailto:${GRIEVANCE_OFFICER.email}?subject=Grievance`}>{GRIEVANCE_OFFICER.email}</a>
+        {GRIEVANCE_OFFICER.phone ? (
+          <>
+            <br />
+            Phone: <a href={`tel:${GRIEVANCE_OFFICER.phone.replace(/\s/g, "")}`}>{GRIEVANCE_OFFICER.phone}</a>
+          </>
+        ) : null}
+        <br />
+        {LEGAL_ENTITY.name}, India
       </p>
 
       <p className="mt-8 text-sm text-slate">
