@@ -1,16 +1,14 @@
 "use client";
 
+import { Handshake, Store, ShoppingBag, Truck, Warehouse } from "lucide-react";
 import { Reveal, Stagger, StaggerItem } from "./Reveal";
 
 const trades = [
-  "Kirana & general stores",
-  "Hardware & paints",
-  "Pharmacies",
-  "Textiles & garments",
-  "Electronics & mobiles",
-  "Distributors & wholesalers",
-  "Service businesses",
-  "CA firms",
+  { label: "Kirana Stores", icon: Store },
+  { label: "Distributors", icon: Truck },
+  { label: "Service Businesses", icon: Handshake },
+  { label: "Retailers", icon: ShoppingBag },
+  { label: "Wholesalers", icon: Warehouse },
 ];
 
 const stats = [
@@ -25,9 +23,20 @@ export function CapabilityProof() {
     <section className="relative border-b border-bone bg-white py-14 md:py-16">
       <div className="container-page">
         <Reveal>
-          <p className="mb-10 text-center text-sm font-medium text-slate">
+          <p className="mb-6 text-center text-xs font-semibold uppercase tracking-[0.14em] text-slate">
             Built for kirana stores, distributors, and service businesses across India
           </p>
+          <ul className="mb-12 flex flex-wrap justify-center gap-3">
+            {trades.map(({ label, icon: Icon }) => (
+              <li
+                key={label}
+                className="inline-flex items-center gap-2 rounded-full bg-mist px-4 py-2 text-sm font-medium text-ink ring-1 ring-bone"
+              >
+                <Icon className="h-4 w-4 text-brand-violet" />
+                {label}
+              </li>
+            ))}
+          </ul>
         </Reveal>
         <Stagger className="grid grid-cols-2 gap-px overflow-hidden rounded-card-lg border border-bone bg-bone lg:grid-cols-4" stagger={0.08}>
           {stats.map(({ value, label }) => (
@@ -37,18 +46,6 @@ export function CapabilityProof() {
             </StaggerItem>
           ))}
         </Stagger>
-        <div className="marquee mt-10 overflow-hidden" aria-label={`Used by ${trades.join(", ")}`}>
-          <div className="marquee-track flex w-max gap-3" aria-hidden>
-            {[...trades, ...trades].map((t, i) => (
-              <span
-                key={i}
-                className="whitespace-nowrap rounded-full border border-bone bg-mist px-4 py-2 text-sm font-medium text-slate"
-              >
-                {t}
-              </span>
-            ))}
-          </div>
-        </div>
       </div>
     </section>
   );

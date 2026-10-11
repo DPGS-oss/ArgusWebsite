@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { Reveal, Stagger, StaggerItem } from "./Reveal";
 import { AnimatedHeading } from "./AnimatedHeading";
+import { HeroDemo } from "./HeroDemo";
 
 /** Sample preview only — illustrative shop data for the marketing mock. */
 const stats = [
@@ -60,12 +61,34 @@ export function ProductShowcase() {
       <div className="container-page">
         <Reveal>
           <div className="section-header">
-            <span className="eyebrow">Web app</span>
-            <AnimatedHeading text="Your shop, on one dashboard" />
+            <span className="eyebrow">How it works</span>
+            <AnimatedHeading text="Speak the bill. Argus does the rest." />
             <p>
-              Sample preview — revenue, invoices, parties, and dues the way Argus surfaces them
+              Say the order in Hindi or English. Argus builds the GST invoice, you check it, and it
+              is ready to share. Sample preview below.
             </p>
           </div>
+        </Reveal>
+
+        <Reveal delay={0.05} y={40}>
+          <div className="mx-auto mb-20 max-w-4xl overflow-hidden rounded-card-lg border border-bone bg-white shadow-[0_30px_80px_-30px_rgba(30,42,94,0.3)]">
+            <div className="flex items-center justify-between border-b border-bone bg-mist px-5 py-3">
+              <div className="flex items-center gap-2">
+                <span className="h-2.5 w-2.5 rounded-full bg-red-400" />
+                <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
+                <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
+              </div>
+              <span className="rounded-full bg-white px-3 py-1 font-mono text-[11px] text-slate">argusinvoicing.com/app</span>
+              <span className="w-10" />
+            </div>
+            <HeroDemo />
+          </div>
+        </Reveal>
+
+        <Reveal>
+          <h3 className="mb-8 text-center font-display text-2xl font-bold text-ink md:text-3xl">
+            Your shop, on one dashboard
+          </h3>
         </Reveal>
 
         <Reveal delay={0.1} y={60}>

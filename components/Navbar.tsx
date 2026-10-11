@@ -9,15 +9,15 @@ import { getInitials, useAuth } from "@/lib/auth-provider";
 
 const navLinks = [
   { href: "#features", label: "Features" },
+  { href: "/gstr/", label: "GST 2.0" },
   { href: "#pricing", label: "Pricing" },
   { href: "#faq", label: "FAQ" },
-  { href: "/guide/", label: "Guide" },
-  { href: "#contact", label: "Contact" },
+  { href: "#about", label: "Company" },
 ];
 
 /**
- * Floating header for the home page. Sits transparent over the dark hero and
- * turns into a light glass pill once the visitor scrolls past it.
+ * Header for the home page. Transparent over the light hero, then a white
+ * glass bar once the visitor scrolls.
  */
 export function Navbar() {
   const { user, setShowAuthModal, setShowProfileModal } = useAuth();
@@ -25,13 +25,14 @@ export function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > window.innerHeight * 0.6);
+    const onScroll = () => setScrolled(window.scrollY > 24);
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  const light = scrolled || mobileOpen;
+  const solid = scrolled || mobileOpen;
+  const light = true;
   const { scrollYProgress } = useScroll();
   const progress = useSpring(scrollYProgress, { stiffness: 140, damping: 30, restDelta: 0.001 });
 
@@ -44,10 +45,10 @@ export function Navbar() {
       />
       <nav
         aria-label="Main"
-        className={`mx-auto flex max-w-6xl items-center justify-between rounded-full border px-3 py-2 transition-all duration-300 md:px-4 ${
-          light
-            ? "border-bone/80 bg-white/80 shadow-lift backdrop-blur-xl"
-            : "border-white/10 bg-white/[0.04] backdrop-blur-md"
+        className={`mx-auto flex max-w-6xl items-center justify-between rounded-2xl border px-3 py-2 transition-all duration-300 md:px-4 ${
+          solid
+            ? "border-bone/80 bg-white/85 shadow-lift backdrop-blur-xl"
+            : "border-transparent bg-transparent"
         }`}
       >
         <Link href="/" className="flex items-center gap-2 pl-1" aria-label="Argus home">
@@ -80,25 +81,20 @@ export function Navbar() {
                 light ? "text-ink hover:bg-mist" : "text-white/85 hover:bg-white/10 hover:text-white"
               }`}
             >
-              Sign in
+              Log in
             </button>
           ) : (
             <button
               type="button"
               onClick={() => setShowProfileModal(true)}
               aria-label="Open profile"
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-brand-violet to-signal-blue text-xs font-bold text-white"
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-navy text-xs font-bold text-white"
             >
               {getInitials(user.name)}
             </button>
           )}
-          <Link
-            href="/app/"
-            className={`group inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-bold ${
-              light ? "bg-ink text-white hover:bg-onyx" : "bg-white text-ink hover:bg-white/90"
-            }`}
-          >
-            Launch web app
+          <Link href="/app/" className="btn-primary group px-5 py-2.5">
+            Start free trial
             <ArrowRight className="h-3.5 w-3.5 transition group-hover:translate-x-0.5" />
           </Link>
         </div>
@@ -130,7 +126,7 @@ export function Navbar() {
           </div>
           <div className="mt-2 grid gap-2 border-t border-bone pt-3">
             <Link href="/app/" onClick={() => setMobileOpen(false)} className="btn-primary w-full">
-              Launch web app
+              Start free trial
             </Link>
             <button
               type="button"

@@ -5,13 +5,14 @@ import { CheckCircle2, IndianRupee, MessageCircle, Mic } from "lucide-react";
 import { useEffect, useState } from "react";
 
 /** Illustrative sample only: voice → invoice → paid → shared, looping. */
+// Same maths as the product: spoken prices include GST, and delivery is taxed
+// at the rate of the goods it delivers (CGST Act s.15(2)(c)). Taxable values:
 const ITEMS = [
-  { label: "Steel almirah × 2 · HSN 9403", amount: 18000 },
-  { label: "Delivery · SAC 9965", amount: 500 },
+  { label: "Steel almirah × 2 · HSN 9403", amount: 15254.24 },
+  { label: "Delivery (taxed with goods)", amount: 423.73 },
 ];
-const TAXABLE = 18500;
-const GST = 3330; // 18% of 18,500
-const TOTAL = TAXABLE + GST; // 21,830
+const GST = 2822.03; // CGST 1,411.02 + SGST 1,411.01, inside the price
+const TOTAL = 18500; // 2 × 9,000 + 500, what the customer pays
 const VOICE = "Sharma Traders ko do steel almirah, nau hazaar each, aur delivery paanch sau";
 
 // Timeline (ms from loop start) for each beat of the demo.
