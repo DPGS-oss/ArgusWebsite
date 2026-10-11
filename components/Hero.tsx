@@ -6,12 +6,6 @@ import { ArrowRight, CheckCircle2, FileCheck2, FileText, PackageCheck, PlayCircl
 
 const trust = ["GST 2.0 rates built in", "Free CA access", "Same login on Android & web"];
 
-// Plain facts only: no invented user counts or totals on the marketing site.
-const facts = [
-  { value: "₹0", label: "to start on Android" },
-  { value: "14 days", label: "Business trial, no card" },
-];
-
 const ease = [0.16, 1, 0.3, 1] as const;
 
 export function Hero() {
@@ -34,8 +28,8 @@ export function Hero() {
         <div className="absolute left-1/2 top-1/2 h-[420px] w-[720px] -translate-x-1/2 rounded-full bg-[radial-gradient(closest-side,rgba(30,42,94,0.06),transparent)] blur-2xl" />
       </div>
 
-      <div className="container-page grid items-center gap-14 lg:grid-cols-[1.05fr_1fr] lg:gap-10">
-        <div>
+      <div className="container-page flex flex-col items-center gap-16">
+        <div className="flex flex-col items-center text-center">
           <motion.a
             href="#features"
             {...rise(0)}
@@ -55,12 +49,12 @@ export function Hero() {
             made <span className="text-brand-violet">clear.</span>
           </motion.h1>
 
-          <motion.p {...rise(0.16)} className="mt-6 max-w-xl text-base leading-relaxed text-slate md:text-lg">
+          <motion.p {...rise(0.16)} className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-slate md:text-lg">
             Bill customers, track stock and dues, prepare GSTR summaries, and share books with your CA
             — one workspace for Indian shops, on your phone and in the browser.
           </motion.p>
 
-          <motion.ul {...rise(0.22)} className="mt-6 flex flex-wrap gap-x-6 gap-y-2 text-sm font-medium text-ink">
+          <motion.ul {...rise(0.22)} className="mt-6 flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm font-medium text-ink">
             {trust.map((t) => (
               <li key={t} className="inline-flex items-center gap-1.5">
                 <CheckCircle2 className="h-4 w-4 text-brand-violet" />
@@ -69,7 +63,7 @@ export function Hero() {
             ))}
           </motion.ul>
 
-          <motion.div {...rise(0.3)} className="mt-9 flex flex-wrap items-center gap-3">
+          <motion.div {...rise(0.3)} className="mt-9 flex flex-wrap items-center justify-center gap-3">
             <a href="/app/" className="btn-primary group px-7 py-3.5 text-base">
               Start 14-day free trial
               <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
@@ -80,15 +74,6 @@ export function Hero() {
             </a>
           </motion.div>
 
-          <motion.dl {...rise(0.38)} className="mt-10 flex flex-wrap gap-x-12 gap-y-4">
-            {facts.map((f) => (
-              <div key={f.label} className="flex items-baseline gap-2">
-                <dt className="sr-only">{f.label}</dt>
-                <dd className="font-display text-2xl font-bold text-ink">{f.value}</dd>
-                <span className="text-sm text-slate">{f.label}</span>
-              </div>
-            ))}
-          </motion.dl>
         </div>
 
         <InvoiceVisual reduce={Boolean(reduce)} />
@@ -136,7 +121,7 @@ function InvoiceVisual({ reduce }: { reduce: boolean }) {
     <motion.div
       ref={ref}
       style={{ y: lift }}
-      className="relative mx-auto mb-16 w-full max-w-md lg:mr-0"
+      className="relative mx-auto mb-16 w-full max-w-md"
       role="img"
       aria-label="Sample tax invoice for Sharma Traders: taxable value 24,500 rupees, CGST and SGST 2,205 rupees each, total 28,910 rupees, marked paid"
     >
@@ -207,7 +192,7 @@ function InvoiceVisual({ reduce }: { reduce: boolean }) {
 
       <motion.div
         {...chip(1.15)}
-        className="absolute -bottom-10 -left-8 hidden animate-float-slow items-center gap-3 rounded-xl border border-bone bg-white px-4 py-3 shadow-lift sm:flex"
+        className="absolute -bottom-16 -left-10 hidden animate-float-slow items-center gap-3 rounded-xl border border-bone bg-white px-4 py-3 shadow-lift sm:flex"
       >
         <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-navy-soft text-navy">
           <PackageCheck className="h-4 w-4" />
