@@ -14,7 +14,7 @@ const trades = [
 ];
 
 const stats = [
-  { value: "₹0", label: "Unlimited invoices on Android" },
+  { value: "₹0", label: "20 free bills a month on Android" },
   { value: "14 days", label: "Full Business trial, no card" },
   { value: "0·5·18·40%", label: "GST 2.0 slabs, validated per bill" },
   { value: "Free", label: "Read-only seat for your CA" },

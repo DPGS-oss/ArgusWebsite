@@ -28,8 +28,8 @@ export default function CaPage() {
       <p>
         In the web app, open Settings and choose Invite CA. Argus gives you a link that lasts seven
         days, plus a backup code. Your CA signs in with Google or email, redeems the invite once,
-        and lands on a read-only dashboard. They do not pay. You do not buy them a seat. Book
-        shares are end-to-end encrypted for the invite path.
+        and lands on a read-only dashboard. They do not pay. You do not buy them a seat. You can
+        see who has access and stop sharing at any time.
       </p>
       <p>
         After they redeem, the link is used. You can revoke access later if the CA changes. The
@@ -72,7 +72,7 @@ export default function CaPage() {
 
       <h2>For the shopkeeper</h2>
       <p>
-        Start on Android (unlimited invoices on the free plan) or start the 14-day Business trial
+        Start on Android (20 free bills a month) or start the 14-day Business trial
         on the web. Same login. When your CA asks for books, generate the invite from Settings.
         Business is ₹500/month. Lifetime ₹18,000 is on this website only. iOS is coming soon.
       </p>

@@ -5,7 +5,7 @@ import { LegalLayout } from "@/components/LegalLayout";
 export default function PrivacyPage() {
   return (
     <LegalLayout title="Privacy Policy">
-      <p className="text-sm text-slate">Last updated: 28 September 2026</p>
+      <p className="text-sm text-slate">Last updated: 11 October 2026</p>
 
       <p>
         <strong>Argus</strong> (website{" "}
@@ -36,12 +36,20 @@ export default function PrivacyPage() {
           &ldquo;Speak the bill&rdquo; uses your browser&apos;s speech service (Chrome and Edge send
           the audio to Google to convert it to text); Argus receives only the text.
         </li>
-        <li>Diagnostics and security logs when cloud features are used (IP-derived signals, device labels, error events)</li>
-        <li>CA portal: encrypted book shares and invite metadata when you invite an accountant</li>
+        <li>App crash reports (device model, app version, error details) and security logs when cloud features are used (IP-derived signals, device labels)</li>
+        <li>CA portal: who you invited, when, and their read-only access</li>
       </ul>
       <p>
         We do not require Aadhaar, biometrics, or other sensitive categories. Do not enter such data
-        into free-text fields.
+        into free-text fields. We do not sell personal data or use it for advertising, and Argus
+        has no advertising or cross-site tracking cookies. The website stores your books and
+        sign-in in your browser so the app works.
+      </p>
+      <p>
+        <strong>Your customers&apos; and suppliers&apos; details.</strong> When you enter details
+        about other people (for example a customer&apos;s name, phone or GSTIN), you decide why and
+        how they are used and are the Data Fiduciary for them; we process them only on your behalf
+        to provide Argus.
       </p>
 
       <h2 className="mt-8 text-xl font-semibold text-ink">3. Purposes</h2>
@@ -76,11 +84,18 @@ export default function PrivacyPage() {
           (may involve processing outside India)
         </li>
         <li>
-          <strong>Resend</strong> (or similar) — transactional email (support, receipts, admin alerts)
+          <strong>Firebase Crashlytics (Google)</strong> — crash reports from the Android app
         </li>
         <li>
-          Optional AI providers (e.g. OpenRouter) — only when you explicitly use Ask Argus; summaries
-          are minimised before send
+          <strong>Resend</strong> — transactional email (support, receipts, admin alerts)
+        </li>
+        <li>
+          <strong>OpenRouter</strong> and the AI model it routes to — only when you tap Ask Argus on
+          the website; a short summary is sent, without party names unless you opt in
+        </li>
+        <li>
+          <strong>Google (browser speech)</strong> — only if you use &ldquo;Speak the bill&rdquo; on
+          the website in Chrome or Edge
         </li>
       </ul>
       <p>
@@ -90,12 +105,14 @@ export default function PrivacyPage() {
         programmes.
       </p>
 
-      <h2 className="mt-8 text-xl font-semibold text-ink">5. CA / accountant sharing</h2>
+      <h2 className="mt-8 text-xl font-semibold text-ink">5. Cloud sync and CA / accountant sharing</h2>
       <p>
-        When you invite a CA, books are encrypted on your device (AES-GCM) before upload. We store
-        ciphertext and related metadata; the decryption key is intended to travel only in the invite
-        link fragment you share. You control who receives the link. Revoke access by creating a new
-        invite / stopping shares and asking the CA to stop using the portal.
+        With cloud sync on (Business plan), your books are stored in Google Cloud Firestore,
+        encrypted in transit and at rest by Google, and read by our servers to sync your phone and
+        the web app. When you invite a CA, they get read-only access to those books through our CA
+        portal until you stop sharing (Settings &gt; Share with your CA). Only you and the CAs you
+        invite can see your books; our staff access them only to fix a problem you report or when
+        the law requires.
       </p>
 
       <h2 className="mt-8 text-xl font-semibold text-ink">6. Retention</h2>
@@ -105,8 +122,8 @@ export default function PrivacyPage() {
           Cloud account and synced books: until you delete the account, subject to backup cycles
         </li>
         <li>
-          Payment, tax, fraud, and dispute records: typically up to <strong>7 years</strong> where
-          needed for Indian tax, accounting, or legal compliance
+          Payment, tax, fraud, and dispute records: up to <strong>8 years</strong> where needed for
+          Indian tax, accounting, or legal compliance
         </li>
         <li>Security / rate-limit logs: shorter operational windows</li>
       </ul>
