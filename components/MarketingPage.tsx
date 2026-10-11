@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { BrandLogo } from "./BrandLogo";
 import { Footer } from "./Footer";
 
@@ -25,6 +26,7 @@ export function MarketingPage({ children }: MarketingPageProps) {
         </div>
       </main>
       <Footer />
+      <WhatsAppButton />
     </>
   );
 }

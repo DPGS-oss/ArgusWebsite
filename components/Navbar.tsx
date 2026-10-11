@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { motion, useScroll, useSpring } from "framer-motion";
 import { ArrowRight, Menu, X } from "lucide-react";
@@ -8,11 +9,11 @@ import { BrandLogo } from "./BrandLogo";
 import { getInitials, useAuth } from "@/lib/auth-provider";
 
 const navLinks = [
-  { href: "#features", label: "Features" },
-  { href: "/gstr/", label: "GST 2.0" },
-  { href: "#pricing", label: "Pricing" },
-  { href: "#faq", label: "FAQ" },
-  { href: "#about", label: "Company" },
+  { href: "/#features", label: "Features", hi: "सुविधाएँ" },
+  { href: "/gstr/", label: "GST 2.0", hi: "GST 2.0" },
+  { href: "/#pricing", label: "Pricing", hi: "क़ीमत" },
+  { href: "/#faq", label: "FAQ", hi: "सवाल" },
+  { href: "/#about", label: "Company", hi: "कंपनी" },
 ];
 
 /**
@@ -21,6 +22,8 @@ const navLinks = [
  */
 export function Navbar() {
   const { user, setShowAuthModal, setShowProfileModal } = useAuth();
+  const hindi = (usePathname() || "").startsWith("/hi");
+  const langLink = hindi ? { href: "/", label: "English", lang: "en" } : { href: "/hi/", label: "हिंदी", lang: "hi" };
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -67,12 +70,19 @@ export function Navbar() {
                 light ? "text-slate hover:bg-mist hover:text-ink" : "text-white/70 hover:bg-white/10 hover:text-white"
               }`}
             >
-              {link.label}
+              {hindi ? link.hi : link.label}
             </a>
           ))}
         </div>
 
         <div className="hidden items-center gap-2 lg:flex">
+          <Link
+            href={langLink.href}
+            lang={langLink.lang}
+            className="rounded-full px-3 py-2 text-sm font-semibold text-slate hover:bg-mist hover:text-ink"
+          >
+            {langLink.label}
+          </Link>
           {!user ? (
             <button
               type="button"
@@ -81,7 +91,7 @@ export function Navbar() {
                 light ? "text-ink hover:bg-mist" : "text-white/85 hover:bg-white/10 hover:text-white"
               }`}
             >
-              Log in
+              {hindi ? "लॉग इन" : "Log in"}
             </button>
           ) : (
             <button
@@ -94,7 +104,7 @@ export function Navbar() {
             </button>
           )}
           <Link href="/app/" className="btn-primary group px-5 py-2.5">
-            Start free trial
+            {hindi ? "मुफ़्त शुरू करें" : "Start free trial"}
             <ArrowRight className="h-3.5 w-3.5 transition group-hover:translate-x-0.5" />
           </Link>
         </div>
@@ -120,10 +130,18 @@ export function Navbar() {
                 onClick={() => setMobileOpen(false)}
                 className="rounded-xl px-3 py-3 text-sm font-medium text-ink hover:bg-mist"
               >
-                {link.label}
+                {hindi ? link.hi : link.label}
               </a>
             ))}
           </div>
+          <Link
+            href={langLink.href}
+            lang={langLink.lang}
+            onClick={() => setMobileOpen(false)}
+            className="block rounded-xl px-3 py-3 text-sm font-semibold text-ink hover:bg-mist"
+          >
+            {langLink.label}
+          </Link>
           <div className="mt-2 grid gap-2 border-t border-bone pt-3">
             <Link href="/app/" onClick={() => setMobileOpen(false)} className="btn-primary w-full">
               Start free trial

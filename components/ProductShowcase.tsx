@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { Reveal, Stagger, StaggerItem } from "./Reveal";
 import { AnimatedHeading } from "./AnimatedHeading";
-import { HeroDemo } from "./HeroDemo";
+import { Walkthrough } from "./Walkthrough";
 
 /** Sample preview only — illustrative shop data for the marketing mock. */
 const stats = [
@@ -64,24 +64,15 @@ export function ProductShowcase() {
             <span className="eyebrow">How it works</span>
             <AnimatedHeading text="Speak the bill. Argus does the rest." />
             <p>
-              Say the order in Hindi or English. Argus builds the GST invoice, you check it, and it
-              is ready to share. Sample preview below.
+              From spoken order to paid bill in 30 seconds. Say it in Hindi or English, check the
+              GST bill, share it on WhatsApp, and get paid.
             </p>
           </div>
         </Reveal>
 
         <Reveal delay={0.05} y={40}>
-          <div className="mx-auto mb-20 max-w-4xl overflow-hidden rounded-card-lg border border-bone bg-white shadow-[0_30px_80px_-30px_rgba(30,42,94,0.3)]">
-            <div className="flex items-center justify-between border-b border-bone bg-mist px-5 py-3">
-              <div className="flex items-center gap-2">
-                <span className="h-2.5 w-2.5 rounded-full bg-red-400" />
-                <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
-                <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
-              </div>
-              <span className="rounded-full bg-white px-3 py-1 font-mono text-[11px] text-slate">argusinvoicing.com/app</span>
-              <span className="w-10" />
-            </div>
-            <HeroDemo />
+          <div className="mx-auto mb-20 max-w-3xl">
+            <Walkthrough />
           </div>
         </Reveal>
 
