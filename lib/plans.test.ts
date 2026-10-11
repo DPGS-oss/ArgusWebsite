@@ -34,12 +34,12 @@ describe("Business / Lifetime prices (Play + website)", () => {
   });
 });
 
-describe("Free vs Business entitlements (Vyapar model)", () => {
-  it("lets Free do unlimited Android-class billing and still gates web, CA JSON, and Tally XML", () => {
+describe("Free vs Business entitlements", () => {
+  it("gives Free 20 Android bills a month and still gates web, CA JSON, and Tally XML", () => {
     for (const planId of [undefined, null, "", "free", "Free"]) {
       const e = getEntitlements(planId);
       expect(e.android_billing, String(planId)).toBe(true);
-      expect(e.android_invoice_limit, String(planId)).toBeNull();
+      expect(e.android_invoice_limit, String(planId)).toBe(20);
       expect(e.web_invoicing, String(planId)).toBe(false);
       expect(e.web_books, String(planId)).toBe(false);
       expect(e.ca_portal, String(planId)).toBe(false);

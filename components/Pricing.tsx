@@ -19,7 +19,8 @@ const plans = [
     suffix: "",
     featured: false,
     features: [
-      "Unlimited invoices on Android",
+      "20 bills a month on Android",
+      "Small \"Made with Argus\" watermark on bills",
       "Customers & basic billing",
       "UPI payment links",
       "Upgrade anytime for full books + web",
@@ -36,7 +37,7 @@ const plans = [
     suffixYearly: "/year",
     featured: true,
     features: [
-      "Unlimited invoices on phone & web",
+      "Unlimited bills on phone & web, no watermark",
       "Full books: purchases, stock, khata",
       "GSTR-1, 2B, 3B summaries",
       "Quotes, credit notes & challans",
@@ -325,7 +326,7 @@ export function Pricing() {
           </Stagger>
           <Reveal delay={0.2}>
             <p className="mx-auto mt-12 max-w-3xl text-center text-sm leading-relaxed text-ash">
-              Free covers everyday billing on Android (unlimited invoices). The web app is part of
+              Free covers everyday billing on Android (20 bills a month). The web app is part of
               Business — so your books, GST summaries, and CA invite stay in one paid workspace.
               Same login unlocks both. Lifetime is a one-time licence for the current Business
               generation (see Terms); cancelled renewals are not refunded for unused time.

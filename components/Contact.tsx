@@ -46,11 +46,11 @@ export function Contact() {
   }
 
   return (
-    <section id="contact" className="mb-24 border-y border-bone bg-mist py-24 md:mb-32 md:py-32">
+    <section id="contact" className="bg-white py-24 md:py-32">
       <div className="container-page">
         <Reveal>
           <div className="section-header">
-            <span className="eyebrow">Contact</span>
+            <span className="mb-3 inline-block text-sm font-bold text-brand-violet">Talk to us.</span>
             <AnimatedHeading text="Talk to a human" />
             <p>Questions about GST, pricing, or moving from another tool? We&apos;re here to help.</p>
           </div>

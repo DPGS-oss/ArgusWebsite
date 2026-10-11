@@ -16,9 +16,8 @@ export const LEGAL_ENTITY = {
 };
 
 export const GRIEVANCE_OFFICER = {
-  /** Full name of the Grievance Officer. REQUIRED before launch. */
-  name: "",
+  name: "Devansh Pundhir",
   designation: "Grievance Officer",
   email: "support@argusinvoicing.com",
-  phone: "",
+  phone: "+91 96549 54190",
 };

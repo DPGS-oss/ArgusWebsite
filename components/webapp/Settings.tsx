@@ -245,9 +245,9 @@ export function Settings({ data, onSaved }: SettingsProps) {
       <div className="rounded-card border border-bone bg-white p-6">
         <h2 className="mb-2 text-lg font-semibold text-ink">Invite CA</h2>
         <p className="mb-4 text-sm text-slate">
-          Generate a 7-day link. Your CA signs in, redeems once, and gets a free read-only portal.
-          Books are encrypted before upload — the invite fragment holds the key (never stored as
-          plaintext on Argus servers). The link is shown for this browser session only — copy it now.
+          Generate a 7-day link. Your CA signs in, redeems once, and gets a free read-only view of
+          your books until you stop sharing below. The link is shown for this browser session only,
+          so copy it now and send it privately.
         </p>
         <div className="flex flex-wrap gap-2">
           <button className="btn-primary" disabled={caBusy} onClick={() => handleInviteCa(!!caInvite)}>

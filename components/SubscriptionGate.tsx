@@ -81,14 +81,14 @@ export function SubscriptionGate() {
   const savingsLabel = promoOffer ? "Offer" : yearly ? "Best value" : null;
 
   const freeFeatures = [
-    "Unlimited invoices on Android",
+    "20 bills a month on Android",
     "Basic billing & customers",
     "UPI payment links",
     "Upgrade anytime for full books + web",
   ];
 
   const businessFeatures = [
-    "Unlimited invoices on phone & web",
+    "Unlimited bills on phone & web, no watermark",
     "Full books: purchases, stock, khata",
     "GSTR-1, 2B, 3B summaries",
     "Quotes, credit notes & challans",
@@ -114,7 +114,7 @@ export function SubscriptionGate() {
               ? "Your Business subscription has expired. Renew below to continue using the web app."
               : currentPlan
               ? `Your current plan (${currentPlan}) doesn't include web access. Upgrade to Business to continue.`
-              : "Web books, GSTR summaries, and the CA portal are Business. Android Free is unlimited basic billing — it does not unlock this web suite. Start a 14-day trial, or subscribe below."}
+              : "Web books, GSTR summaries, and the CA portal are Business. Android Free covers 20 bills a month — it does not unlock this web suite. Start a 14-day trial, or subscribe below."}
           </p>
         </div>
 

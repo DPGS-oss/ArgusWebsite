@@ -68,11 +68,11 @@
   }
 
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 rounded-full bg-ink px-6 py-3 text-sm font-bold text-white shadow-subtle transition hover:-translate-y-px hover:bg-onyx hover:shadow-lift disabled:pointer-events-none disabled:opacity-60;
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-brand-violet px-6 py-3 text-sm font-bold text-white shadow-subtle transition hover:-translate-y-px hover:bg-[#0f8a45] hover:shadow-lift disabled:pointer-events-none disabled:opacity-60;
   }
 
   .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 rounded-full border border-bone bg-white px-6 py-3 text-sm font-bold text-ink transition hover:border-cloud hover:bg-mist disabled:opacity-60;
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-bone bg-white px-6 py-3 text-sm font-bold text-ink transition hover:border-cloud hover:bg-mist disabled:opacity-60;
   }
 
   .btn-outline {
@@ -80,7 +80,7 @@
   }
 
   .btn-brand {
-    @apply inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-brand-violet to-signal-blue px-6 py-3 text-sm font-bold text-white shadow-glow transition hover:-translate-y-px hover:brightness-110 disabled:opacity-60;
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-brand-violet px-6 py-3 text-sm font-bold text-white shadow-glow transition hover:-translate-y-px hover:bg-[#0f8a45] disabled:opacity-60;
   }
 
   .input-field {
@@ -120,7 +120,7 @@
     border-radius: inherit;
     opacity: 0;
     transition: opacity 0.3s ease;
-    background: radial-gradient(260px circle at var(--mx, 50%) var(--my, 50%), rgba(102, 71, 240, 0.1), transparent 70%);
+    background: radial-gradient(260px circle at var(--mx, 50%) var(--my, 50%), rgba(18, 161, 80, 0.1), transparent 70%);
     pointer-events: none;
   }
   .card:hover::before {
@@ -132,7 +132,7 @@
     border: 2px solid transparent;
     background:
       linear-gradient(#fff, #fff) padding-box,
-      conic-gradient(from var(--border-angle), #6647f0, #0091ff, #6ee7b7, #6647f0) border-box;
+      conic-gradient(from var(--border-angle), #12a150, #1e2a5e, #6ee7b7, #12a150) border-box;
     animation: border-spin 6s linear infinite;
   }
   @keyframes border-spin {
@@ -164,7 +164,7 @@
   }
 
   .gradient-text {
-    @apply bg-gradient-to-r from-brand-violet to-signal-blue bg-clip-text text-transparent;
+    @apply bg-gradient-to-r from-brand-violet to-[#0b7a3e] bg-clip-text text-transparent;
   }
 
   .bg-grid {

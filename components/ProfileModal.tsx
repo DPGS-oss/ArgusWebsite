@@ -87,7 +87,7 @@ export function ProfileModal() {
             {user.subscription?.plan || "Free Plan"}
           </div>
           <p className="mb-4 text-sm text-slate">
-            {user.subscription?.details || "Unlimited Android billing. Business required for web books, GSTR JSON, and Tally XML."}
+            {user.subscription?.details || "20 bills a month on Android. Business adds unlimited bills, web books, GSTR JSON, and Tally XML."}
           </p>
           {user.subscription?.active && user.subscription.auto_renew === false && user.subscription.expiry_date ? (
             <p className="mb-4 text-sm text-slate">

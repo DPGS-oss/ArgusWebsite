@@ -2,7 +2,7 @@
 export const HOME_FAQ: { q: string; a: string }[] = [
   {
     q: "Is Argus really free?",
-    a: "Yes. The Android app is free with unlimited invoices, customers, and UPI payment links. Full books, the web app, GSTR summaries, and the CA portal are part of Business (₹500/month, ₹5,000/year, or ₹18,000 Lifetime).",
+    a: "Yes. The Android app is free for 20 bills a month (with a small \"Made with Argus\" watermark), plus customers and UPI payment links. Full books, the web app, GSTR summaries, and the CA portal are part of Business (₹500/month, ₹5,000/year, or ₹18,000 Lifetime).",
   },
   {
     q: "Does Argus file my GST returns?",

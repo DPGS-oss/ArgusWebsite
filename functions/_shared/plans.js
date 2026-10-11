@@ -1,14 +1,14 @@
 /** Subscription plans — must match Flutter / Play Store (₹500 / ₹5,000).
  *  Lifetime (₹18,000) is website-only; never sold in the mobile app.
  *
- *  Vyapar model: Free Android billing is unlimited. Web books, GSTR JSON,
+ *  Free Android billing: 20 bills a calendar month, watermarked. Web books, GSTR JSON,
  *  CA portal, and Tally XML stay on Business. Do not add a ₹299 SKU.
  */
 const LIFETIME_EXPIRY_ISO = '2099-12-31T00:00:00.000Z';
 
 const FREE_ENTITLEMENTS = {
   android_billing: true,
-  android_invoice_limit: null,
+  android_invoice_limit: 20, // per calendar month, enforced in the app
   web_invoicing: false,
   web_books: false,
   ca_portal: false,

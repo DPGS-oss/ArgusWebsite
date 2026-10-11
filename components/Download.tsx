@@ -12,7 +12,7 @@ export function Download() {
           <AnimatedHeading className="mb-4 text-4xl font-bold tracking-tightest text-ink md:text-5xl" text="Start on the web today" />
           <p className="mx-auto mb-10 max-w-2xl text-lg text-slate">
             The web app is live now and works best in Chrome or Edge on desktop. The Android app
-            (free, unlimited invoices) and iOS are coming soon — same login everywhere.
+            (free for 20 bills a month) and iOS are coming soon — same login everywhere.
           </p>
         </Reveal>
         <Stagger className="flex flex-wrap items-center justify-center gap-4" stagger={0.12}>
