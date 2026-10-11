@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { join } from "node:path";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -34,6 +35,7 @@ export default function GuidePage() {
         </div>
       </main>
       <Footer />
+      <WhatsAppButton />
     </>
   );
 }

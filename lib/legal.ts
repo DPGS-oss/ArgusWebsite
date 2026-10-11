@@ -21,3 +21,6 @@ export const GRIEVANCE_OFFICER = {
   email: "support@argusinvoicing.com",
   phone: "+91 96549 54190",
 };
+
+/** WhatsApp support chat (digits only, with country code). Shown as the floating chat button. */
+export const SUPPORT_WHATSAPP = "919654954190";

@@ -15,6 +15,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 1,
     },
     {
+      url: `${SITE_URL}/hi/`,
+      lastModified: new Date("2026-10-11"),
+      changeFrequency: "weekly",
+      priority: 0.9,
+    },
+    {
       url: `${SITE_URL}/gstr/`,
       lastModified: now,
       changeFrequency: "monthly",

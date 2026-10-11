@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
+import { WhatsAppButton } from "@/components/WhatsAppButton";
 import { Hero } from "@/components/Hero";
 import { CapabilityProof } from "@/components/CapabilityProof";
+import { PhoneScreens } from "@/components/PhoneScreens";
 import { ProductShowcase } from "@/components/ProductShowcase";
 import { WhatsAppInvoice } from "@/components/WhatsAppInvoice";
 import { Features } from "@/components/Features";
@@ -24,6 +26,7 @@ export const metadata: Metadata = {
     description: HOME_DESCRIPTION,
     path: "/",
   }),
+  alternates: { canonical: "/", languages: { "en-IN": "/", "hi-IN": "/hi/" } },
   other: {
     "description:hi": HINDI_LINE,
   },
@@ -38,6 +41,7 @@ export default function HomePage() {
       <main>
         <Hero />
         <CapabilityProof />
+        <PhoneScreens />
         <ProductShowcase />
         <WhatsAppInvoice />
         <Features />
@@ -49,6 +53,7 @@ export default function HomePage() {
         <FinalCta />
       </main>
       <Footer />
+      <WhatsAppButton />
       <AuthModal />
       <ProfileModal />
     </>

@@ -8,6 +8,7 @@ import { startRazorpayCheckout, validatePromoCode, type PromoOffer } from "@/lib
 import { startBusinessTrial } from "@/lib/subscription";
 import { Reveal, Stagger, StaggerItem } from "./Reveal";
 import { AnimatedHeading } from "./AnimatedHeading";
+import { PlanComparison } from "./PlanComparison";
 
 type BillingInterval = "monthly" | "yearly";
 
@@ -324,6 +325,7 @@ export function Pricing() {
               </StaggerItem>
             ))}
           </Stagger>
+          <PlanComparison />
           <Reveal delay={0.2}>
             <p className="mx-auto mt-12 max-w-3xl text-center text-sm leading-relaxed text-ash">
               Free covers everyday billing on Android (20 bills a month). The web app is part of
