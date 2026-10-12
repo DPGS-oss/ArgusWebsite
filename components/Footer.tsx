@@ -72,6 +72,15 @@ export function Footer() {
           <div>
             <h2 className="mb-4 text-sm font-bold tracking-normal text-white">Company entity</h2>
             <p className="text-sm leading-relaxed">{LEGAL_ENTITY.name}</p>
+            {LEGAL_ENTITY.address ? <p className="text-sm leading-relaxed">{LEGAL_ENTITY.address}</p> : null}
+            {LEGAL_ENTITY.phone ? (
+              <p className="mt-2 text-sm">
+                Customer care:{" "}
+                <a href={`tel:${LEGAL_ENTITY.phone.replace(/\s/g, "")}`} className="hover:text-white">
+                  {LEGAL_ENTITY.phone}
+                </a>
+              </p>
+            ) : null}
             <p className="mt-3 text-sm leading-relaxed">
               Grievance Officer:
               <br />

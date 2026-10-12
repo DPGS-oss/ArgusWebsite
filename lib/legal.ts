@@ -7,10 +7,10 @@
 export const LEGAL_ENTITY = {
   name: "B&L Softwares and Logistics",
   email: "support@argusinvoicing.com",
-  /** Registered / principal place of business. REQUIRED before launch. */
-  address: "",
-  /** Customer care phone. REQUIRED before launch. */
-  phone: "",
+  /** Registered / principal place of business. */
+  address: "Hauz Khas, New Delhi 110016",
+  /** Customer care phone. */
+  phone: "+91 96549 54190",
   /** GSTIN, if registered. */
   gstin: "",
 };
