@@ -58,6 +58,10 @@ export type Gstr1Json = {
   cur_gt: number;
   b2b: Array<{ ctin: string; inv: Gstr1Inv[] }>;
   b2cl: Array<{ pos: string; inv: Gstr1Inv[] }>;
+  /** Table 8: nil-rated / exempt / non-GST supplies (bills of supply). */
+  nil_sup?: {
+    inv: Array<{ sply_ty: "INTRB2B" | "INTRAB2B" | "INTRB2C" | "INTRAB2C"; expt_amt: number; nil_amt: number; ngsup_amt: number }>;
+  };
   b2cs: Array<{
     sply_ty: "INTER" | "INTRA";
     pos: string;
