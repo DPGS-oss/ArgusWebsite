@@ -1,4 +1,4 @@
-import type { AppData, CreditNote, DebitNote, GSTRate, HSNCode, Invoice, InvoiceItem, InvoiceStatus, InvoiceType, GSTRReport, GSTRSection, GSTRReportType, GstDocumentType, Purchase } from "./types";
+import type { AppData, BusinessProfile, CreditNote, DebitNote, GSTRate, HSNCode, Invoice, InvoiceItem, InvoiceStatus, InvoiceType, GSTRReport, GSTRSection, GSTRReportType, GstDocumentType, Purchase } from "./types";
 import { GST_2_0_RATES, INDIAN_STATES } from "./types";
 import { isRegisteredGstin, normalizeGstin, stateCodeFromGstin } from "./gstin";
 import caExports from "../functions/_shared/ca-exports.js";
@@ -1239,7 +1239,7 @@ export function generateInvoiceHTML(invoice: Invoice, business: {
   <div class="header">
     <div class="business-info">
       <h1>${business.name}</h1>
-      <p>${business.address}<br>${business.city}, ${business.state} - ${business.pincode}<br>GSTIN: ${business.gstin}<br>Phone: ${business.phone} | Email: ${business.email}</p>
+      <p>${business.address}<br>${business.city}, ${business.state} - ${business.pincode}<br>GSTIN: ${business.gstin || "Not registered"}<br>Phone: ${business.phone} | Email: ${business.email}</p>
     </div>
     <div class="invoice-meta">
       <h3>${invoice.invoiceNumber}</h3>
@@ -1301,6 +1301,7 @@ export function generateInvoiceHTML(invoice: Invoice, business: {
   ${invoice.terms ? `<div class="notes"><p><strong>Terms:</strong> ${invoice.terms}</p></div>` : ""}
   <div style="margin-top:32px;text-align:right;font-size:13px">
     <p>For <strong>${business.name}</strong></p>
+    ${billOfSupplyNote(invoice, business) ? `<p style="font-style:italic;font-size:12px">${billOfSupplyNote(invoice, business)}</p>` : ""}
     <p style="margin-top:40px;border-top:1px solid #999;display:inline-block;padding-top:4px">Authorised Signatory</p>
   </div>
   <div class="footer">
@@ -1310,4 +1311,16 @@ export function generateInvoiceHTML(invoice: Invoice, business: {
 </div>
 </body>
 </html>`;
+}
+
+/**
+ * Declaration a bill of supply must carry. Composition dealers print the
+ * Rule 5(1)(g) line; unregistered sellers state that no GST is charged.
+ * Registered sellers issuing a bill of supply for exempt goods need none.
+ */
+export function billOfSupplyNote(invoice: Pick<Invoice, "type">, business: Pick<BusinessProfile, "gstin" | "composition">): string | null {
+  if (invoice.type !== "bill_of_supply") return null;
+  if (business.composition) return "Composition taxable person, not eligible to collect tax on supplies.";
+  if (!isRegisteredGstin(business.gstin)) return "Supplier not registered under GST. No GST charged.";
+  return null;
 }

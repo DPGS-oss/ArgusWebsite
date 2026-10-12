@@ -1,6 +1,7 @@
 "use client";
 
 import type { AppData, AppSettings, BusinessProfile, Invoice, Party, StockItem, CreditNote, DebitNote, PayrollEntry, DeliveryChallan, Expense, Quote, Purchase, Payment, Template, KhataEntry, DeletableKey } from "./types";
+import { cancelledEntry } from "./invoice-history";
 
 declare global {
   interface Window {
@@ -556,10 +557,21 @@ export function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
+/**
+ * Next bill number, e.g. INV-2026-0042. GST Rule 46(b) allows at most 16
+ * characters, so a long suffix is dropped and a long prefix is shortened.
+ */
 export function generateInvoiceNumber(counter: number, prefix: string, suffix: string): string {
+  const MAX = 16;
   const year = new Date().getFullYear();
   const num = String(counter).padStart(4, "0");
-  return `${prefix}-${year}-${num}${suffix ? `-${suffix}` : ""}`;
+  const clean = (v: string) => (v || "").replace(/[^A-Za-z0-9/-]/g, "").toUpperCase();
+  const core = `-${year}-${num}`;
+  const p = clean(prefix) || "INV";
+  const sfx = clean(suffix);
+  const withSuffix = `${p}${core}${sfx ? `-${sfx}` : ""}`;
+  if (withSuffix.length <= MAX) return withSuffix;
+  return `${p.slice(0, Math.max(1, MAX - core.length))}${core}`;
 }
 
 export function exportAllData(): string {
@@ -621,10 +633,29 @@ export function markDeleted(data: AppData, key: DeletableKey, id: string): void 
   (deleted[key] ||= {})[id] = new Date().toISOString();
 }
 
+/**
+ * Only drafts can be deleted. Issued bills are cancelled instead and stay in
+ * the books (CGST Rule 56; cancelled bills count in GSTR-1 Table 13).
+ */
 export function deleteInvoice(id: string): void {
   const data = loadData();
+  const inv = data.invoices.find((i) => i.id === id);
+  if (inv && inv.status !== "draft") {
+    throw new Error("Issued bills can't be deleted. Cancel the bill instead, or issue a credit note.");
+  }
   data.invoices = data.invoices.filter((i) => i.id !== id);
   markDeleted(data, "invoices", id);
+  saveData(data);
+}
+
+/** Marks an issued bill cancelled and records it in the bill's change log. */
+export function cancelInvoice(id: string): void {
+  const data = loadData();
+  data.invoices = data.invoices.map((i) =>
+    i.id === id && i.status !== "cancelled"
+      ? { ...i, status: "cancelled" as const, balanceDue: 0, updatedAt: new Date().toISOString(), history: [...(i.history || []), cancelledEntry()] }
+      : i
+  );
   saveData(data);
 }
 

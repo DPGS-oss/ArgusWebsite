@@ -276,6 +276,9 @@ function buildGstr1Json(input) {
   const cdnur = [];
   const hsnB2b = new Map();
   const hsnB2c = new Map();
+  // Table 8: bills of supply (no GST charged) are exempt supplies, not sales
+  // in the taxable tables.
+  const nilMap = new Map();
 
   function addB2cs(inv, sign) {
     const pos = posOf(inv);
@@ -321,6 +324,15 @@ function buildGstr1Json(input) {
     const sign = credit ? -1 : 1;
 
     addHsn(registered ? hsnB2b : hsnB2c, inv, sign);
+
+    if (inv.type === 'bill_of_supply' && !note) {
+      const sply_ty = `${isInter(inv) ? 'INTR' : 'INTRA'}${registered ? 'B2B' : 'B2C'}`;
+      const cur = nilMap.get(sply_ty) || { sply_ty, expt_amt: 0, nil_amt: 0, ngsup_amt: 0 };
+      const value = (inv.items || []).reduce((t, it) => t + (Number(it.taxableAmount) || Number(it.total) || 0), 0);
+      cur.expt_amt = round2(cur.expt_amt + value);
+      nilMap.set(sply_ty, cur);
+      continue;
+    }
 
     if (note) {
       const noteRow = {
@@ -413,6 +425,7 @@ function buildGstr1Json(input) {
     cdnr: [...cdnrMap.entries()].map(([ctin, nt]) => ({ ctin, nt })),
     cdnur,
     hsn: { hsn_b2b: numbered(hsnB2b), hsn_b2c: numbered(hsnB2c) },
+    ...(nilMap.size ? { nil_sup: { inv: [...nilMap.values()] } } : {}),
     doc_issue: { doc_det },
   };
 }

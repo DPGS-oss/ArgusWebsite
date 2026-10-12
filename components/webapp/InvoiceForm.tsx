@@ -1,8 +1,9 @@
 "use client";
 
 import { isRegisteredGstin } from "@/lib/gstin";
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { VoiceBill } from "./VoiceBill";
+import { withHistory } from "@/lib/invoice-history";
 import type { VoiceBill as VoiceBillResult } from "@/lib/voice-parser";
 import { Plus, Trash2, Sparkles, ArrowLeft, Save, ScanLine, Package, X } from "lucide-react";
 import type { AppData, BusinessProfile, Invoice, InvoiceItem, InvoiceType, InvoiceStatus, GSTRate, StockItem } from "@/lib/types";
@@ -241,7 +242,7 @@ export function InvoiceForm({ data, business: businessProp, editingInvoice, onSa
     if (bill.customerName && !partyId && !inlinePartyName.trim()) setInlinePartyName(bill.customerName);
     if (bill.items.length) {
       const voiceItems = bill.items.map((v) => {
-        const gstRate = v.gstRate as GSTRate;
+        const gstRate = (zeroTax ? 0 : v.gstRate) as GSTRate;
         const rate = exclusiveRateFromInclusive(v.price, gstRate);
         return {
           ...emptyItem(business?.stateCode || "", "", gstRate),
@@ -279,6 +280,26 @@ export function InvoiceForm({ data, business: businessProp, editingInvoice, onSa
       return next;
     });
   }
+
+  // Only a GST-registered seller on the regular scheme may charge GST
+  // (CGST Act s.32). Unregistered and composition sellers issue a bill of
+  // supply, and a bill of supply never carries tax.
+  const canChargeGst = isRegisteredGstin(business?.gstin) && !business?.composition;
+  const zeroTax = invoiceType === "bill_of_supply";
+  useEffect(() => {
+    if (!canChargeGst && invoiceType === "tax_invoice") setInvoiceType("bill_of_supply");
+  }, [canChargeGst, invoiceType]);
+  useEffect(() => {
+    if (!zeroTax) return;
+    if (totalGstRate !== 0) setTotalGstRate(0 as GSTRate);
+    if (!items.some((i) => i.gstRate !== 0)) return;
+    setItems((prev) =>
+      prev.map((item) => {
+        const calc = calculateItem({ quantity: item.quantity, rate: item.rate, discount: item.discount, gstRate: 0 as GSTRate, isInterState: interState });
+        return { ...item, gstRate: 0 as GSTRate, taxableAmount: calc.taxableAmount, cgst: calc.cgst, sgst: calc.sgst, igst: calc.igst, cess: calc.cess ?? 0, total: calc.total };
+      })
+    );
+  }, [zeroTax, items, totalGstRate, interState]);
 
   function addItem() {
     setItems((prev) => [...prev, emptyItem(businessStateCode, placeOfSupply, newInvoiceGstRate)]);
@@ -426,6 +447,16 @@ export function InvoiceForm({ data, business: businessProp, editingInvoice, onSa
     }
     setGstinError("");
 
+    // Rule 46(e): unregistered buyer and taxable value ₹50,000 or more → the
+    // bill must show the buyer's name and address.
+    if (invoiceType === "tax_invoice" && !isRegisteredGstin(billToGstin) && totals.totalTaxable >= 50000 && !party?.address?.trim()) {
+      alert(
+        "Bills of ₹50,000 or more to a customer without a GSTIN must show the customer's name and address. " +
+          "Pick the customer from your parties (with their address) or add them, then save."
+      );
+      return;
+    }
+
     if (isTotalMode) {
       if (totalAmount <= 0) {
         alert("Please enter a total amount.");
@@ -541,7 +572,8 @@ export function InvoiceForm({ data, business: businessProp, editingInvoice, onSa
       invoice.balanceDue = round2(invoice.grandTotal - (invoice.paidAmount || 0));
     }
 
-    onSave(invoice);
+    // Edits to an issued bill are logged, never silently overwritten.
+    onSave(withHistory(openedInvoice, invoice));
   }
 
   const hsnResults = hsnSearch !== null ? searchHSN(hsnSearch) : [];
@@ -612,11 +644,18 @@ export function InvoiceForm({ data, business: businessProp, editingInvoice, onSa
                   onChange={(e) => setInvoiceType(e.target.value as InvoiceType)}
                   className="mt-1 w-full rounded-btn border border-lead/30 bg-graphite px-4 py-2.5 text-starlight outline-none focus:border-mercury-blue"
                 >
-                  {INVOICE_TYPES.map((t) => (
+                  {INVOICE_TYPES.filter((t) => canChargeGst || t.value !== "tax_invoice").map((t) => (
                     <option key={t.value} value={t.value}>{t.label}</option>
                   ))}
                 </select>
               </label>
+              {!canChargeGst ? (
+                <p className="text-xs text-silver sm:col-span-2 sm:order-last">
+                  {business?.composition
+                    ? "You are on the composition scheme, so bills are Bills of Supply with no GST."
+                    : "No GSTIN on your business profile, so bills are Bills of Supply with no GST. Add your GSTIN in Business if you are registered."}
+                </p>
+              ) : null}
               <label className="block text-sm text-silver">
                 Status
                 <select
@@ -810,6 +849,7 @@ export function InvoiceForm({ data, business: businessProp, editingInvoice, onSa
                     <label className="text-xs text-silver">GST Rate</label>
                     <select
                       value={totalGstRate}
+                      disabled={zeroTax}
                       onChange={(e) => setTotalGstRate(parseFloat(e.target.value) as GSTRate)}
                       className="mt-1 w-full rounded-btn border border-lead/30 bg-abyss px-2 py-2 text-sm text-starlight outline-none focus:border-mercury-blue"
                     >
@@ -937,6 +977,7 @@ export function InvoiceForm({ data, business: businessProp, editingInvoice, onSa
                       <label className="text-xs text-silver">GST%</label>
                       <select
                         value={item.gstRate}
+                        disabled={zeroTax}
                         onChange={(e) => updateItem(idx, { gstRate: parseFloat(e.target.value) as GSTRate })}
                         className="mt-1 w-full rounded-btn border border-lead/30 bg-abyss px-2 py-2 text-sm text-starlight outline-none focus:border-mercury-blue"
                       >

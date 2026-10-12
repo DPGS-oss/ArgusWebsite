@@ -222,9 +222,12 @@ export function RecurringInvoices({ data, onSaved }: Props) {
     onSaved();
   }
 
+  // Stop repeating: the bill itself stays (issued bills are never deleted).
   function handleDelete(id: string) {
-    if (!confirm("Delete this recurring invoice?")) return;
-    deleteInvoice(id);
+    if (!confirm("Stop repeating this bill? Bills already made are kept.")) return;
+    const inv = loadData().invoices.find((i) => i.id === id);
+    if (inv?.status === "draft") deleteInvoice(id);
+    else if (inv) saveInvoice({ ...inv, recurring: undefined, updatedAt: new Date().toISOString() });
     onSaved();
   }
 

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import dynamic from "next/dynamic";
 import { Menu, X, Cloud, CloudOff, RefreshCw } from "lucide-react";
 import type { AppData, BusinessProfile, Invoice, View } from "@/lib/types";
-import { loadData, saveInvoice, deleteInvoice, pickFolder, deductStockForInvoice, saveData, generateId, initStorage, isFileSystemSupported, isUsingFileSystem, getFolderName } from "@/lib/storage";
+import { loadData, saveInvoice, deleteInvoice, cancelInvoice, pickFolder, deductStockForInvoice, saveData, generateId, initStorage, isFileSystemSupported, isUsingFileSystem, getFolderName } from "@/lib/storage";
 import { syncFromCloud, syncToCloud, getLastSyncTime, type SyncStatus } from "@/lib/cloud-sync";
 import { Sidebar } from "@/components/webapp/Sidebar";
 import { Dashboard } from "@/components/webapp/Dashboard";
@@ -284,9 +284,18 @@ export default function AppPage() {
   }
 
   function handleDeleteInvoice(id: string) {
-    deleteInvoice(id);
+    try {
+      deleteInvoice(id);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Could not delete this bill.");
+    }
     refresh();
     setView("invoices");
+  }
+
+  function handleCancelInvoice(id: string) {
+    cancelInvoice(id);
+    refresh();
   }
 
   async function handlePickFolder() {
@@ -317,6 +326,7 @@ export default function AppPage() {
             onPreview={handlePreviewInvoice}
             onEdit={handleEditInvoice}
             onDelete={handleDeleteInvoice}
+            onCancel={handleCancelInvoice}
             onAddUpi={() => navigate("business")}
           />
         );
