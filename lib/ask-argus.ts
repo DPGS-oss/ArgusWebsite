@@ -1,5 +1,8 @@
 import type { AppData } from "./types";
 import { generateGSTRReport, notesAsInvoices } from "./gst";
+import { profitAndLoss } from "./books";
+import { istDate } from "./dates";
+import { round2 } from "./money";
 
 export type AskArgusSummary = {
   period: { from: string; to: string };
@@ -14,6 +17,8 @@ export type AskArgusSummary = {
   inventory_skus: number;
   low_stock_items: number;
   gstr3b_tax_due_estimate: number;
+  /** Profit before tax for the period: sales and purchases without GST, less expenses. */
+  profit: number;
   include_party_names?: boolean;
   top_parties?: { label: string; total: number }[];
 };
@@ -36,10 +41,16 @@ export function buildAskArgusSummary(
   includePartyNames: boolean,
 ): AskArgusSummary {
   const bizId = data.activeBusinessId;
+  // Drafts and cancelled bills are not sales.
   const invoices = data.invoices.filter(
-    (inv) => (!bizId || inv.businessId === bizId) && inRange(inv.date.slice(0, 10), from, to),
+    (inv) =>
+      (!bizId || inv.businessId === bizId) &&
+      inv.status !== "draft" &&
+      inv.status !== "cancelled" &&
+      inRange(inv.date.slice(0, 10), from, to),
   );
-  const purchases = (data.purchases ?? []).filter((p) => inRange(String(p.createdAt).slice(0, 10), from, to));
+  const purchaseDay = (p: { date?: string; createdAt: string }) => p.date || istDate(new Date(p.createdAt));
+  const purchases = (data.purchases ?? []).filter((p) => inRange(purchaseDay(p as { date?: string; createdAt: string }), from, to));
   const expenses = (data.expenses ?? []).filter((e) => inRange(e.date.slice(0, 10), from, to));
 
   let salesTotal = 0;
@@ -85,6 +96,14 @@ export function buildAskArgusSummary(
     inventory_skus: stock.length,
     low_stock_items: lowStock,
     gstr3b_tax_due_estimate: round2(gstr3b.totalTax),
+    profit: profitAndLoss({
+      ...data,
+      invoices,
+      purchases,
+      expenses,
+      creditNotes: (data.creditNotes ?? []).filter((c) => inRange(c.date || istDate(new Date(c.createdAt)), from, to)),
+      debitNotes: (data.debitNotes ?? []).filter((d) => inRange(d.date || istDate(new Date(d.createdAt)), from, to)),
+    }).profit,
   };
 
   if (includePartyNames) {
@@ -98,8 +117,54 @@ export function buildAskArgusSummary(
   return summary;
 }
 
-function round2(n: number) {
-  return Math.round((n + Number.EPSILON) * 100) / 100;
+const inr = (n: number) => `₹${n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+const INTENTS: { words: RegExp; answer: (s: AskArgusSummary) => string }[] = [
+  {
+    words: /\b(gst|tax|kar)\b.*\b(due|pay|payable|owe|bharna|dena|kitna|liability|3b)\b|\b(due|pay|kitna)\b.*\b(gst|tax)\b/i,
+    answer: (s) =>
+      `GST to pay for ${s.period.from} to ${s.period.to}: about ${inr(s.gstr3b_tax_due_estimate)}.\n` +
+      `• GST on your sales: ${inr(s.sales_tax)}\n• GST on your purchases: ${inr(s.purchase_tax)}\n` +
+      "Your CA files the final figure in GSTR-3B.",
+  },
+  {
+    words: /\b(profit|munafa|fayda|kamai|margin|loss|nuksan)\b/i,
+    answer: (s) =>
+      `Profit from ${s.period.from} to ${s.period.to}: ${inr(s.profit)} (before income tax).\n` +
+      "Sales and purchases are counted without GST; expenses are taken off.",
+  },
+  {
+    words: /\b(owe|owes|outstanding|pending|udhaar|udhar|baaki|baki|receivable)\b/i,
+    answer: (s) =>
+      `Customers owe you ${inr(s.outstanding)} on bills from ${s.period.from} to ${s.period.to}.` +
+      (s.top_parties?.length ? `\nBiggest customers: ${s.top_parties.map((p) => `${p.label} ${inr(p.total)}`).join(", ")}.` : ""),
+  },
+  {
+    words: /\b(sales|sale|sold|bikri|becha|revenue|turnover)\b/i,
+    answer: (s) =>
+      `Sales from ${s.period.from} to ${s.period.to}: ${inr(s.sales_total)} on ${s.invoice_count} bills, including ${inr(s.sales_tax)} GST.`,
+  },
+  {
+    words: /\b(purchase|purchases|bought|kharid|kharida)\b/i,
+    answer: (s) => `Purchases from ${s.period.from} to ${s.period.to}: ${inr(s.purchases_total)}, including ${inr(s.purchase_tax)} GST.`,
+  },
+  {
+    words: /\b(expense|expenses|kharcha|kharche|spent)\b/i,
+    answer: (s) => `Expenses from ${s.period.from} to ${s.period.to}: ${inr(s.expenses_total)}.`,
+  },
+  {
+    words: /\b(stock|inventory|maal|khatam)\b/i,
+    answer: (s) => `${s.low_stock_items} of your ${s.inventory_skus} items are at or below their minimum stock.`,
+  },
+];
+
+/**
+ * Answers common money questions straight from the books, with exact figures
+ * and no AI. Returns null when the question needs the AI.
+ */
+export function answerFromBooks(question: string, summary: AskArgusSummary): string | null {
+  const hit = INTENTS.find((i) => i.words.test(question));
+  return hit ? hit.answer(summary) : null;
 }
 
 export async function askArgusQuestion(

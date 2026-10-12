@@ -22,7 +22,7 @@ export function WhatsAppInvoice() {
         <Reveal delay={0.1} y={40}>
           <div className="mx-auto max-w-3xl overflow-hidden rounded-card-lg border border-bone bg-white shadow-lift">
             <div className="border-b border-bone px-5 py-4">
-              <p className="text-xs uppercase tracking-wide text-slate">Invoice INV-2026-0001</p>
+              <p className="text-xs uppercase tracking-wide text-slate">Invoice INV/26-27/0001</p>
               <p className="text-lg font-bold text-ink">Sharma Traders · ₹1,180.00</p>
             </div>
             <div className="flex flex-wrap gap-3 px-5 py-5">
@@ -42,7 +42,7 @@ export function WhatsAppInvoice() {
               </a>
             </div>
             <p className="border-t border-bone bg-plaster px-5 py-3 font-mono text-xs text-slate">
-              upi://pay?pa=shop@okaxis&amp;am=1180.00&amp;tn=INV-2026-0001&amp;cu=INR
+              upi://pay?pa=shop@okaxis&amp;am=1180.00&amp;tn=INV/26-27/0001&amp;cu=INR
             </p>
           </div>
         </Reveal>

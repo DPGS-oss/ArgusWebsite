@@ -31,6 +31,8 @@ import {
 import { generateId, generateInvoiceNumber, saveBusiness } from "@/lib/storage";
 import { BarcodeScannerModal } from "./BarcodeScannerModal";
 import { validateGstin } from "@/lib/gstin";
+import { roundOffPaise, toPaise } from "@/lib/money";
+import { addDays, addPeriod, todayIST } from "@/lib/dates";
 
 type InvoiceFormProps = {
   data: AppData;
@@ -46,26 +48,6 @@ const INVOICE_TYPES: { value: InvoiceType; label: string }[] = [
   { value: "credit_note", label: "Credit Note" },
   { value: "debit_note", label: "Debit Note" },
 ];
-
-function addPeriod(iso: string, frequency: string, interval = 1): string {
-  const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso}T00:00:00` : iso);
-  const start = Number.isNaN(d.getTime()) ? new Date() : d;
-  const n = Math.max(1, interval);
-  switch (frequency) {
-    case "weekly":
-      start.setDate(start.getDate() + 7 * n);
-      break;
-    case "quarterly":
-      start.setMonth(start.getMonth() + 3 * n);
-      break;
-    case "yearly":
-      start.setFullYear(start.getFullYear() + n);
-      break;
-    default:
-      start.setMonth(start.getMonth() + n);
-  }
-  return start.toISOString().slice(0, 10);
-}
 
 function emptyItem(businessStateCode: string, partyStateCode: string, defaultGstRate: GSTRate): InvoiceItem {
   const calc = calculateItem({
@@ -96,8 +78,8 @@ function emptyItem(businessStateCode: string, partyStateCode: string, defaultGst
 
 export function InvoiceForm({ data, business: businessProp, editingInvoice, onSave, onBack }: InvoiceFormProps) {
   const business = businessProp;
-  const today = new Date().toISOString().split("T")[0];
-  const dueDate = new Date(Date.now() + 15 * 86400000).toISOString().split("T")[0];
+  const today = todayIST();
+  const dueDate = addDays(today, 15);
   const openedInvoice = editingInvoice ? openHistoricalInvoice(editingInvoice) : null;
 
   const parties = data.parties;
@@ -190,12 +172,11 @@ export function InvoiceForm({ data, business: businessProp, editingInvoice, onSa
   const baseTotals = useMemo(() => {
     if (isTotalMode) {
       const afterDiscount = round2(totalAmount * (1 - totalDiscount / 100));
-      const taxable = round2(afterDiscount / (1 + totalGstRate / 100));
-      const tax = round2(afterDiscount - taxable);
-      let cgst = 0, sgst = 0, igst = 0;
-      if (interState) { igst = tax; } else { cgst = round2(tax / 2); sgst = round2(tax / 2); }
-      const grandTotal = data.settings.roundOff ? Math.round(afterDiscount) : afterDiscount;
-      const roundOff = round2(grandTotal - afterDiscount);
+      const { taxableAmount: taxable, cgst, sgst, igst } = calculateItem({
+        quantity: 1, rate: 0, discount: 0, gstRate: totalGstRate, isInterState: interState, inclusiveTotal: afterDiscount,
+      });
+      const roundOff = data.settings.roundOff ? roundOffPaise(toPaise(afterDiscount)) / 100 : 0;
+      const grandTotal = round2(afterDiscount + roundOff);
       const discountAmount = round2(totalAmount - afterDiscount);
       return {
         subtotal: round2(totalAmount),
@@ -205,7 +186,7 @@ export function InvoiceForm({ data, business: businessProp, editingInvoice, onSa
         totalSgst: sgst,
         totalIgst: igst,
         totalCess: 0,
-        totalTax: tax,
+        totalTax: round2(cgst + sgst + igst),
         roundOff,
         grandTotal: round2(grandTotal),
       };
@@ -469,19 +450,16 @@ export function InvoiceForm({ data, business: businessProp, editingInvoice, onSa
       }
     }
 
-    const invoiceNumber = editingInvoice?.invoiceNumber || generateInvoiceNumber(
-      data.invoiceCounter,
-      data.settings.invoicePrefix,
-      data.settings.invoiceSuffix
-    );
+    const invoiceNumber = editingInvoice?.invoiceNumber || generateInvoiceNumber(data.invoices, data.settings.invoicePrefix, date);
 
     let invoiceItems: InvoiceItem[];
     if (isTotalMode) {
       const afterDiscount = round2(totalAmount * (1 - totalDiscount / 100));
-      const taxable = round2(afterDiscount / (1 + totalGstRate / 100));
-      const tax = round2(afterDiscount - taxable);
-      let cgst = 0, sgst = 0, igst = 0;
-      if (interState) { igst = tax; } else { cgst = round2(tax / 2); sgst = round2(tax / 2); }
+      const calc = calculateItem({
+        quantity: 1, rate: exclusiveRateFromInclusive(totalAmount, totalGstRate), discount: totalDiscount,
+        gstRate: totalGstRate, isInterState: interState, inclusiveTotal: afterDiscount,
+      });
+      const { taxableAmount: taxable, cgst, sgst, igst } = calc;
       invoiceItems = [{
         id: generateId(),
         description: totalDescription || "Total Amount",
@@ -499,7 +477,8 @@ export function InvoiceForm({ data, business: businessProp, editingInvoice, onSa
         sgst,
         igst,
         cess: 0,
-        total: round2(afterDiscount),
+        total: calc.total,
+        inclusiveTotal: afterDiscount,
         stockItemId: totalStockItemId,
       }];
     } else {

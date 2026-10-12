@@ -97,8 +97,6 @@ function buildCaReport(appData, from, to) {
   };
 }
 
-function round2(n) {
-  return Math.round((n + Number.EPSILON) * 100) / 100;
-}
+const { round2 } = require('./money');
 
 module.exports = { pickBusinessProfile, buildCaReport, inRange, rowDate, num };

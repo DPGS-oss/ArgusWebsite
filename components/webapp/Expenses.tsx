@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Plus, Trash2, Receipt } from "lucide-react";
 import type { AppData, Expense } from "@/lib/types";
 import { saveExpense, deleteExpense, generateId } from "@/lib/storage";
+import { todayIST } from "@/lib/dates";
 
 type Props = {
   data: AppData;
@@ -18,7 +19,7 @@ export function Expenses({ data, onSaved }: Props) {
   const [category, setCategory] = useState("Rent");
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState(0);
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+  const [date, setDate] = useState(todayIST());
   const [paymentMode, setPaymentMode] = useState("Cash");
   const [vendor, setVendor] = useState("");
   const [gstAmount, setGstAmount] = useState(0);

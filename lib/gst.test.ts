@@ -985,7 +985,7 @@ describe("delivery charges (s.15(2)(c))", () => {
 describe("bill of supply declaration", () => {
   it("prints the composition line, the unregistered line, or nothing", async () => {
     const { billOfSupplyNote } = await import("./gst");
-    expect(billOfSupplyNote({ type: "bill_of_supply" }, { gstin: "07AAKFS1234M1Z5", composition: true })).toMatch(/Composition taxable person/);
+    expect(billOfSupplyNote({ type: "bill_of_supply" }, { gstin: "07AAKFS1234M1ZZ", composition: true })).toMatch(/Composition taxable person/);
     expect(billOfSupplyNote({ type: "bill_of_supply" }, { gstin: "" })).toMatch(/not registered/);
     expect(billOfSupplyNote({ type: "tax_invoice" }, { gstin: "" })).toBeNull();
   });

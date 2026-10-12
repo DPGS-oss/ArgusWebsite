@@ -64,6 +64,41 @@ function sanitizeSummary(summary) {
   return out;
 }
 
+/** Every number in the summary (nested), which an answer may quote. */
+function summaryNumbers(value, out = []) {
+  if (typeof value === 'number' && Number.isFinite(value)) out.push(value);
+  else if (Array.isArray(value)) value.forEach((v) => summaryNumbers(v, out));
+  else if (value && typeof value === 'object') Object.values(value).forEach((v) => summaryNumbers(v, out));
+  return out;
+}
+
+/**
+ * Rupee amounts in an AI answer that are not in the shop's figures. The AI
+ * only phrases the answer; any amount it states must match a real figure
+ * (within ₹1, or a sum or difference of two), otherwise the owner is told.
+ */
+function unverifiedAmounts(answer, summary) {
+  const known = summaryNumbers(summary);
+  const derived = new Set();
+  for (const a of known) for (const b of known) { derived.add(a + b); derived.add(a - b); }
+  const allowed = [...known, ...derived];
+  const found = [];
+  const re = /(?:₹|\brs\.?|\binr)\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s*(lakh|lac|crore|cr|k)?/gi;
+  let m;
+  while ((m = re.exec(String(answer || '')))) {
+    let n = Number(m[1].replace(/,/g, ''));
+    const unit = (m[2] || '').toLowerCase();
+    if (unit === 'k') n *= 1e3;
+    else if (unit === 'lakh' || unit === 'lac') n *= 1e5;
+    else if (unit === 'crore' || unit === 'cr') n *= 1e7;
+    if (!Number.isFinite(n) || n === 0) continue;
+    // A rounded figure ("₹1.2 lakh") is fine if it is within 1% of a real one.
+    const tolerance = unit ? Math.max(1, n * 0.01) : 1;
+    if (!allowed.some((v) => Math.abs(Math.abs(v) - n) <= tolerance)) found.push(n);
+  }
+  return [...new Set(found)];
+}
+
 async function callOpenRouter(question, summary) {
   const apiKey = (process.env.OPENROUTER_API_KEY || '').trim();
   if (!apiKey) {
@@ -79,7 +114,9 @@ async function callOpenRouter(question, summary) {
   const system = [
     'You are Argus, a concise GST billing assistant for Indian shop owners.',
     'Use only the provided summary numbers. Do not invent transactions or party names.',
-    'Prefer bullet points. Mention when data is insufficient.',
+    'Quote rupee amounts exactly as they appear in the summary. Do not add, subtract or estimate new rupee totals;',
+    'if a figure is not in the summary, say the data is not available.',
+    'Prefer bullet points. Mention when data is insufficient. Plain language, no accounting jargon.',
   ].join(' ');
 
   const res = await fetch(OPENROUTER_CHAT_URL, {
@@ -92,7 +129,7 @@ async function callOpenRouter(question, summary) {
     },
     body: JSON.stringify({
       model,
-      temperature: 0.2,
+      temperature: 0,
       messages: [
         { role: 'system', content: system },
         {
@@ -115,8 +152,12 @@ async function callOpenRouter(question, summary) {
   }
 
   const data = await res.json();
-  const answer = data?.choices?.[0]?.message?.content?.trim() || 'No answer returned.';
-  return { answer, configured: true, provider: 'openrouter', model };
+  const raw = data?.choices?.[0]?.message?.content?.trim() || 'No answer returned.';
+  const unknown = unverifiedAmounts(raw, summary);
+  const answer = unknown.length
+    ? `${raw}\n\nCheck before relying on it: ${unknown.map((n) => `₹${n.toLocaleString('en-IN')}`).join(', ')} is not in your records. See Reports for exact figures.`
+    : raw;
+  return { answer, configured: true, provider: 'openrouter', model: data?.model || model, unverified: unknown };
 }
 
 exports.apiAsk = onRequest({ region: 'us-central1', maxInstances: 10, secrets: ASK_SECRETS }, async (req, res) => {
@@ -164,6 +205,7 @@ exports.apiAsk = onRequest({ region: 'us-central1', maxInstances: 10, secrets: A
     configured: result.configured !== false,
     provider: result.provider || 'openrouter',
     model: result.model || null,
+    unverified: result.unverified || [],
     party_names_sent: Boolean(body.summary?.include_party_names),
   });
 });
@@ -171,6 +213,7 @@ exports.apiAsk = onRequest({ region: 'us-central1', maxInstances: 10, secrets: A
 module.exports = {
   apiAsk: exports.apiAsk,
   callOpenRouter,
+  unverifiedAmounts,
   DEFAULT_ASK_MODEL,
   OPENROUTER_CHAT_URL,
 };

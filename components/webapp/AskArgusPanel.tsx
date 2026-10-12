@@ -4,14 +4,15 @@ import { FormEvent, useMemo, useState } from "react";
 import { Sparkles } from "lucide-react";
 import type { AppData } from "@/lib/types";
 import { useAuth, hasValidSubscription } from "@/lib/auth-provider";
-import { buildAskArgusSummary, askArgusQuestion } from "@/lib/ask-argus";
+import { answerFromBooks, buildAskArgusSummary, askArgusQuestion } from "@/lib/ask-argus";
+import { istDate } from "@/lib/dates";
 
 type AskArgusPanelProps = {
   data: AppData;
 };
 
 function isoDate(d: Date) {
-  return d.toISOString().slice(0, 10);
+  return istDate(d);
 }
 
 function fyStart(d = new Date()) {
@@ -24,6 +25,7 @@ export function AskArgusPanel({ data }: AskArgusPanelProps) {
   const [open, setOpen] = useState(false);
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
+  const [source, setSource] = useState<"books" | "ai" | "">("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -41,12 +43,20 @@ export function AskArgusPanel({ data }: AskArgusPanelProps) {
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     if (!token || !question.trim()) return;
-    setLoading(true);
     setError("");
     setAnswer("");
+    // Money questions are answered from the books, exactly; only the rest goes to the AI.
+    const exact = answerFromBooks(question.trim(), summary);
+    if (exact) {
+      setAnswer(exact);
+      setSource("books");
+      return;
+    }
+    setLoading(true);
     try {
       const result = await askArgusQuestion(token, question.trim(), summary);
       setAnswer(result.answer);
+      setSource("ai");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not reach Ask Argus");
     } finally {
@@ -82,11 +92,16 @@ export function AskArgusPanel({ data }: AskArgusPanelProps) {
             className="w-full rounded-card border border-bone px-3 py-2 text-sm"
           />
           <button type="submit" className="btn-primary px-5 py-2 text-sm" disabled={loading || !question.trim()}>
-            {loading ? "Thinking…" : "Ask via OpenRouter (free tier)"}
+            {loading ? "Thinking…" : "Ask"}
           </button>
           {error ? <p className="text-sm text-red-600">{error}</p> : null}
           {answer ? (
-            <div className="rounded-card bg-mist p-3 text-sm text-ink whitespace-pre-wrap">{answer}</div>
+            <div className="rounded-card bg-mist p-3 text-sm text-ink whitespace-pre-wrap">
+              {answer}
+              <p className="mt-2 text-xs text-slate">
+                {source === "books" ? "Worked out from your bills — exact." : "Written by AI from your totals. Amounts are checked against your records."}
+              </p>
+            </div>
           ) : null}
         </form>
       ) : null}

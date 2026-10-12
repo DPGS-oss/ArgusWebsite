@@ -151,3 +151,41 @@ describe("legacy double-GST bills", () => {
     expect(checkBooks(books([fixed]), today).some((i) => i.title === "This bill may charge GST twice")).toBe(false);
   });
 });
+
+describe("checkBooks: maths, numbering and balance", () => {
+  const line = (taxable: number, rate: number, cgst: number, sgst: number) =>
+    ({ hsn: "9403", gstRate: rate, taxableAmount: taxable, cgst, sgst, igst: 0 }) as Invoice["items"][number];
+
+  it("flags tax that is not the rate on the value, and unequal CGST/SGST", () => {
+    const titles = checkBooks(
+      books([
+        invoice({ invoiceNumber: "INV/26-27/W0001", items: [line(141900, 5, 3550, 3550)] }),
+        invoice({ invoiceNumber: "INV/26-27/W0002", items: [line(100, 18, 9.01, 8.99)] }),
+      ]),
+    ).map((i) => i.title);
+    expect(titles).toContain("GST on INV/26-27/W0001 is off by ₹5.00");
+    expect(titles).toContain("CGST and SGST differ on INV/26-27/W0002");
+    expect(titles.filter((t) => t.startsWith("GST on INV/26-27/W0002"))).toEqual([]);
+  });
+
+  it("points out missing bill numbers; cancelled bills fill the gap", () => {
+    const gap = checkBooks(books([invoice({ invoiceNumber: "INV/26-27/W0001" }), invoice({ invoiceNumber: "INV/26-27/W0004" })]));
+    expect(gap.map((i) => i.title)).toContain("2 bill numbers missing in INV/26-27/W…");
+    const filled = checkBooks(
+      books([
+        invoice({ invoiceNumber: "INV/26-27/W0001" }),
+        invoice({ invoiceNumber: "INV/26-27/W0002", status: "cancelled" }),
+      ]),
+    );
+    expect(filled.map((i) => i.title).some((t) => t.includes("missing"))).toBe(false);
+  });
+
+  it("flags books that do not balance", () => {
+    const d = books([]);
+    d.khataEntries = [
+      { id: "1", customerId: "", customerName: "Sales", amount: 100, description: "", createdAt: "", isCredit: false, accountType: "sales", sourceType: "invoice", sourceId: "x" },
+      { id: "2", customerId: "", customerName: "A", amount: 118, description: "", createdAt: "", isCredit: true, accountType: "party", sourceType: "invoice", sourceId: "x" },
+    ];
+    expect(checkBooks(d).map((i) => i.title)).toContain("Books don't balance for 1 entry");
+  });
+});

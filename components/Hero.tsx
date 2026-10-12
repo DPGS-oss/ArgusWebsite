@@ -147,7 +147,7 @@ function InvoiceVisual({ reduce }: { reduce: boolean }) {
             Paid
           </motion.span>
         </div>
-        <p className="mt-4 font-semibold text-ink">INV-2026-0142</p>
+        <p className="mt-4 font-semibold text-ink">INV/26-27/0142</p>
         <p className="text-sm text-slate">Sharma Traders · 27AAPFU0939F1ZV</p>
         <dl className="mt-5 space-y-2.5 rounded-xl bg-mist p-4 text-sm">
           {[

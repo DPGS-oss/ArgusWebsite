@@ -6,6 +6,8 @@ import type { AppData, GSTRate, Invoice, RecurringConfig } from "@/lib/types";
 import { generateId, generateInvoiceNumber, saveInvoice, deleteInvoice, loadData } from "@/lib/storage";
 import { persistLedger, postInvoiceLedger } from "@/lib/books";
 import { round2 } from "@/lib/gst";
+import { addPeriod, todayIST } from "@/lib/dates";
+import { linePaise } from "@/lib/money";
 
 type Props = {
   data: AppData;
@@ -34,30 +36,6 @@ function recurringOf(inv: Invoice): RecurringConfig | null {
   };
 }
 
-function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function addPeriod(iso: string, frequency: string, interval = 1): string {
-  const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso}T00:00:00` : iso);
-  const start = Number.isNaN(d.getTime()) ? new Date() : d;
-  const n = Math.max(1, interval);
-  switch (frequency) {
-    case "weekly":
-      start.setDate(start.getDate() + 7 * n);
-      break;
-    case "quarterly":
-      start.setMonth(start.getMonth() + 3 * n);
-      break;
-    case "yearly":
-      start.setFullYear(start.getFullYear() + n);
-      break;
-    default:
-      start.setMonth(start.getMonth() + n);
-  }
-  return start.toISOString().slice(0, 10);
-}
-
 function frequencyLabel(rc: RecurringConfig): string {
   const n = rc.interval <= 1 ? "" : `every ${rc.interval} `;
   switch ((rc.frequency || "monthly").toLowerCase()) {
@@ -73,12 +51,11 @@ function frequencyLabel(rc: RecurringConfig): string {
 }
 
 function splitInclusive(total: number, gstRate: GSTRate, interState: boolean) {
-  const taxable = round2(total / (1 + gstRate / 100));
-  const tax = round2(total - taxable);
-  const cgst = interState ? 0 : round2(tax / 2);
-  const sgst = interState ? 0 : round2(tax / 2);
-  const igst = interState ? tax : 0;
-  return { taxable, tax, cgst, sgst, igst, grandTotal: round2(total) };
+  const line = linePaise({ quantity: 1, price: total, gstRate, inclusive: true, interState });
+  return {
+    taxable: line.taxable / 100, tax: line.tax / 100, cgst: line.cgst / 100, sgst: line.sgst / 100, igst: line.igst / 100,
+    grandTotal: line.total / 100,
+  };
 }
 
 export function RecurringInvoices({ data, onSaved }: Props) {
@@ -88,7 +65,7 @@ export function RecurringInvoices({ data, onSaved }: Props) {
   const [amount, setAmount] = useState(0);
   const [gstRate, setGstRate] = useState<GSTRate>(data.settings.defaultGstRate || 18);
   const [frequency, setFrequency] = useState("monthly");
-  const [startDate, setStartDate] = useState(todayIso());
+  const [startDate, setStartDate] = useState(todayIST());
 
   const recurringInvoices = data.invoices.filter((inv) => recurringOf(inv));
   const customers = data.parties.filter((p) => p.type !== "supplier");
@@ -99,7 +76,7 @@ export function RecurringInvoices({ data, onSaved }: Props) {
     setAmount(0);
     setGstRate(data.settings.defaultGstRate || 18);
     setFrequency("monthly");
-    setStartDate(todayIso());
+    setStartDate(todayIST());
     setShowForm(false);
   }
 
@@ -116,11 +93,7 @@ export function RecurringInvoices({ data, onSaved }: Props) {
     const party = data.parties.find((p) => p.name.toLowerCase() === partyName.trim().toLowerCase());
     const split = splitInclusive(amount, gstRate, false);
     const now = new Date().toISOString();
-    const invoiceNumber = generateInvoiceNumber(
-      data.invoiceCounter,
-      data.settings.invoicePrefix,
-      data.settings.invoiceSuffix,
-    );
+    const invoiceNumber = generateInvoiceNumber(data.invoices, data.settings.invoicePrefix, startDate);
     const invoice: Invoice = {
       id: generateId(),
       invoiceNumber,
@@ -140,7 +113,7 @@ export function RecurringInvoices({ data, onSaved }: Props) {
           hsn: "",
           quantity: 1,
           unit: "NOS",
-          rate: amount,
+          rate: split.taxable,
           discount: 0,
           gstRate,
           taxableAmount: split.taxable,
@@ -148,6 +121,7 @@ export function RecurringInvoices({ data, onSaved }: Props) {
           sgst: split.sgst,
           igst: split.igst,
           total: split.grandTotal,
+          inclusiveTotal: split.grandTotal,
         },
       ],
       subtotal: amount,
@@ -193,16 +167,12 @@ export function RecurringInvoices({ data, onSaved }: Props) {
     const rc = recurringOf(inv);
     if (!rc) return;
     const now = new Date().toISOString();
-    const date = todayIso();
+    const date = todayIST();
     const latest = loadData();
     const generated: Invoice = {
       ...inv,
       id: generateId(),
-      invoiceNumber: generateInvoiceNumber(
-        latest.invoiceCounter,
-        latest.settings.invoicePrefix,
-        latest.settings.invoiceSuffix,
-      ),
+      invoiceNumber: generateInvoiceNumber(latest.invoices, latest.settings.invoicePrefix, date),
       date,
       dueDate: date,
       status: "unpaid",
