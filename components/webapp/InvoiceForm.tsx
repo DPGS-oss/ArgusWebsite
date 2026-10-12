@@ -521,6 +521,7 @@ export function InvoiceForm({ data, business: businessProp, editingInvoice, onSa
       businessId: business.id,
       sellerGstin: business.gstin || "",
       sellerStateCode: business.stateCode || "",
+      sellerComposition: !!business.composition,
       partyId: party?.id || "",
       partyName: party?.name || inlinePartyName || "",
       partyGstin: billToGstin,

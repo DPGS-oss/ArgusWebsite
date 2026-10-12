@@ -222,6 +222,8 @@ export type BuildInvoiceInput = {
    */
   preserveStoredTax?: boolean;
   storedIsInterState?: boolean;
+  /** Seller is on the composition scheme (bills of supply only, no GST). */
+  sellerComposition?: boolean;
 };
 
 
@@ -755,8 +757,14 @@ export function buildInvoiceDocument(input: BuildInvoiceInput): Invoice {
     ? (input.storedIsInterState ?? inferInterStateFromItems(input.items) ?? computedInterState)
     : computedInterState;
 
+  // Only a GST-registered seller on the regular scheme may charge GST
+  // (CGST Act s.32), and a bill of supply never carries tax. Enforced here so
+  // every path that builds a bill (form, recurring, sync) obeys it.
+  const noTax =
+    input.type === "bill_of_supply" || !isRegisteredGstin(input.sellerGstin) || !!input.sellerComposition;
+  const docType: InvoiceType = noTax && input.type === "tax_invoice" ? "bill_of_supply" : input.type;
   const items = input.items.map((item) => {
-    if (shouldPreserveLineTax(item, !keepStoredTax)) {
+    if (!noTax && shouldPreserveLineTax(item, !keepStoredTax)) {
       return {
         ...item,
         uqc: item.uqc || item.unit,
@@ -767,9 +775,9 @@ export function buildInvoiceDocument(input: BuildInvoiceInput): Invoice {
       quantity: item.quantity,
       rate: item.rate,
       discount: item.discount,
-      gstRate: item.gstRate,
+      gstRate: noTax ? 0 : item.gstRate,
       isInterState: interState,
-      cess: item.cess ?? 0,
+      cess: noTax ? 0 : item.cess ?? 0,
     });
     return {
       ...item,
@@ -793,7 +801,7 @@ export function buildInvoiceDocument(input: BuildInvoiceInput): Invoice {
   return {
     id: input.id,
     invoiceNumber: input.invoiceNumber,
-    type: input.type,
+    type: docType,
     status: input.status,
     businessId: input.businessId,
     partyId: input.partyId,
