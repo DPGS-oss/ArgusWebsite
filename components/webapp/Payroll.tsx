@@ -7,6 +7,7 @@ import type { AppData, Expense, PayrollEntry } from "@/lib/types";
 import { deletePayrollEntry, generateId, saveExpense, savePayrollEntry } from "@/lib/storage";
 import { persistLedger } from "@/lib/books";
 import { loadData } from "@/lib/storage";
+import { todayIST } from "@/lib/dates";
 
 type Props = { data: AppData; onSaved: () => void };
 
@@ -18,7 +19,7 @@ export function Payroll({ data, onSaved }: Props) {
   const [role, setRole] = useState("");
   const [amount, setAmount] = useState(0);
   const [period, setPeriod] = useState("");
-  const [payDate, setPayDate] = useState(new Date().toISOString().slice(0, 10));
+  const [payDate, setPayDate] = useState(todayIST());
   const rows = data.payroll || [];
   const due = rows.filter((e) => e.status !== "paid").reduce((s, e) => s + e.amount, 0);
   const paid = rows.filter((e) => e.status === "paid").reduce((s, e) => s + e.amount, 0);
@@ -50,7 +51,7 @@ export function Payroll({ data, onSaved }: Props) {
   }
 
   function confirm(entry: PayrollEntry, method: string) {
-    const paidOn = new Date().toISOString().slice(0, 10);
+    const paidOn = todayIST();
     const now = new Date().toISOString();
     savePayrollEntry({ ...entry, status: "paid", paidOn, method, updatedAt: now });
     const expense: Expense = {

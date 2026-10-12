@@ -15,9 +15,7 @@
  */
 const { monthBounds, posOf: invoicePos } = require('./ca-exports');
 
-function round2(n) {
-  return Math.round((Number(n) || 0) * 100) / 100;
-}
+const { round2 } = require('./money');
 
 function nicGstin(value) {
   const trimmed = String(value || '').trim().toUpperCase();

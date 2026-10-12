@@ -1,6 +1,9 @@
 import type { AppData, Invoice, Purchase } from "./types";
 import { isRegisteredGstin, isValidGstin } from "./gstin";
 import { generateGstnJson, notesAsInvoices, purchaseTax } from "./gst";
+import { unbalancedPostings } from "./books";
+import { istDate } from "./dates";
+import { roundPaise, toPaise } from "./money";
 
 /** Owner-facing wording is plain language; `law` is a short reference for the CA. */
 export type Issue = { severity: "error" | "warn"; title: string; detail: string; law?: string };
@@ -15,10 +18,12 @@ function afterGst20(date: string): boolean {
   return d >= GST20;
 }
 
+/** Start year of the April–March financial year, read from the "YYYY-MM-DD" date itself (no time zones). */
 function financialYear(date: string): number | null {
-  const d = new Date(date);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.getMonth() >= 3 ? d.getFullYear() : d.getFullYear() - 1;
+  const m = /^(\d{4})-(\d{2})/.exec(String(date || ""));
+  if (!m) return null;
+  const y = Number(m[1]);
+  return Number(m[2]) >= 4 ? y : y - 1;
 }
 
 /** Section 34(2) / 16(4): 30 November after the end of the invoice's financial year. */
@@ -129,6 +134,31 @@ export function checkBooks(data: AppData, today: Date = new Date()): Issue[] {
       if (hsnFlagged && rateFlagged) break;
     }
 
+    // Tax must be the GST rate applied to the value (within ₹1 per bill), and CGST = SGST.
+    let taxGap = 0;
+    let splitOff = false;
+    for (const item of inv.items) {
+      const tax = toPaise(item.cgst) + toPaise(item.sgst) + toPaise(item.igst);
+      taxGap += Math.abs(tax - roundPaise((toPaise(item.taxableAmount) * (item.gstRate || 0)) / 100));
+      if (!item.igst && Math.abs(toPaise(item.cgst) - toPaise(item.sgst)) > 1) splitOff = true;
+    }
+    if (taxGap > 100) {
+      issues.push({
+        severity: "warn",
+        title: `GST on ${number} is off by ₹${(taxGap / 100).toFixed(2)}`,
+        detail: "The tax does not match the GST rate on the value. If it matters to your customer, issue a credit or debit note for the difference.",
+        law: "Section 15 value × notified rate",
+      });
+    }
+    if (splitOff) {
+      issues.push({
+        severity: "warn",
+        title: `CGST and SGST differ on ${number}`,
+        detail: "They should be equal halves of the tax.",
+        law: "CGST/SGST split",
+      });
+    }
+
     if (above5 && b2b && !inv.irn && inv.grandTotal > 0) {
       const age = ageInDays(inv.date, today);
       issues.push({
@@ -216,7 +246,7 @@ export function checkBooks(data: AppData, today: Date = new Date()): Issue[] {
   for (const cn of data.creditNotes || []) {
     const original = cn.invoiceId ? byId.get(cn.invoiceId) : undefined;
     const deadline = original ? novemberDeadline(original.date) : null;
-    const cnDate = String(cn.createdAt || "").slice(0, 10);
+    const cnDate = cn.date || istDate(new Date(cn.createdAt || Date.now()));
     if (original && deadline && cnDate > deadline && (cn.totalGstAmount || 0) > 0) {
       issues.push({
         severity: "error",
@@ -239,7 +269,49 @@ export function checkBooks(data: AppData, today: Date = new Date()): Issue[] {
     }
   }
 
+  issues.push(...numberGaps(data.invoices));
+
+  const unbalanced = unbalancedPostings(data.khataEntries || []);
+  if (unbalanced.length) {
+    issues.push({
+      severity: "error",
+      title: `Books don't balance for ${unbalanced.length} ${unbalanced.length === 1 ? "entry" : "entries"}`,
+      detail: `Money in and out don't match for: ${[...new Set(unbalanced.map((u) => u.sourceType))].join(", ")}. Open it and save again, or ask your CA.`,
+      law: "Double entry: debits = credits",
+    });
+  }
+
   return issues;
+}
+
+/**
+ * Missing numbers in a series (0004 then 0007). Not illegal, but GSTR-1
+ * Table 13 reports every number issued; a bill that was dropped should be kept
+ * as cancelled, not deleted.
+ */
+function numberGaps(invoices: Invoice[]): Issue[] {
+  const bySeries = new Map<string, number[]>();
+  for (const inv of invoices) {
+    if (inv.status === "draft") continue;
+    const m = /^(.*?)(\d+)$/.exec((inv.invoiceNumber || "").trim());
+    if (!m || !m[1]) continue;
+    bySeries.set(m[1], [...(bySeries.get(m[1]) || []), Number(m[2])]);
+  }
+  const out: Issue[] = [];
+  for (const [series, list] of bySeries) {
+    const nums = [...new Set(list)].sort((a, b) => a - b);
+    let missing = 0;
+    for (let i = 1; i < nums.length; i++) missing += nums[i] - nums[i - 1] - 1;
+    if (missing > 0) {
+      out.push({
+        severity: "warn",
+        title: `${missing} bill number${missing === 1 ? "" : "s"} missing in ${series}…`,
+        detail: `Bills ${series}${nums[0]} to ${series}${nums[nums.length - 1]} have gaps. Every number issued goes in your GST return; if a bill was dropped, keep it as cancelled.`,
+        law: "GSTR-1 Table 13",
+      });
+    }
+  }
+  return out;
 }
 
 /** GSTR-3B figures for one tax period, from the same builder as the JSON export. */

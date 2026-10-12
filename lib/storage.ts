@@ -2,6 +2,7 @@
 
 import type { AppData, AppSettings, BusinessProfile, Invoice, Party, StockItem, CreditNote, DebitNote, PayrollEntry, DeliveryChallan, Expense, Quote, Purchase, Payment, Template, KhataEntry, DeletableKey } from "./types";
 import { cancelledEntry } from "./invoice-history";
+import { financialYear, todayIST } from "./dates";
 
 declare global {
   interface Window {
@@ -372,7 +373,7 @@ async function writeFileToDir(dir: DirHandle, filename: string, content: string)
 }
 
 async function getDateSubDir(parentDir: DirHandle, dateStr: string): Promise<DirHandle | null> {
-  const dateFolder = dateStr || new Date().toISOString().split("T")[0];
+  const dateFolder = dateStr || todayIST();
   return getOrCreateSubDirIn(parentDir, dateFolder);
 }
 
@@ -557,21 +558,37 @@ export function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
+function cleanPrefix(prefix: string): string {
+  return (prefix || "").replace(/[^A-Za-z0-9-]/g, "").toUpperCase() || "INV";
+}
+
+export function invoiceSeries(prefix: string, date: string = todayIST()): string {
+  return `${cleanPrefix(prefix).slice(0, 4)}/${financialYear(date)}/W`;
+}
+
 /**
- * Next bill number, e.g. INV-2026-0042. GST Rule 46(b) allows at most 16
- * characters, so a long suffix is dropped and a long prefix is shortened.
+ * Next bill number, e.g. "INV/26-27/W0001": one series per financial year,
+ * numbered from the bills already in it (Rule 46(b): unique per year, at most
+ * 16 characters). The "W" marks bills made on the website; the phone app uses
+ * "INV/26-27/0001", so a phone working offline and the website can never hand
+ * out the same number.
  */
-export function generateInvoiceNumber(counter: number, prefix: string, suffix: string): string {
-  const MAX = 16;
-  const year = new Date().getFullYear();
-  const num = String(counter).padStart(4, "0");
-  const clean = (v: string) => (v || "").replace(/[^A-Za-z0-9/-]/g, "").toUpperCase();
-  const core = `-${year}-${num}`;
-  const p = clean(prefix) || "INV";
-  const sfx = clean(suffix);
-  const withSuffix = `${p}${core}${sfx ? `-${sfx}` : ""}`;
-  if (withSuffix.length <= MAX) return withSuffix;
-  return `${p.slice(0, Math.max(1, MAX - core.length))}${core}`;
+export function generateInvoiceNumber(
+  invoices: ReadonlyArray<{ invoiceNumber: string }>,
+  prefix: string,
+  date: string = todayIST(),
+): string {
+  const p = cleanPrefix(prefix);
+  const fy = financialYear(date);
+  let max = 0;
+  for (const inv of invoices) {
+    const m = /^([A-Z0-9-]{1,4})\/(\d{2}-\d{2})\/W(\d+)$/.exec(inv.invoiceNumber || "");
+    if (!m || m[2] !== fy || !p.startsWith(m[1])) continue;
+    max = Math.max(max, Number(m[3]));
+  }
+  const num = String(max + 1).padStart(4, "0");
+  // "/26-27/W" is 8 characters; past 9,999 bills the prefix gives up a letter.
+  return `${p.slice(0, Math.max(1, Math.min(4, 16 - 8 - num.length)))}/${fy}/W${num}`;
 }
 
 export function exportAllData(): string {
@@ -651,11 +668,18 @@ export function deleteInvoice(id: string): void {
 /** Marks an issued bill cancelled and records it in the bill's change log. */
 export function cancelInvoice(id: string): void {
   const data = loadData();
+  const before = data.invoices;
   data.invoices = data.invoices.map((i) =>
     i.id === id && i.status !== "cancelled"
       ? { ...i, status: "cancelled" as const, balanceDue: 0, updatedAt: new Date().toISOString(), history: [...(i.history || []), cancelledEntry()] }
       : i
   );
+  // The goods on a cancelled bill go back into stock.
+  const bill = before.find((i) => i.id === id && i.status !== "cancelled" && i.status !== "draft");
+  for (const item of bill?.items || []) {
+    const stock = item.stockItemId ? data.stock.find((s) => s.id === item.stockItemId) : undefined;
+    if (stock) stock.currentStock += item.quantity;
+  }
   saveData(data);
 }
 
@@ -725,10 +749,12 @@ export function saveCreditNote(cn: CreditNote): void {
   saveData(data);
 }
 
-export function deleteCreditNote(id: string): void {
+/** Issued notes are kept (Rule 56); cancelling marks them and the books post a reversal. */
+export function cancelCreditNote(id: string): void {
   const data = loadData();
-  data.creditNotes = data.creditNotes.filter((c) => c.id !== id);
-  markDeleted(data, "creditNotes", id);
+  data.creditNotes = (data.creditNotes || []).map((n) =>
+    n.id === id && n.status !== "cancelled" ? { ...n, status: "cancelled", updatedAt: new Date().toISOString() } : n,
+  );
   saveData(data);
 }
 
@@ -741,10 +767,12 @@ export function saveDebitNote(note: DebitNote): void {
   saveData(data);
 }
 
-export function deleteDebitNote(id: string): void {
+/** Issued notes are kept (Rule 56); cancelling marks them and the books post a reversal. */
+export function cancelDebitNote(id: string): void {
   const data = loadData();
-  data.debitNotes = (data.debitNotes || []).filter((c) => c.id !== id);
-  markDeleted(data, "debitNotes", id);
+  data.debitNotes = (data.debitNotes || []).map((n) =>
+    n.id === id && n.status !== "cancelled" ? { ...n, status: "cancelled", updatedAt: new Date().toISOString() } : n,
+  );
   saveData(data);
 }
 

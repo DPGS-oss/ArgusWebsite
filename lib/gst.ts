@@ -2,6 +2,7 @@ import type { AppData, BusinessProfile, CreditNote, DebitNote, GSTRate, HSNCode,
 import { GST_2_0_RATES, INDIAN_STATES } from "./types";
 import { isRegisteredGstin, normalizeGstin, stateCodeFromGstin } from "./gstin";
 import caExports from "../functions/_shared/ca-exports.js";
+import { fromPaise, linePaise, roundOffPaise, round2 as moneyRound2, toPaise } from "./money";
 
 const { buildGstr1Json, notesAsInvoices: sharedNotesAsInvoices } = caExports as {
   buildGstr1Json: (input: { gstin: string; from: string; to: string; fp: string; invoices: unknown[] }) => unknown;
@@ -535,8 +536,7 @@ export function deliveryItems(goods: InvoiceItem[], amountInclusive: number, int
   return groups.map(([rate, g], idx) => {
     const share = idx === groups.length - 1 ? round2(amountInclusive - allocated) : round2((amountInclusive * g.value) / weight);
     allocated = round2(allocated + share);
-    const exclusive = exclusiveRateFromInclusive(share, rate);
-    const calc = calculateItem({ quantity: 1, rate: exclusive, discount: 0, gstRate: rate, isInterState: interState });
+    const calc = calculateItem({ quantity: 1, rate: exclusiveRateFromInclusive(share, rate), discount: 0, gstRate: rate, isInterState: interState, inclusiveTotal: share });
     return {
       id: `delivery-${rate}`,
       description: groups.length > 1 ? `Delivery charges (${rate}%)` : "Delivery charges",
@@ -544,6 +544,7 @@ export function deliveryItems(goods: InvoiceItem[], amountInclusive: number, int
       unit: "NOS",
       uqc: "NOS",
       ...calc,
+      inclusiveTotal: share,
       isDelivery: true,
     } as InvoiceItem;
   });
@@ -580,76 +581,53 @@ export function calculateItem(item: {
   isInterState: boolean;
   cessRate?: number;
   cess?: number;
+  /** GST-inclusive line amount (after discount); when set, the line total equals it exactly. */
+  inclusiveTotal?: number;
 }): Omit<InvoiceItem, "id" | "description" | "hsn" | "unit" | "uqc" | "stockItemId"> {
-  const grossAmount = item.quantity * item.rate;
-  const discountAmount = (grossAmount * item.discount) / 100;
-  const taxableAmount = grossAmount - discountAmount;
-  const taxAmount = (taxableAmount * item.gstRate) / 100;
-
-  let cgst = 0;
-  let sgst = 0;
-  let igst = 0;
-
-  if (item.isInterState) {
-    igst = taxAmount;
-  } else {
-    cgst = taxAmount / 2;
-    sgst = taxAmount / 2;
-  }
-
-  const cess =
-    item.cessRate != null
-      ? (taxableAmount * item.cessRate) / 100
-      : item.cess ?? 0;
-  const total = taxableAmount + taxAmount + cess;
-
+  const inclusive = item.inclusiveTotal != null && item.inclusiveTotal > 0;
+  const p = linePaise(
+    inclusive
+      ? { quantity: 1, price: item.inclusiveTotal!, gstRate: item.gstRate, inclusive: true, interState: item.isInterState, cessRate: item.cessRate, cess: item.cess }
+      : { quantity: item.quantity, price: item.rate, discount: item.discount, gstRate: item.gstRate, interState: item.isInterState, cessRate: item.cessRate, cess: item.cess },
+  );
   return {
     quantity: item.quantity,
     rate: item.rate,
     discount: item.discount,
     gstRate: item.gstRate as GSTRate,
-    taxableAmount: round2(taxableAmount),
-    cgst: round2(cgst),
-    sgst: round2(sgst),
-    igst: round2(igst),
-    cess: round2(cess),
-    total: round2(total),
+    taxableAmount: fromPaise(p.taxable),
+    cgst: fromPaise(p.cgst),
+    sgst: fromPaise(p.sgst),
+    igst: fromPaise(p.igst),
+    cess: fromPaise(p.cess),
+    total: fromPaise(p.total),
   };
 }
 
 export function calculateInvoiceTotals(items: InvoiceItem[], roundOffEnabled: boolean) {
-  const subtotal = items.reduce((sum, i) => sum + i.quantity * i.rate, 0);
-  const totalDiscount = items.reduce(
-    (sum, i) => sum + (i.quantity * i.rate * i.discount) / 100,
-    0
-  );
-  const totalTaxable = items.reduce((sum, i) => sum + i.taxableAmount, 0);
-  const totalCgst = items.reduce((sum, i) => sum + i.cgst, 0);
-  const totalSgst = items.reduce((sum, i) => sum + i.sgst, 0);
-  const totalIgst = items.reduce((sum, i) => sum + i.igst, 0);
-  const totalCess = items.reduce((sum, i) => sum + (i.cess ?? 0), 0);
+  const sum = (f: (i: InvoiceItem) => number) => items.reduce((s, i) => s + toPaise(f(i)), 0);
+  const subtotal = sum((i) => i.quantity * i.rate);
+  const totalTaxable = sum((i) => i.taxableAmount);
+  const totalDiscount = items.reduce((s, i) => s + Math.max(0, toPaise(i.quantity * i.rate) - toPaise(i.taxableAmount)), 0);
+  const totalCgst = sum((i) => i.cgst);
+  const totalSgst = sum((i) => i.sgst);
+  const totalIgst = sum((i) => i.igst);
+  const totalCess = sum((i) => i.cess ?? 0);
   const totalTax = totalCgst + totalSgst + totalIgst + totalCess;
   const rawTotal = totalTaxable + totalTax;
-
-  let roundOff = 0;
-  let grandTotal = rawTotal;
-
-  if (roundOffEnabled) {
-    grandTotal = Math.round(rawTotal);
-    roundOff = round2(grandTotal - rawTotal);
-  }
+  const roundOff = roundOffEnabled ? roundOffPaise(rawTotal) : 0;
 
   return {
-    subtotal: round2(subtotal),
-    totalDiscount: round2(totalDiscount),
-    totalTaxable: round2(totalTaxable),
-    totalCgst: round2(totalCgst),
-    totalSgst: round2(totalSgst),
-    totalIgst: round2(totalIgst),
-    totalCess: round2(totalCess),
-    totalTax: round2(totalTax),
-    roundOff: round2(roundOff),
-    grandTotal: round2(grandTotal),
+    subtotal: fromPaise(subtotal),
+    totalDiscount: fromPaise(totalDiscount),
+    totalTaxable: fromPaise(totalTaxable),
+    totalCgst: fromPaise(totalCgst),
+    totalSgst: fromPaise(totalSgst),
+    totalIgst: fromPaise(totalIgst),
+    totalCess: fromPaise(totalCess),
+    totalTax: fromPaise(totalTax),
+    roundOff: fromPaise(roundOff),
+    grandTotal: fromPaise(rawTotal + roundOff),
   };
 }
 
@@ -677,7 +655,7 @@ export function formatDate(dateStr: string): string {
 }
 
 export function round2(num: number): number {
-  return Math.round(num * 100) / 100;
+  return moneyRound2(num);
 }
 
 export function isInterState(sellerStateCode: string, placeOfSupplyStateCode: string): boolean {
@@ -703,11 +681,15 @@ function hasStoredLineTax(item: InvoiceItem): boolean {
 
 /** True when stored taxable + tax still match qty/rate/discount/GST%. */
 function lineAmountsMatchInputs(item: InvoiceItem): boolean {
-  const expectedTaxable = round2(item.quantity * item.rate * (1 - (item.discount || 0) / 100));
-  if (round2(item.taxableAmount || 0) !== expectedTaxable) return false;
-  const expectedTax = round2((expectedTaxable * (item.gstRate || 0)) / 100);
-  const storedTax = round2((item.cgst || 0) + (item.sgst || 0) + (item.igst || 0));
-  return storedTax === expectedTax;
+  // Within a paisa: bills saved by older versions rounded slightly differently,
+  // and an issued bill must not be rewritten for that.
+  const calc = calculateItem({
+    quantity: item.quantity, rate: item.rate, discount: item.discount || 0, gstRate: item.gstRate || 0,
+    isInterState: (item.igst || 0) > 0, inclusiveTotal: item.inclusiveTotal,
+  });
+  const near = (a: number, b: number) => Math.abs(toPaise(a) - toPaise(b)) <= 1;
+  const storedTax = (item.cgst || 0) + (item.sgst || 0) + (item.igst || 0);
+  return near(item.taxableAmount || 0, calc.taxableAmount) && near(storedTax, calc.cgst + calc.sgst + calc.igst);
 }
 
 function inferInterStateFromItems(items: InvoiceItem[]): boolean | undefined {
@@ -778,6 +760,7 @@ export function buildInvoiceDocument(input: BuildInvoiceInput): Invoice {
       gstRate: noTax ? 0 : item.gstRate,
       isInterState: interState,
       cess: noTax ? 0 : item.cess ?? 0,
+      inclusiveTotal: item.inclusiveTotal,
     });
     return {
       ...item,

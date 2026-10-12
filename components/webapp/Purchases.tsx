@@ -7,6 +7,8 @@ import { GST_2_0_RATES } from "@/lib/types";
 import { savePurchase, deletePurchase, generateId, loadData } from "@/lib/storage";
 import { persistLedger, postPurchaseLedger } from "@/lib/books";
 import { round2 } from "@/lib/gst";
+import { splitTaxPaise, toPaise } from "@/lib/money";
+import { todayIST } from "@/lib/dates";
 
 type Props = {
   data: AppData;
@@ -15,10 +17,6 @@ type Props = {
 
 const GST_RATES: GSTRate[] = GST_2_0_RATES;
 const PAYMENT_METHODS = ["Cash", "UPI", "Bank Transfer", "Cheque", "Card", "Credit"];
-
-function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
-}
 
 function splitInclusive(total: number, gstRate: GSTRate) {
   const taxable = round2(total / (1 + gstRate / 100));
@@ -38,7 +36,7 @@ export function Purchases({ data, onSaved }: Props) {
   const [gstRate, setGstRate] = useState<GSTRate>(
     GST_2_0_RATES.includes(data.settings.defaultGstRate) ? data.settings.defaultGstRate : 18,
   );
-  const [date, setDate] = useState(todayIso());
+  const [date, setDate] = useState(todayIST());
   const [paymentMethod, setPaymentMethod] = useState("Cash");
   const [paidAmount, setPaidAmount] = useState(0);
   const [paidTouched, setPaidTouched] = useState(false);
@@ -56,7 +54,7 @@ export function Purchases({ data, onSaved }: Props) {
     setDescription("");
     setAmount(0);
     setGstRate(GST_2_0_RATES.includes(data.settings.defaultGstRate) ? data.settings.defaultGstRate : 18);
-    setDate(todayIso());
+    setDate(todayIST());
     setPaymentMethod("Cash");
     setPaidAmount(0);
     setPaidTouched(false);
@@ -85,8 +83,8 @@ export function Purchases({ data, onSaved }: Props) {
       discount: 0,
       gstRate,
       taxableAmount: split.taxable,
-      cgst: round2(split.gst / 2),
-      sgst: round2(split.gst / 2),
+      cgst: splitTaxPaise(toPaise(split.gst)).cgst / 100,
+      sgst: splitTaxPaise(toPaise(split.gst)).sgst / 100,
       igst: 0,
       total: split.total,
     };

@@ -1,10 +1,13 @@
 /**
  * Easy Tally: every money event posts ledger lines. Shopkeeper never sees vouchers.
  */
-import type { AppData, Expense, Invoice, KhataEntry, Payment, Purchase } from "./types";
+import type { AppData, CreditNote, DebitNote, Expense, Invoice, KhataEntry, Payment, Purchase } from "./types";
 import { generateId, loadData, saveData } from "./storage";
+import { isRegisteredGstin } from "./gstin";
+import { round2, toPaise } from "./money";
 
-export type LedgerAccount = "party" | "cash" | "bank" | "sales" | "purchase" | "expense";
+/** "gst" holds GST collected on sales (owed to the government) less GST paid on purchases. */
+export type LedgerAccount = "party" | "cash" | "bank" | "sales" | "purchase" | "expense" | "gst";
 
 function methodAccount(method?: string): "cash" | "bank" {
   const m = (method || "cash").toLowerCase();
@@ -28,48 +31,70 @@ function line(partial: Omit<KhataEntry, "id" | "createdAt"> & { id?: string; cre
   };
 }
 
+/**
+ * Posts a bill: the customer owes the total (or it was paid), sales get the
+ * value before tax, and the GST goes to the GST account because it is owed to
+ * the government, not income. Payments recorded later are posted on their own.
+ * A cancelled bill keeps its entries and gets reversing ones, so the customer
+ * no longer owes it and the record of what happened stays.
+ */
 export function postInvoiceLedger(data: AppData, invoice: Invoice): AppData {
-  if (invoice.status === "cancelled" || invoice.status === "draft") return data;
-  const existing = (data.khataEntries || []).filter((e) => e.sourceId !== invoice.id);
-  const partyDebit = line({
-    customerId: invoice.partyId,
-    customerName: invoice.partyName,
-    amount: invoice.balanceDue > 0 ? invoice.balanceDue : invoice.grandTotal - (invoice.paidAmount || 0),
-    description: `Bill ${invoice.invoiceNumber}`,
-    isCredit: true,
-    accountType: "party",
-    partyKind: "customer",
-    sourceType: "invoice",
-    sourceId: invoice.id,
-  });
-  const sales = line({
-    customerId: "",
-    customerName: "Sales",
-    amount: invoice.grandTotal,
-    description: `Sales ${invoice.invoiceNumber}`,
-    isCredit: false,
-    accountType: "sales",
-    sourceType: "invoice",
-    sourceId: invoice.id,
-  });
-  const next = [...existing, sales];
-  if (partyDebit.amount > 0) next.push(partyDebit);
-  if ((invoice.paidAmount || 0) > 0) {
-    const acct = methodAccount(invoice.paymentMode);
-    next.push(
-      line({
-        customerId: "",
-        customerName: acct === "bank" ? "Bank" : "Cash",
-        amount: invoice.paidAmount,
-        description: `In (${invoice.paymentMode || "cash"}) ${invoice.invoiceNumber}`,
-        isCredit: true,
-        accountType: acct,
-        paymentMethod: invoice.paymentMode,
-        sourceType: "invoice",
-        sourceId: invoice.id,
-      })
-    );
+  const all = data.khataEntries || [];
+  if (invoice.status === "draft") {
+    return { ...data, khataEntries: all.filter((e) => !(e.sourceId === invoice.id && e.sourceType === "invoice")) };
   }
+  if (invoice.status === "cancelled") return reverseSource(data, invoice.id, "invoice", `Cancelled ${invoice.invoiceNumber}`);
+
+  const existing = all.filter((e) => !(e.sourceId === invoice.id && (e.sourceType === "invoice" || e.sourceType === "invoice_cancel")));
+  // Money received through recorded payments is posted by postPaymentLedger.
+  const viaPayments = (data.payments || []).filter((p) => p.invoiceId === invoice.id).reduce((s, p) => s + toPaise(p.amount), 0);
+  const grand = toPaise(invoice.grandTotal);
+  const paidAtBilling = Math.max(0, Math.min(grand, toPaise(invoice.paidAmount || 0) - viaPayments));
+  const tax = toPaise(invoice.totalTax || 0);
+  const reimbursed = toPaise(invoice.deliveryReimbursement || 0);
+  const sales = grand - tax - reimbursed;
+  const base = { sourceType: "invoice", sourceId: invoice.id };
+  const next = [...existing];
+  next.push(line({ ...base, customerId: "", customerName: "Sales", amount: sales / 100, description: `Sales ${invoice.invoiceNumber}`, isCredit: false, accountType: "sales" }));
+  if (tax) next.push(line({ ...base, customerId: "", customerName: "GST", amount: tax / 100, description: `GST on ${invoice.invoiceNumber}`, isCredit: false, accountType: "gst" }));
+  if (reimbursed) next.push(line({ ...base, customerId: "", customerName: "Delivery recovered", amount: reimbursed / 100, description: `Courier recovered ${invoice.invoiceNumber}`, isCredit: true, accountType: "expense" }));
+  if (grand - paidAtBilling > 0) {
+    next.push(line({ ...base, customerId: invoice.partyId, customerName: invoice.partyName, amount: (grand - paidAtBilling) / 100, description: `Bill ${invoice.invoiceNumber}`, isCredit: true, accountType: "party", partyKind: "customer" }));
+  }
+  if (paidAtBilling > 0) {
+    const acct = methodAccount(invoice.paymentMode);
+    next.push(line({ ...base, customerId: "", customerName: acct === "bank" ? "Bank" : "Cash", amount: paidAtBilling / 100, description: `In (${invoice.paymentMode || "cash"}) ${invoice.invoiceNumber}`, isCredit: true, accountType: acct, paymentMethod: invoice.paymentMode }));
+  }
+  return { ...data, khataEntries: next };
+}
+
+/** Adds entries that undo a document's postings, once. */
+function reverseSource(data: AppData, sourceId: string, sourceType: string, description: string): AppData {
+  const all = data.khataEntries || [];
+  const reversalType = `${sourceType}_cancel`;
+  if (all.some((e) => e.sourceId === sourceId && e.sourceType === reversalType)) return data;
+  const posted = all.filter((e) => e.sourceId === sourceId && e.sourceType === sourceType);
+  const reversals = posted.map((e) => line({ ...e, id: undefined, createdAt: undefined, isCredit: !e.isCredit, description, sourceType: reversalType }));
+  return { ...data, khataEntries: [...all, ...reversals] };
+}
+
+/**
+ * A credit note cuts sales, GST and what the customer owes; a debit note
+ * (the customer was undercharged) adds to all three.
+ */
+export function postNoteLedger(data: AppData, note: CreditNote | DebitNote, kind: "credit_note" | "debit_note"): AppData {
+  const number = "creditNoteNumber" in note ? note.creditNoteNumber : note.debitNoteNumber;
+  if (note.status === "cancelled") return reverseSource(data, note.id, kind, `Cancelled ${number}`);
+  const existing = (data.khataEntries || []).filter((e) => e.sourceId !== note.id);
+  const total = toPaise(note.totalAmount);
+  const tax = toPaise(note.totalGstAmount || 0);
+  const reduces = kind === "credit_note";
+  const label = reduces ? "Credit note" : "Debit note";
+  const base = { sourceType: kind, sourceId: note.id };
+  const next = [...existing];
+  next.push(line({ ...base, customerId: "", customerName: "Sales", amount: (total - tax) / 100, description: `${label} ${number}`, isCredit: reduces, accountType: "sales" }));
+  if (tax) next.push(line({ ...base, customerId: "", customerName: "GST", amount: tax / 100, description: `GST on ${number}`, isCredit: reduces, accountType: "gst" }));
+  next.push(line({ ...base, customerId: note.customerId || "", customerName: note.customerName, amount: total / 100, description: `${label} ${number}`, isCredit: !reduces, accountType: "party", partyKind: "customer" }));
   return { ...data, khataEntries: next };
 }
 
@@ -131,11 +156,16 @@ export function postPurchaseLedger(data: AppData, purchase: Purchase): AppData {
   const due = Math.max(0, round2(purchase.totalAmount - paid));
   const next = [...existing];
 
+  // GST paid on a purchase is claimed back (input tax credit) by a regular
+  // GST-registered business; for anyone else it is part of the cost.
+  const business = data.businesses.find((b) => b.id === data.activeBusinessId) || data.businesses[0];
+  const claimable = !!business && isRegisteredGstin(business.gstin) && !business.composition;
+  const gst = claimable ? round2(Math.min(purchase.totalGstAmount || 0, purchase.totalAmount)) : 0;
   next.push(
     line({
       customerId: "",
       customerName: "Purchases",
-      amount: purchase.totalAmount,
+      amount: round2(purchase.totalAmount - gst),
       description: `Purchase ${purchase.purchaseNumber}`,
       isCredit: false,
       accountType: "purchase",
@@ -143,6 +173,9 @@ export function postPurchaseLedger(data: AppData, purchase: Purchase): AppData {
       sourceId: purchase.id,
     }),
   );
+  if (gst > 0) {
+    next.push(line({ customerId: "", customerName: "GST", amount: gst, description: `GST paid on ${purchase.purchaseNumber}`, isCredit: true, accountType: "gst", sourceType: "purchase", sourceId: purchase.id }));
+  }
 
   if (due > 0) {
     next.push(
@@ -225,31 +258,68 @@ export function runningBook(entries: KhataEntry[], account: LedgerAccount) {
   });
 }
 
+/**
+ * Which side of the books an entry sits on. The khata flag means "money in /
+ * owed to you" for customers, cash and bank (a debit), and "reverses income"
+ * for sales and GST; for purchases, expenses and suppliers it is the other way.
+ */
+export function entrySide(e: KhataEntry): "debit" | "credit" {
+  const type = e.accountType || "party";
+  const debitWhenFlagged =
+    type === "cash" || type === "bank" || type === "sales" || type === "gst" || (type === "party" && e.partyKind !== "supplier");
+  return e.isCredit === debitWhenFlagged ? "debit" : "credit";
+}
+
+/**
+ * Every bill, payment, purchase, expense and credit note must post equal
+ * debits and credits. Returns the documents that do not, so a mistake shows up
+ * instead of quietly skewing the books. Hand-written entries without a
+ * counterpart (opening balances, udhaar) are one-sided by design and skipped.
+ */
+export function unbalancedPostings(entries: KhataEntry[]): { sourceId: string; sourceType: string; difference: number }[] {
+  const groups = new Map<string, { sourceType: string; diff: number }>();
+  for (const e of entries) {
+    if (!e.sourceId || !e.sourceType || e.sourceType === "manual" || e.sourceType === "opening") continue;
+    const type = e.sourceType.replace(/_cancel$/, "");
+    const g = groups.get(e.sourceId) || { sourceType: type, diff: 0 };
+    g.diff += (entrySide(e) === "debit" ? 1 : -1) * toPaise(e.amount);
+    groups.set(e.sourceId, g);
+  }
+  return [...groups.entries()]
+    .filter(([, g]) => Math.abs(g.diff) > 1)
+    .map(([sourceId, g]) => ({ sourceId, sourceType: g.sourceType, difference: g.diff / 100 }));
+}
+
+/**
+ * Profit before tax. Sales and purchases are counted without GST: GST
+ * collected is owed to the government and GST paid is claimed back (when the
+ * business can claim it). Cancelled bills are left out; credit notes are taken off and debit notes added.
+ */
 export function profitAndLoss(data: AppData) {
-  const sales = (data.invoices || [])
-    .filter((i) => i.status !== "cancelled" && i.status !== "draft")
-    .reduce((s, i) => s + (i.grandTotal || 0), 0);
-  const cogs = (data.purchases || []).reduce((s, p) => {
-    if (p.items?.length) {
-      return (
-        s +
-        p.items.reduce((n, item) => n + item.quantity * (item.rate || 0), 0)
-      );
-    }
-    return s + (p.totalAmount - (p.totalGstAmount || 0));
-  }, 0);
-  const expenses = (data.expenses || []).reduce((s, e) => s + e.amount, 0);
+  const live = (data.invoices || []).filter((i) => i.status !== "cancelled" && i.status !== "draft");
+  const salesPaise =
+    live.reduce((s, i) => s + toPaise(i.grandTotal) - toPaise(i.totalTax || 0) - toPaise(i.deliveryReimbursement || 0), 0) -
+    (data.creditNotes || [])
+      .filter((c) => c.status !== "cancelled")
+      .reduce((s, c) => s + toPaise(c.totalAmount) - toPaise(c.totalGstAmount || 0), 0) +
+    (data.debitNotes || [])
+      .filter((d) => d.status !== "cancelled")
+      .reduce((s, d) => s + toPaise(d.totalAmount) - toPaise(d.totalGstAmount || 0), 0);
+  const business = data.businesses.find((b) => b.id === data.activeBusinessId) || data.businesses[0];
+  const claimable = !!business && isRegisteredGstin(business.gstin) && !business.composition;
+  const cogsPaise = (data.purchases || []).reduce(
+    (s, p) => s + toPaise(p.totalAmount) - (claimable ? toPaise(Math.min(p.totalGstAmount || 0, p.totalAmount)) : 0),
+    0,
+  );
+  const expensesPaise = (data.expenses || []).reduce((s, e) => s + toPaise(e.amount), 0);
   return {
-    sales: round2(sales),
-    cogs: round2(cogs),
-    expenses: round2(expenses),
-    profit: round2(sales - cogs - expenses),
+    sales: salesPaise / 100,
+    cogs: cogsPaise / 100,
+    expenses: expensesPaise / 100,
+    profit: (salesPaise - cogsPaise - expensesPaise) / 100,
   };
 }
 
-function round2(n: number) {
-  return Math.round(n * 100) / 100;
-}
 
 export function postManualLedger(
   data: AppData,

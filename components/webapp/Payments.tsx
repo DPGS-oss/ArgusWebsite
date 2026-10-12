@@ -5,6 +5,7 @@ import { Plus, Trash2, CreditCard } from "lucide-react";
 import type { AppData, Payment } from "@/lib/types";
 import { deletePayment, generateId } from "@/lib/storage";
 import { applyPaymentToInvoice, persistLedger } from "@/lib/books";
+import { todayIST } from "@/lib/dates";
 
 type Props = {
   data: AppData;
@@ -18,7 +19,7 @@ export function Payments({ data, onSaved }: Props) {
   const [invoiceId, setInvoiceId] = useState("");
   const [amount, setAmount] = useState(0);
   const [method, setMethod] = useState("Cash");
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+  const [date, setDate] = useState(todayIST());
   const [note, setNote] = useState("");
 
   const payments = data.payments ?? [];

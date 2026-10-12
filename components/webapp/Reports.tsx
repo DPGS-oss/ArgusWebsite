@@ -4,6 +4,7 @@ import { useState } from "react";
 import { BarChart3, Download, FileText } from "lucide-react";
 import type { AppData, GSTRReportType, GSTRReport } from "@/lib/types";
 import { generateGSTRReport, generateGstnJson, formatCurrency, formatDate, notesAsInvoices } from "@/lib/gst";
+import { monthRange } from "@/lib/dates";
 
 type ReportsProps = {
   data: AppData;
@@ -15,13 +16,6 @@ const REPORT_TYPES: { value: GSTRReportType; label: string }[] = [
   { value: "gstr2b", label: "GSTR-2 / GSTR-2B (ITC Available)" },
   { value: "gstr4", label: "GSTR-4 (Composition)" },
 ];
-
-function getMonthRange(month: string): { from: string; to: string } {
-  const [year, m] = month.split("-").map(Number);
-  const from = new Date(year, m - 1, 1).toISOString().split("T")[0];
-  const to = new Date(year, m, 0).toISOString().split("T")[0];
-  return { from, to };
-}
 
 export function Reports({ data }: ReportsProps) {
   const now = new Date();
@@ -36,13 +30,13 @@ export function Reports({ data }: ReportsProps) {
   const sellerGstin = data.businesses.find((b) => b.id === data.activeBusinessId)?.gstin || "";
 
   function generate() {
-    const { from, to } = getMonthRange(month);
+    const { from, to } = monthRange(month);
     const r = generateGSTRReport(invoices, reportType, from, to, data.purchases || [], sellerGstin);
     setReport(r);
   }
 
   function downloadGstnJson() {
-    const { from, to } = getMonthRange(month);
+    const { from, to } = monthRange(month);
     const gstin = data.businesses.find((b) => b.id === data.activeBusinessId)?.gstin || "";
     const payload = generateGstnJson(invoices, "gstr1", from, to, data.purchases || [], gstin);
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });

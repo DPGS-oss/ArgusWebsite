@@ -20,6 +20,7 @@ import {
 } from "@/components/webapp/WebAppTutorial";
 import { KeyboardShortcuts } from "@/components/webapp/KeyboardShortcuts";
 import { getExpiryIso } from "@/lib/subscription";
+import { todayIST } from "@/lib/dates";
 
 // Screens load on first open; only the shell (sidebar, dashboard, invoice list) ships up front.
 function ViewLoading() {
@@ -295,6 +296,10 @@ export default function AppPage() {
 
   function handleCancelInvoice(id: string) {
     cancelInvoice(id);
+    // Keep the bill's entries and post reversing ones, so the customer no longer owes it.
+    const latest = loadData();
+    const cancelled = latest.invoices.find((i) => i.id === id);
+    if (cancelled) persistLedger(postInvoiceLedger(latest, cancelled));
     refresh();
   }
 
@@ -363,7 +368,7 @@ export default function AppPage() {
                   invoiceId: liveInvoice.id,
                   amount: amt,
                   method: "UPI",
-                  date: new Date().toISOString().slice(0, 10),
+                  date: todayIST(),
                   note: "Marked paid",
                 })
               );

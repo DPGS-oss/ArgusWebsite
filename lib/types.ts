@@ -74,6 +74,8 @@ export interface InvoiceItem {
   stockItemId?: string;
   /** Delivery charge line (taxed with the goods, s.15(2)(c)); rebuilt from the delivery field on edit. */
   isDelivery?: boolean;
+  /** Line amount the customer pays, GST included, when the price was typed with tax. Keeps the total exact on recalculation. */
+  inclusiveTotal?: number;
 }
 
 export interface InvoiceHistoryEntry {
@@ -228,6 +230,9 @@ export interface DebitNote {
   id: string;
   debitNoteNumber: string;
   invoiceId?: string;
+  /** Note date, "YYYY-MM-DD" in Indian time. */
+  date?: string;
+  items?: InvoiceItem[];
   customerName: string;
   customerId?: string;
   reason: string;
@@ -244,6 +249,8 @@ export interface CreditNote {
   id: string;
   creditNoteNumber: string;
   invoiceId?: string;
+  /** Note date, "YYYY-MM-DD" in Indian time. */
+  date?: string;
   customerName: string;
   customerId?: string;
   reason: string;
@@ -366,7 +373,7 @@ export interface KhataEntry {
   description: string;
   createdAt: string;
   isCredit: boolean;
-  accountType?: "party" | "cash" | "bank" | "sales" | "purchase" | "expense";
+  accountType?: "party" | "cash" | "bank" | "sales" | "purchase" | "expense" | "gst";
   partyKind?: "customer" | "supplier";
   paymentMethod?: string;
   sourceType?: string;

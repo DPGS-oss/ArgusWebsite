@@ -9,7 +9,7 @@ import { generateInvoiceNumber } from "./storage";
 import type { BusinessProfile, InvoiceItem, InvoiceType } from "./types";
 
 const SELLER: BusinessProfile = {
-  id: "b1", name: "Sharma Kirana Store", gstin: "07AAKFS1234M1Z5", pan: "AAKFS1234M", email: "shop@example.com",
+  id: "b1", name: "Sharma Kirana Store", gstin: "07AAKFS1234M1ZZ", pan: "AAKFS1234M", email: "shop@example.com",
   phone: "9800000000", address: "12 Main Market", city: "New Delhi", state: "Delhi", stateCode: "07", pincode: "110016",
   bankName: "", bankAccount: "", bankIfsc: "", bankBranch: "", upiId: "",
 };
@@ -27,7 +27,7 @@ function bill(opts: {
 }) {
   const seller = opts.seller ?? SELLER;
   const inv = buildInvoiceDocument({
-    id: "inv", invoiceNumber: opts.number ?? generateInvoiceNumber(42, "INV", ""), type: opts.type ?? "tax_invoice",
+    id: "inv", invoiceNumber: opts.number ?? generateInvoiceNumber([{ invoiceNumber: "INV/26-27/W0041" }], "INV", "2026-10-12"), type: opts.type ?? "tax_invoice",
     status: "unpaid", businessId: seller.id, sellerGstin: seller.gstin, sellerStateCode: seller.stateCode,
     partyId: "p1", partyName: "Mehta Retail", partyGstin: opts.buyerGstin ?? "", partyPhone: "9811111111",
     partyAddress: opts.buyerAddress ?? "45 Ring Road, New Delhi", partyStateCode: opts.buyerState ?? "07",
@@ -83,9 +83,11 @@ function expectRule46(html: string, inv: ReturnType<typeof bill>["inv"], seller 
 
 describe("invoice compliance audit", () => {
   it("B2B, same state: buyer GSTIN, CGST + SGST, Rule 46 fields", () => {
-    const { inv, html } = bill({ buyerGstin: "07AAPFU0939F1ZV", items: [line("Basmati rice 25kg", "1006", 4, 1500, 5, false)] });
+    const { inv, html } = bill({ buyerGstin: "07AAPFU0939F1ZX", items: [line("Basmati rice 25kg", "1006", 4, 1500, 5, false)] });
     expect(inv.isInterState).toBe(false);
-    expect(html).toContain("07AAPFU0939F1ZV");
+    expect(inv.type).toBe("tax_invoice");
+    expect(inv.totalTax).toBeGreaterThan(0);
+    expect(html).toContain("07AAPFU0939F1ZX");
     expectRule46(html, inv);
     expectArithmetic(inv);
   });
@@ -93,6 +95,7 @@ describe("invoice compliance audit", () => {
   it("B2B, other state: IGST only and place of supply with the state name", () => {
     const { inv, html } = bill({ buyerGstin: "27AAPFU0939F1ZV", buyerState: "27", items: [line("Steel almirah", "9403", 2, 7627.12, 18, true)] });
     expect(inv.isInterState).toBe(true);
+    expect(inv.totalIgst).toBeGreaterThan(0);
     expect(html).toContain(placeOfSupplyLabel(inv.placeOfSupply));
     expect(html).toMatch(/Maharashtra/);
     expectRule46(html, inv);
@@ -117,7 +120,7 @@ describe("invoice compliance audit", () => {
   });
 
   it("reverse charge is stated on the bill", () => {
-    const { inv, html } = bill({ buyerGstin: "07AAPFU0939F1ZV", reverseCharge: true, items: [line("Goods transport", "9965", 1, 1000, 5, false)] });
+    const { inv, html } = bill({ buyerGstin: "07AAPFU0939F1ZX", reverseCharge: true, items: [line("Goods transport", "9965", 1, 1000, 5, false)] });
     expect(inv.reverseCharge).toBe(true);
     expect(html).toMatch(/Reverse charge[^<]*Yes|Reverse Charge[^<]*Yes/i);
   });
@@ -140,8 +143,8 @@ describe("invoice compliance audit", () => {
   });
 
   it("bill numbers stay within 16 characters even with long prefixes", () => {
-    for (const [p, s] of [["INV", ""], ["SHARMAKIRANASTORE", "DELHI"], ["A", "B"]]) {
-      expect(generateInvoiceNumber(9999, p, s).length).toBeLessThanOrEqual(16);
+    for (const p of ["INV", "SHARMAKIRANASTORE", "A", ""]) {
+      expect(generateInvoiceNumber([{ invoiceNumber: `${p.slice(0, 4) || "INV"}/26-27/W9998` }], p, "2026-10-12").length).toBeLessThanOrEqual(16);
     }
   });
 });

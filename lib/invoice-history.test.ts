@@ -26,10 +26,16 @@ describe("invoice change log (Rule 56)", () => {
 });
 
 describe("bill numbers (Rule 46)", () => {
-  it("never exceed 16 characters", async () => {
+  it("one series per financial year, numbered from the bills in it, at most 16 characters", async () => {
     const { generateInvoiceNumber } = await import("./storage");
-    expect(generateInvoiceNumber(42, "INV", "")).toMatch(/^INV-\d{4}-0042$/);
-    expect(generateInvoiceNumber(42, "SHARMAKIRANA", "DELHI").length).toBeLessThanOrEqual(16);
-    expect(generateInvoiceNumber(42, "SK", "D1")).toMatch(/^SK-\d{4}-0042-D1$/);
+    const bills = [{ invoiceNumber: "INV/26-27/W0041" }, { invoiceNumber: "INV/26-27/0099" }, { invoiceNumber: "INV/25-26/W0300" }];
+    expect(generateInvoiceNumber(bills, "INV", "2026-10-12")).toBe("INV/26-27/W0042");
+    // A new financial year starts again at 1 (series change on 1 April).
+    expect(generateInvoiceNumber(bills, "INV", "2027-04-01")).toBe("INV/27-28/W0001");
+    expect(generateInvoiceNumber(bills, "INV", "2027-03-31")).toBe("INV/26-27/W0042");
+    expect(generateInvoiceNumber([], "SHARMAKIRANA", "2026-10-12")).toBe("SHAR/26-27/W0001");
+    // Past 9,999 bills the prefix shortens so the number stays within 16 characters, and counting continues.
+    expect(generateInvoiceNumber([{ invoiceNumber: "SHAR/26-27/W9999" }], "SHARMAKIRANA", "2026-10-12")).toBe("SHA/26-27/W10000");
+    expect(generateInvoiceNumber([{ invoiceNumber: "SHA/26-27/W10000" }], "SHARMAKIRANA", "2026-10-12")).toBe("SHA/26-27/W10001");
   });
 });

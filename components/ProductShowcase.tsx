@@ -25,11 +25,11 @@ const stats = [
 ];
 
 const recentInvoices = [
-  { number: "INV-2026-0142", party: "Sharma Traders", date: "22 Aug", amount: "₹12,480", status: "Paid" },
-  { number: "INV-2026-0141", party: "Mehta Retail", date: "21 Aug", amount: "₹8,260", status: "Paid" },
-  { number: "INV-2026-0140", party: "Green Valley Stores", date: "20 Aug", amount: "₹21,150", status: "Unpaid" },
-  { number: "INV-2026-0139", party: "Patel Distributors", date: "19 Aug", amount: "₹5,900", status: "Paid" },
-  { number: "INV-2026-0138", party: "City Mart", date: "18 Aug", amount: "₹3,450", status: "Unpaid" },
+  { number: "INV/26-27/0142", party: "Sharma Traders", date: "22 Aug", amount: "₹12,480", status: "Paid" },
+  { number: "INV/26-27/0141", party: "Mehta Retail", date: "21 Aug", amount: "₹8,260", status: "Paid" },
+  { number: "INV/26-27/0140", party: "Green Valley Stores", date: "20 Aug", amount: "₹21,150", status: "Unpaid" },
+  { number: "INV/26-27/0139", party: "Patel Distributors", date: "19 Aug", amount: "₹5,900", status: "Paid" },
+  { number: "INV/26-27/0138", party: "City Mart", date: "18 Aug", amount: "₹3,450", status: "Unpaid" },
 ];
 
 const workflowSteps = [

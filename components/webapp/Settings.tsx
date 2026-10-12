@@ -3,7 +3,7 @@
 import { useState, type ChangeEvent } from "react";
 import { Settings as SettingsIcon, Download, Upload, FolderOpen, Save, Cloud, RefreshCw } from "lucide-react";
 import type { AppData, AppSettings, GSTRate } from "@/lib/types";
-import { saveSettings, exportAllData, importAllData, pickFolder, isUsingFileSystem, getFolderName, isFileSystemSupported, disconnectFolder, loadData } from "@/lib/storage";
+import { saveSettings, exportAllData, importAllData, pickFolder, isUsingFileSystem, getFolderName, isFileSystemSupported, disconnectFolder, loadData, generateInvoiceNumber } from "@/lib/storage";
 import { useAuth, hasValidSubscription } from "@/lib/auth-provider";
 import { syncFromCloud, syncToCloud, getLastSyncTime } from "@/lib/cloud-sync";
 import { encryptBooksPayload, generateCaShareKey } from "@/lib/ca-crypto";
@@ -294,15 +294,11 @@ export function Settings({ data, onSaved }: SettingsProps) {
               className="mt-1 w-full rounded-btn border border-bone bg-mist px-4 py-2.5 text-ink outline-none focus:border-brand-violet"
             />
           </label>
-          <label className="block text-sm text-slate">
-            Invoice Suffix
-            <input
-              type="text"
-              value={settings.invoiceSuffix}
-              onChange={(e) => update("invoiceSuffix", e.target.value)}
-              className="mt-1 w-full rounded-btn border border-bone bg-mist px-4 py-2.5 text-ink outline-none focus:border-brand-violet"
-            />
-          </label>
+          <p className="self-end text-sm text-slate">
+            Next bill: <span className="font-mono text-ink">{generateInvoiceNumber(data.invoices, settings.invoicePrefix)}</span>
+            <br />
+            Numbers restart each April. &ldquo;W&rdquo; marks bills made on the website.
+          </p>
           <label className="block text-sm text-slate">
             Default GST Rate
             <select

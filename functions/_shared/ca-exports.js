@@ -136,13 +136,12 @@ function stateCodeFromPlaceOfSupply(value) {
   return stateLookup().get(normalizeStateKey(raw)) || null;
 }
 
-function round2(n) {
-  return Math.round((Number(n) || 0) * 100) / 100;
-}
+const { round2, splitTax } = require('./money');
 
 function currentMonthYm(now) {
+  // Indian time: the server runs in UTC, which is still last month until 5:30 am IST on the 1st.
   const d = now instanceof Date ? now : new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit' }).format(d).slice(0, 7);
 }
 
 function parseMonthParam(value, now) {
@@ -435,6 +434,15 @@ function buildGstr1Json(input) {
  * the GST check, and the CA portal all count them. A note inherits the buyer
  * GSTIN, place of supply, and intra/inter-state split of the invoice it amends.
  */
+/** A note's calendar date in Indian time ("YYYY-MM-DD" stays as it is). */
+function istDay(value) {
+  const v = String(value || '');
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return v.slice(0, 10);
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+}
+
 function notesAsInvoices(data) {
   const invoices = (data && data.invoices) || [];
   const byId = new Map(invoices.map((i) => [i.id, i]));
@@ -444,7 +452,7 @@ function notesAsInvoices(data) {
     let lines = Array.isArray(items) && items.length ? items : [];
     if (!lines.length) {
       const rate = taxable > 0 ? round2((gst / taxable) * 100) : 0;
-      const half = round2(gst / 2);
+      const half = splitTax(gst).cgst;
       lines = [{
         id: `${id}-line`, description: 'Adjustment',
         hsn: (base && base.items && base.items[0] && base.items[0].hsn) || '',
@@ -465,7 +473,7 @@ function notesAsInvoices(data) {
       partyGstin: (base && base.partyGstin) || '',
       placeOfSupply: (base && base.placeOfSupply) || '',
       isInterState: inter,
-      date: String(createdAt || '').slice(0, 10),
+      date: istDay(createdAt),
       items: lines,
       subtotal: sum('taxableAmount'),
       totalDiscount: 0,
@@ -480,10 +488,10 @@ function notesAsInvoices(data) {
   }
   return [
     ...((data && data.creditNotes) || []).map((n) =>
-      build('credit_note', n.id, n.creditNoteNumber, n.invoiceId, n.customerName, n.createdAt, n.status, n.items,
+      build('credit_note', n.id, n.creditNoteNumber, n.invoiceId, n.customerName, n.date || n.createdAt, n.status, n.items,
         round2((n.totalAmount || 0) - (n.totalGstAmount || 0)), n.totalGstAmount || 0)),
     ...((data && data.debitNotes) || []).map((n) =>
-      build('debit_note', n.id, n.debitNoteNumber, n.invoiceId, n.customerName, n.createdAt, n.status, null,
+      build('debit_note', n.id, n.debitNoteNumber, n.invoiceId, n.customerName, n.date || n.createdAt, n.status, n.items,
         n.subtotal || round2((n.totalAmount || 0) - (n.totalGstAmount || 0)), n.totalGstAmount || 0)),
   ];
 }
