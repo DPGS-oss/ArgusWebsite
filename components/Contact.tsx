@@ -1,6 +1,7 @@
 "use client";
 
-import { Building2, Globe, Mail } from "lucide-react";
+import { Building2, Mail, MapPin, Phone } from "lucide-react";
+import { LEGAL_ENTITY } from "@/lib/legal";
 import { FormEvent, useState } from "react";
 import { Reveal, Stagger, StaggerItem } from "./Reveal";
 import { AnimatedHeading } from "./AnimatedHeading";
@@ -65,15 +66,20 @@ export function Contact() {
                 href: "mailto:support@argusinvoicing.com",
               },
               {
-                icon: Globe,
-                title: "Website",
-                value: "argusinvoicing.com",
-                href: "https://argusinvoicing.com",
+                icon: Phone,
+                title: "Customer care",
+                value: LEGAL_ENTITY.phone,
+                href: `tel:${LEGAL_ENTITY.phone.replace(/\s/g, "")}`,
+              },
+              {
+                icon: MapPin,
+                title: "Address",
+                value: LEGAL_ENTITY.address,
               },
               {
                 icon: Building2,
                 title: "Company",
-                value: "B&L Softwares and Logistics",
+                value: LEGAL_ENTITY.name,
               },
             ].map(({ icon: Icon, title, value, href }: { icon: typeof Mail; title: string; value: string; href?: string }) => (
               <StaggerItem key={title} className="card flex items-center gap-4 p-5">
