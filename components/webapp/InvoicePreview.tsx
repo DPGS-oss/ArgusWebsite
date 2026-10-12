@@ -4,7 +4,7 @@ import { useState } from "react";
 import { ArrowLeft, FileJson, FileText, Edit, FileDown } from "lucide-react";
 import { hasValidSubscription, useAuth } from "@/lib/auth-provider";
 import type { BusinessProfile, Invoice, StockItem } from "@/lib/types";
-import { formatCurrency, formatDate, generateInvoiceHTML, placeOfSupplyLabel } from "@/lib/gst";
+import { billOfSupplyNote, formatCurrency, formatDate, generateInvoiceHTML, placeOfSupplyLabel } from "@/lib/gst";
 import { saveInvoice, saveInvoiceToFile, saveInvoiceAsHTML, saveInvoiceAsPDF, downloadInvoiceFile, downloadInvoiceHTML, downloadInvoicePDF, isUsingFileSystem } from "@/lib/storage";
 import { InvoiceShareActions } from "./InvoiceShareActions";
 
@@ -347,6 +347,9 @@ export function InvoicePreview({ invoice, business, stock = [], onBack, onEdit, 
         {/* Rule 46(q): supplier signature block. */}
         <div className="mt-8 text-right text-sm text-gray-700">
           <p>For <strong>{business?.name}</strong></p>
+          {billOfSupplyNote(invoice, business ?? { gstin: "" }) ? (
+            <p className="mb-2 text-xs italic text-gray-600">{billOfSupplyNote(invoice, business ?? { gstin: "" })}</p>
+          ) : null}
           <p className="mt-10 inline-block border-t border-gray-400 pt-1">Authorised Signatory</p>
         </div>
 
@@ -363,6 +366,19 @@ export function InvoicePreview({ invoice, business, stock = [], onBack, onEdit, 
         </div>
         <button className="btn-secondary mt-3" onClick={savePortalRefs}>Save IRN / e-way</button>
       </div>
+      {invoice.history?.length ? (
+        <div className="rounded-xl border border-bone bg-white p-4 print:hidden">
+          <div className="mb-2 text-sm font-medium text-ink">Change log</div>
+          <ul className="space-y-1.5 text-xs text-slate">
+            {invoice.history.map((h, i) => (
+              <li key={i}>
+                <span className="font-medium text-ink">{new Date(h.at).toLocaleString("en-IN")}</span> ·{" "}
+                {h.action === "cancelled" ? "Cancelled" : "Edited"}: {h.detail}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </div>
   );
 }

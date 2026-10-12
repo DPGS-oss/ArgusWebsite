@@ -29,6 +29,8 @@ export interface BusinessProfile {
   upiId: string;
   upiQrPng?: string;
   logo?: string;
+  /** Composition scheme (CGST s.10): bills of supply only, no GST charged. */
+  composition?: boolean;
 }
 
 export interface Party {
@@ -72,6 +74,12 @@ export interface InvoiceItem {
   stockItemId?: string;
   /** Delivery charge line (taxed with the goods, s.15(2)(c)); rebuilt from the delivery field on edit. */
   isDelivery?: boolean;
+}
+
+export interface InvoiceHistoryEntry {
+  at: string;
+  action: "edited" | "cancelled";
+  detail: string;
 }
 
 export interface Invoice {
@@ -130,6 +138,8 @@ export interface Invoice {
   ewayBillDate?: string;
   tdsSection?: string;
   tcsSection?: string;
+  /** Change log for issued bills (CGST Rule 56(8)). */
+  history?: InvoiceHistoryEntry[];
 }
 
 export interface HSNCode {

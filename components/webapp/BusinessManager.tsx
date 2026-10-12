@@ -132,6 +132,20 @@ export function BusinessManager({ data, onSaved }: BusinessManagerProps) {
             <Field label="Pincode" value={editing.pincode} onChange={(v) => updateField("pincode", v)} />
           </div>
           <Field label="Address" value={editing.address} onChange={(v) => updateField("address", v)} full />
+          <label className="flex items-start gap-3 text-sm text-silver">
+            <input
+              type="checkbox"
+              checked={!!editing.composition}
+              onChange={(e) => setEditing({ ...editing, composition: e.target.checked })}
+              className="mt-1"
+            />
+            <span>
+              I am on the GST composition scheme
+              <span className="block text-xs text-lead">
+                Bills will be Bills of Supply with no GST, as the law requires.
+              </span>
+            </span>
+          </label>
         </div>
 
         <div className="rounded-lg border border-lead/20 bg-midnight p-6 space-y-4">

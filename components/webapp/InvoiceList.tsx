@@ -13,6 +13,7 @@ type InvoiceListProps = {
   onEdit: (invoice: Invoice) => void;
   onPreview: (invoice: Invoice) => void;
   onDelete: (id: string) => void;
+  onCancel: (id: string) => void;
   onAddUpi?: () => void;
 };
 
@@ -24,7 +25,15 @@ const statusFilters: { value: InvoiceStatus | "all"; label: string }[] = [
   { value: "cancelled", label: "Cancelled" },
 ];
 
-export function InvoiceList({ data, business, onNew, onEdit, onPreview, onDelete, onAddUpi }: InvoiceListProps) {
+export function InvoiceList({ data, business, onNew, onEdit, onPreview, onDelete, onCancel, onAddUpi }: InvoiceListProps) {
+  // Drafts can be deleted; issued bills are cancelled and kept (CGST Rule 56).
+  function removeOrCancel(inv: { id: string; invoiceNumber: string; status: string }) {
+    if (inv.status === "draft") {
+      if (confirm(`Delete draft ${inv.invoiceNumber}?`)) onDelete(inv.id);
+    } else if (inv.status !== "cancelled") {
+      if (confirm(`Cancel bill ${inv.invoiceNumber}? It stays in your records marked cancelled and is reported as cancelled in GSTR-1. To reduce an amount instead, issue a credit note.`)) onCancel(inv.id);
+    }
+  }
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<InvoiceStatus | "all">("all");
 
@@ -131,12 +140,11 @@ export function InvoiceList({ data, business, onNew, onEdit, onPreview, onDelete
                     <Edit className="mr-1 inline h-3.5 w-3.5" /> Edit
                   </button>
                   <button
-                    onClick={() => {
-                      if (confirm(`Delete invoice ${inv.invoiceNumber}?`)) onDelete(inv.id);
-                    }}
-                    className="flex-1 rounded-btn bg-graphite py-2 text-xs text-silver hover:text-red-400"
+                    onClick={() => removeOrCancel(inv)}
+                    disabled={inv.status === "cancelled"}
+                    className="flex-1 rounded-btn bg-graphite py-2 text-xs text-silver hover:text-red-400 disabled:opacity-40"
                   >
-                    <Trash2 className="mr-1 inline h-3.5 w-3.5" /> Delete
+                    <Trash2 className="mr-1 inline h-3.5 w-3.5" /> {inv.status === "draft" ? "Delete" : "Cancel bill"}
                   </button>
                 </div>
               </div>
@@ -203,11 +211,10 @@ export function InvoiceList({ data, business, onNew, onEdit, onPreview, onDelete
                           <Edit className="h-4 w-4" />
                         </button>
                         <button
-                          onClick={() => {
-                            if (confirm(`Delete invoice ${inv.invoiceNumber}?`)) onDelete(inv.id);
-                          }}
-                          className="rounded p-1.5 text-silver hover:bg-graphite hover:text-red-400"
-                          title="Delete"
+                          onClick={() => removeOrCancel(inv)}
+                          disabled={inv.status === "cancelled"}
+                          className="rounded p-1.5 text-silver hover:bg-graphite hover:text-red-400 disabled:opacity-40"
+                          title={inv.status === "draft" ? "Delete draft" : "Cancel bill"}
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>

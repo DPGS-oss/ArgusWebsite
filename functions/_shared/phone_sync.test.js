@@ -126,3 +126,10 @@ test('a customer deleted on the web is removed from the phone', () => {
   assert.deepEqual(next.toPhone.deleted.customers, ['c1']);
   assert.deepEqual(next.appData.parties, []);
 });
+
+test('a bill of supply stays a bill of supply across phone and web', () => {
+  const p = { ...phoneBill(), document_type: 'BOS', total_gst_amount: 0, total_cgst: 0, total_sgst: 0 };
+  const w = phoneToWebInvoice(p);
+  assert.equal(w.type, 'bill_of_supply');
+  assert.equal(webToPhoneInvoice(w).document_type, 'BOS');
+});

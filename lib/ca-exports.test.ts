@@ -411,6 +411,14 @@ describe("GSTR-1 compliance details", () => {
     expect(docs).toMatchObject({ from: "INV-1", to: "INV-2", totnum: 2, cancel: 1, net_issue: 1 });
   });
 
+  it("reports bills of supply in Table 8 (exempt), not in the taxable tables", () => {
+    const bos = invoice({ id: "bos", invoiceNumber: "BOS-1", type: "bill_of_supply", partyGstin: "", items: [line({ gstRate: 0, isInterState: false, rate: 500, quantity: 2 })] });
+    const json = buildGstr1Json({ gstin: MH_GSTIN, month: "2026-04", invoices: [bos] });
+    expect(json.b2cs || []).toEqual([]);
+    expect(json.b2b || []).toEqual([]);
+    expect(json.nil_sup.inv[0]).toMatchObject({ sply_ty: "INTRAB2C", expt_amt: 1000 });
+  });
+
   it("lists each numbering series separately in Table 13, in serial order", () => {
     const web9 = invoice({ id: "w9", invoiceNumber: "INV-2026-0009", items: [line({ gstRate: 18, isInterState: false })] });
     const web10 = invoice({ id: "w10", invoiceNumber: "INV-2026-0010", items: [line({ gstRate: 18, isInterState: false })] });
