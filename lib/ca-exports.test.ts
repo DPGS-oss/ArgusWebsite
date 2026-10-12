@@ -416,7 +416,7 @@ describe("GSTR-1 compliance details", () => {
     const json = buildGstr1Json({ gstin: MH_GSTIN, month: "2026-04", invoices: [bos] });
     expect(json.b2cs || []).toEqual([]);
     expect(json.b2b || []).toEqual([]);
-    expect(json.nil_sup.inv[0]).toMatchObject({ sply_ty: "INTRAB2C", expt_amt: 1000 });
+    expect(json.nil_sup?.inv[0]).toMatchObject({ sply_ty: "INTRAB2C", expt_amt: 1000 });
   });
 
   it("lists each numbering series separately in Table 13, in serial order", () => {
