@@ -1796,6 +1796,8 @@ exports.apiDataPhoneSync = onRequest({ region: 'us-central1', maxInstances: 10, 
     invoices: Array.isArray(body.invoices) ? body.invoices : [],
     customers: Array.isArray(body.customers) ? body.customers : [],
     inventory: Array.isArray(body.inventory) ? body.inventory : [],
+    creditNotes: Array.isArray(body.creditNotes) ? body.creditNotes : [],
+    debitNotes: Array.isArray(body.debitNotes) ? body.debitNotes : [],
     deleted: body.deleted && typeof body.deleted === 'object' ? body.deleted : {},
   };
   if (Buffer.byteLength(JSON.stringify(phone), 'utf8') > 4_000_000) {
