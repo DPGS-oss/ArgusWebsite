@@ -32,6 +32,7 @@ import { generateId, generateInvoiceNumber, saveBusiness } from "@/lib/storage";
 import { BarcodeScannerModal } from "./BarcodeScannerModal";
 import { validateGstin } from "@/lib/gstin";
 import { roundOffPaise, toPaise } from "@/lib/money";
+import { withBalance } from "@/lib/notes";
 import { addDays, addPeriod, todayIST } from "@/lib/dates";
 
 type InvoiceFormProps = {
@@ -204,7 +205,7 @@ export function InvoiceForm({ data, business: businessProp, editingInvoice, onSa
     const extra = deliveryIsReimbursement ? [] : deliveryItems(goods, amount, interState);
     const sum = (k: "taxableAmount" | "cgst" | "sgst" | "igst") => round2(extra.reduce((t, l) => t + l[k], 0));
     const raw = round2(baseTotals.grandTotal - baseTotals.roundOff + amount);
-    const grandTotal = data.settings.roundOff ? Math.round(raw) : raw;
+    const grandTotal = data.settings.roundOff ? round2(raw + roundOffPaise(toPaise(raw)) / 100) : raw;
     return {
       ...baseTotals,
       totalTaxable: round2(baseTotals.totalTaxable + sum("taxableAmount")),
@@ -250,6 +251,9 @@ export function InvoiceForm({ data, business: businessProp, editingInvoice, onSa
       });
       next[idx] = {
         ...item,
+        // The line is now priced from quantity × rate; drop any GST-inclusive
+        // amount it carried (recurring or synced bills), or saving would bring it back.
+        inclusiveTotal: undefined,
         taxableAmount: calc.taxableAmount,
         cgst: calc.cgst,
         sgst: calc.sgst,
@@ -277,7 +281,7 @@ export function InvoiceForm({ data, business: businessProp, editingInvoice, onSa
     setItems((prev) =>
       prev.map((item) => {
         const calc = calculateItem({ quantity: item.quantity, rate: item.rate, discount: item.discount, gstRate: 0 as GSTRate, isInterState: interState });
-        return { ...item, gstRate: 0 as GSTRate, taxableAmount: calc.taxableAmount, cgst: calc.cgst, sgst: calc.sgst, igst: calc.igst, cess: calc.cess ?? 0, total: calc.total };
+        return { ...item, inclusiveTotal: undefined, gstRate: 0 as GSTRate, taxableAmount: calc.taxableAmount, cgst: calc.cgst, sgst: calc.sgst, igst: calc.igst, cess: calc.cess ?? 0, total: calc.total };
       })
     );
   }, [zeroTax, items, totalGstRate, interState]);
@@ -549,11 +553,11 @@ export function InvoiceForm({ data, business: businessProp, editingInvoice, onSa
       // Rule 33 pure agent: collected on the bill, outside taxable value.
       invoice.deliveryReimbursement = round2(deliveryAmount);
       invoice.grandTotal = round2(invoice.grandTotal + deliveryAmount);
-      invoice.balanceDue = round2(invoice.grandTotal - (invoice.paidAmount || 0));
     }
 
     // Edits to an issued bill are logged, never silently overwritten.
-    onSave(withHistory(openedInvoice, invoice));
+    // Balance counts payments and any credit or debit notes against the bill.
+    onSave(withHistory(openedInvoice, withBalance(data, invoice)));
   }
 
   const hsnResults = hsnSearch !== null ? searchHSN(hsnSearch) : [];

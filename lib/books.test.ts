@@ -131,3 +131,19 @@ describe("books", () => {
     expect(creditableOnBill(d, bill)).toBeCloseTo(bill.grandTotal / 2, 1);
   });
 });
+
+describe("what a customer still owes on a bill", () => {
+  it("falls with payments and credit notes, rises with debit notes, and cancelled notes do not count", async () => {
+    const { withBalance } = await import("./notes");
+    const bill = { ...makeBill("21", rng(21), "none"), grandTotal: 1180, paidAmount: 0, balanceDue: 1180, status: "unpaid" } as Invoice;
+    const cn = (amount: number, status = "active") => ({ id: `c${amount}${status}`, invoiceId: bill.id, totalAmount: amount, status }) as CreditNote;
+    expect(withBalance({ creditNotes: [cn(180)], debitNotes: [] }, bill).balanceDue).toBe(1000);
+    expect(withBalance({ creditNotes: [cn(180, "cancelled")], debitNotes: [] }, bill).balanceDue).toBe(1180);
+    const settled = withBalance({ creditNotes: [cn(180)], debitNotes: [] }, { ...bill, paidAmount: 1000 });
+    expect(settled.balanceDue).toBe(0);
+    expect(settled.status).toBe("paid");
+    const more = withBalance({ creditNotes: [], debitNotes: [{ id: "d", invoiceId: bill.id, totalAmount: 118, status: "active" } as never] }, { ...bill, paidAmount: 1180, status: "paid" });
+    expect(more.balanceDue).toBe(118);
+    expect(more.status).toBe("unpaid");
+  });
+});

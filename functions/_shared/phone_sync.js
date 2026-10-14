@@ -20,7 +20,9 @@ const num = (v) => {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
 };
+// Fingerprints keep the original rounding so records synced before stay "unchanged".
 const r2 = (v) => Math.round(num(v) * 100) / 100;
+const money = require('./money');
 const str = (v) => (v == null ? '' : String(v)).trim();
 const day = (v) => str(v).slice(0, 10);
 
@@ -57,9 +59,10 @@ const PHONE_TO_WEB_STATUS = { paid: 'paid', cancelled: 'cancelled', draft: 'draf
 
 function phoneToWebInvoice(p, prev = {}, now = new Date().toISOString()) {
   const inter = num(p.total_igst) > 0;
+  // Same split rule as the phone: CGST is half the tax rounded, SGST the rest.
   const splitTax = (tax) => (inter
-    ? { cgst: 0, sgst: 0, igst: r2(tax) }
-    : { cgst: r2(tax / 2), sgst: r2(tax - r2(tax / 2)), igst: 0 });
+    ? { cgst: 0, sgst: 0, igst: money.round2(tax) }
+    : { ...money.splitTax(tax), igst: 0 });
 
   const items = (p.items || []).map((it, i) => {
     const qty = num(it.quantity) || 1;
@@ -77,25 +80,53 @@ function phoneToWebInvoice(p, prev = {}, now = new Date().toISOString()) {
       rate: r2(taxable / qty),
       discount: 0,
       gstRate: rate,
-      taxableAmount: r2(taxable),
+      taxableAmount: money.round2(taxable),
       ...splitTax(tax),
-      cess: r2(it.cess),
-      total: r2(taxable + tax),
+      cess: money.round2(it.cess),
+      total: money.round2(taxable + tax),
+      // Phone prices include GST; keeps the line exact if the bill is edited on the web.
+      inclusiveTotal: money.round2(taxable + tax),
     };
   });
 
   const shipping = num(p.shipping_charges);
   const reimbursement = p.shipping_is_reimbursement ? shipping : 0;
   if (shipping > 0 && !p.shipping_is_reimbursement) {
-    // Delivery is taxed at the rate of the main item (s.15(2)(c)); the amount is GST-inclusive.
-    const main = items.reduce((a, b) => (b.taxableAmount > (a?.taxableAmount ?? -1) ? b : a), null);
-    const rate = main ? main.gstRate : 0;
-    const taxable = shipping / (1 + rate / 100);
-    items.push({
-      id: `${p.id}-delivery`, description: 'Delivery charges', hsn: main ? main.hsn : '', quantity: 1,
-      unit: 'NOS', uqc: 'NOS', rate: r2(taxable), discount: 0, gstRate: rate, taxableAmount: r2(taxable),
-      ...splitTax(shipping - taxable), cess: 0, total: r2(shipping), isDelivery: true,
+    // Delivery is taxed with the goods (s.15(2)(c)) and the amount includes GST.
+    // Split exactly as the phone does (lib/core/utils/invoice_totals.dart): by
+    // each line's share of the value, the last line taking the remainder, each
+    // part taxed at its line's rate; then one delivery line per rate.
+    const shipPaise = money.toPaise(shipping);
+    const weight = items.reduce((s2, it) => s2 + money.toPaise(it.total), 0);
+    const byRate = new Map();
+    let allocated = 0;
+    items.forEach((it, k) => {
+      if (weight <= 0) return;
+      const share = k === items.length - 1
+        ? shipPaise - allocated
+        : money.roundPaise((shipPaise * money.toPaise(it.total)) / weight);
+      allocated += share;
+      const taxablePart = money.roundPaise(share / (1 + it.gstRate / 100));
+      const g = byRate.get(it.gstRate) || { hsn: it.hsn, share: 0, taxable: 0 };
+      g.share += share;
+      g.taxable += taxablePart;
+      byRate.set(it.gstRate, g);
     });
+    const groups = [...byRate.entries()];
+    for (const [rate, g] of groups) {
+      // Split the rate's delivery GST once, so CGST and SGST stay equal halves.
+      const split = inter ? { cgst: 0, sgst: 0 } : money.splitTax((g.share - g.taxable) / 100);
+      g.cgst = money.toPaise(split.cgst);
+      g.sgst = money.toPaise(split.sgst);
+      g.igst = inter ? g.share - g.taxable : 0;
+      items.push({
+        id: `${p.id}-delivery${groups.length > 1 ? `-${rate}` : ''}`,
+        description: groups.length > 1 ? `Delivery charges (${rate}%)` : 'Delivery charges',
+        hsn: g.hsn, quantity: 1, unit: 'NOS', uqc: 'NOS', rate: g.taxable / 100, discount: 0, gstRate: rate,
+        taxableAmount: g.taxable / 100, cgst: g.cgst / 100, sgst: g.sgst / 100, igst: g.igst / 100, cess: 0,
+        total: g.share / 100, inclusiveTotal: g.share / 100, isDelivery: true,
+      });
+    }
   }
 
   const grandTotal = r2(p.total_amount);

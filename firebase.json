@@ -54,24 +54,6 @@
           "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
         }
       ]
-    },
-    {
-      "site": "argusinvoicing-www",
-      "public": "hosting/www-redirect",
-      "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
-      "cleanUrls": true,
-      "redirects": [
-        {
-          "source": "/",
-          "destination": "https://argusinvoicing.com/",
-          "type": 301
-        },
-        {
-          "source": "/:path*",
-          "destination": "https://argusinvoicing.com/:path",
-          "type": 301
-        }
-      ]
     }
   ],
   "functions": {
