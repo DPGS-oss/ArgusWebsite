@@ -62,24 +62,13 @@ describe("Free vs Business entitlements", () => {
   });
 });
 
-describe("Firebase Hosting www → apex", () => {
-  it("declares www.argusinvoicing.com as a redirect site to the apex, not a content host", () => {
+describe("Firebase Hosting", () => {
+  // www.argusinvoicing.com is attached to the main site in the Firebase console
+  // as a domain redirect to the apex. A second site in firebase.json that does
+  // not exist in the project makes `firebase deploy` fail, so there is one.
+  it("deploys only the main site", () => {
     const cfg = JSON.parse(readFileSync(new URL("../firebase.json", import.meta.url), "utf8"));
-    type HostingRedirect = { destination?: string };
-    type HostingEntry = { site?: string; target?: string; redirects?: HostingRedirect[]; rewrites?: unknown[] };
-    const hosting: HostingEntry[] = Array.isArray(cfg.hosting) ? cfg.hosting : [cfg.hosting];
-    const www = hosting.find(
-      (h) =>
-        h.site === "argusinvoicing-www" ||
-        h.target === "www" ||
-        (Array.isArray(h.redirects) &&
-          h.redirects.some((r) => String(r.destination || "").includes("argusinvoicing.com")))
-    );
-    expect(www).toBeTruthy();
-    const destinations = (www?.redirects || []).map((r) => r.destination);
-    expect(destinations.some((d) => d === "https://argusinvoicing.com" || d?.startsWith("https://argusinvoicing.com/"))).toBe(
-      true
-    );
-    expect(www?.rewrites || []).toEqual([]);
+    const hosting: { site?: string }[] = Array.isArray(cfg.hosting) ? cfg.hosting : [cfg.hosting];
+    expect(hosting.map((h) => h.site)).toEqual(["argus-invocing"]);
   });
 });

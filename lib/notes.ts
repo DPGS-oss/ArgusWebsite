@@ -45,6 +45,25 @@ export function noteFromBill(bill: Invoice, amountInclusive: number): NoteAmount
   };
 }
 
+/**
+ * What the customer still owes on a bill: the total less payments and credit
+ * notes, plus debit notes. Never below zero.
+ */
+export function billBalance(data: Pick<AppData, "creditNotes" | "debitNotes">, bill: Invoice): number {
+  const live = <T extends { invoiceId?: string; status: string; totalAmount: number }>(list: T[] | undefined) =>
+    (list || []).filter((n) => n.invoiceId === bill.id && n.status !== "cancelled").reduce((s, n) => s + toPaise(n.totalAmount), 0);
+  const due = toPaise(bill.grandTotal) - toPaise(bill.paidAmount || 0) - live(data.creditNotes) + live(data.debitNotes);
+  return Math.max(0, due) / 100;
+}
+
+/** Bill with its balance (and paid/unpaid status) brought up to date. */
+export function withBalance(data: Pick<AppData, "creditNotes" | "debitNotes">, bill: Invoice): Invoice {
+  if (bill.status === "draft" || bill.status === "cancelled") return bill;
+  const balanceDue = billBalance(data, bill);
+  const status = balanceDue <= 0 && toPaise(bill.grandTotal) > 0 ? "paid" : bill.status === "paid" && balanceDue > 0 ? "unpaid" : bill.status;
+  return { ...bill, balanceDue, status };
+}
+
 /** How much can still be credited against a bill (its total less earlier credit notes). */
 export function creditableOnBill(data: AppData, bill: Invoice): number {
   const credited = (data.creditNotes || [])

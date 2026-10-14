@@ -4,9 +4,9 @@ import { useState } from "react";
 import { Plus, FileText } from "lucide-react";
 import { formatCurrency } from "@/lib/gst";
 import type { AppData, CreditNote, DebitNote } from "@/lib/types";
-import { cancelCreditNote, cancelDebitNote, generateId, generateInvoiceNumber, loadData, saveCreditNote, saveDebitNote } from "@/lib/storage";
+import { cancelCreditNote, cancelDebitNote, generateId, generateInvoiceNumber, loadData, saveCreditNote, saveDebitNote, saveInvoice } from "@/lib/storage";
 import { persistLedger, postNoteLedger } from "@/lib/books";
-import { creditableOnBill, noteFromBill } from "@/lib/notes";
+import { creditableOnBill, noteFromBill, withBalance } from "@/lib/notes";
 import { todayIST } from "@/lib/dates";
 
 type Kind = "credit_note" | "debit_note";
@@ -95,8 +95,16 @@ export function AdjustmentNotes({ data, onSaved, kind }: Props) {
       saveDebitNote(note);
       persistLedger(postNoteLedger(loadData(), note, kind));
     }
+    refreshBill(bill.id);
     onSaved();
     reset();
+  }
+
+  /** The bill's balance moves with its credit and debit notes. */
+  function refreshBill(id: string) {
+    const latest = loadData();
+    const target = latest.invoices.find((i) => i.id === id);
+    if (target) saveInvoice(withBalance(latest, target));
   }
 
   function cancel(note: AnyNote) {
@@ -109,6 +117,7 @@ export function AdjustmentNotes({ data, onSaved, kind }: Props) {
         ? (latest.creditNotes || []).find((n) => n.id === note.id)
         : (latest.debitNotes || []).find((n) => n.id === note.id);
     if (saved) persistLedger(postNoteLedger(latest, saved, kind));
+    if (note.invoiceId) refreshBill(note.invoiceId);
     onSaved();
   }
 

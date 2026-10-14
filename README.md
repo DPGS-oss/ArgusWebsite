@@ -80,12 +80,9 @@ To set up `argusinvoicing.com` as the main domain:
 4. Wait for SSL provisioning (usually 15-30 minutes)
 5. Add `www.argusinvoicing.com` as a **redirect** to the apex (`argusinvoicing.com`), not as a second content host.
 
-`firebase.json` deploys two Hosting sites:
+`firebase.json` deploys one Hosting site, `argus-invocing` (the Next.js export), which serves `argusinvoicing.com`.
 
-- `argus-invocing` — apex / default site (the Next.js export)
-- `argusinvoicing-www` — 301 everything to `https://argusinvoicing.com`
-
-Create the www site once (`firebase hosting:sites:create argusinvoicing-www` if it does not exist), then in Firebase Console → Hosting → that site → **Add custom domain** → `www.argusinvoicing.com`. Use the DNS records Firebase shows; do not invent A/CNAME values. Attaching www to this redirect site lets Firebase provision a www SSL cert so `www` is no longer a broken-cert host.
+`www.argusinvoicing.com` is added to the same site in Firebase Console → Hosting → **Add custom domain**, set to **redirect** to `argusinvoicing.com`. Firebase answers every www request with a 301 to the same path on the apex and provides the www SSL certificate. Do not add a second site for www to `firebase.json`: a site that does not exist in the project makes `firebase deploy` fail.
 
 ## Rate Limiting
 

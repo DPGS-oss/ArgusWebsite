@@ -5,6 +5,7 @@ import type { AppData, CreditNote, DebitNote, Expense, Invoice, KhataEntry, Paym
 import { generateId, loadData, saveData } from "./storage";
 import { isRegisteredGstin } from "./gstin";
 import { round2, toPaise } from "./money";
+import { withBalance } from "./notes";
 
 /** "gst" holds GST collected on sales (owed to the government) less GST paid on purchases. */
 export type LedgerAccount = "party" | "cash" | "bank" | "sales" | "purchase" | "expense" | "gst";
@@ -101,15 +102,9 @@ export function postNoteLedger(data: AppData, note: CreditNote | DebitNote, kind
 export function applyPaymentToInvoice(data: AppData, payment: Payment): AppData {
   const invoices = data.invoices.map((inv) => {
     if (inv.id !== payment.invoiceId) return inv;
-    const paid = (inv.paidAmount || 0) + payment.amount;
-    const balance = Math.max(0, inv.grandTotal - paid);
-    return {
-      ...inv,
-      paidAmount: paid,
-      balanceDue: balance,
-      status: balance <= 0.009 ? "paid" : inv.status === "draft" ? "unpaid" : inv.status,
-      paymentMode: payment.method,
-    };
+    const paidAmount = round2((inv.paidAmount || 0) + payment.amount);
+    const next = withBalance(data, { ...inv, paidAmount, status: inv.status === "draft" ? "unpaid" : inv.status, paymentMode: payment.method });
+    return next;
   });
   const inv = invoices.find((i) => i.id === payment.invoiceId);
   let next = { ...data, invoices, payments: [...(data.payments || []), payment] };
