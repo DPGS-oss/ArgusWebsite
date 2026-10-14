@@ -48,6 +48,8 @@ const webInvoiceFp = (w) => hash({
   t: r2(w.grandTotal), notes: str(w.notes), paid: r2(w.paidAmount),
   i: (w.items || []).map((it) => [str(it.description), r2(it.quantity), r2(it.total), r2(it.gstRate)]),
 });
+const phoneNoteFp = (p) => hash([str(p.credit_note_number || p.debit_note_number), str(p.status), r2(p.total_amount), str(p.invoice_id), (p.items || []).length]);
+const webNoteFp = (w) => hash([str(w.creditNoteNumber || w.debitNoteNumber), str(w.status), r2(w.totalAmount), str(w.invoiceId), (w.items || []).length]);
 const phoneCustomerFp = (c) => hash([c.name, c.gstin, c.phone, c.email, c.billing_address ?? c.address, c.city, c.state, c.pincode].map(str));
 const webPartyFp = (p) => hash([p.name, p.gstin, p.phone, p.email, p.address, p.city, p.state, p.pincode].map(str));
 const phoneStockFp = (s) => hash([str(s.name), str(s.hsn_code), r2(s.gst_rate), r2(s.sell_price), r2(s.stock_on_hand), r2(s.reorder_level), str(s.barcode)]);
@@ -313,6 +315,78 @@ const webToPhoneStock = (s, now = new Date().toISOString()) => ({
   updated_at: now,
 });
 
+// ------------------------------------------------------------- notes
+// Credit and debit notes made on either side, so GSTR-1 (CDNR) and the CA see them.
+
+function noteLineToWeb(it, id, inter) {
+  const qty = num(it.quantity) || 1;
+  const taxable = num(it.taxable_value);
+  const tax = num(it.cgst) + num(it.sgst) + num(it.igst) || num(it.gst_amount);
+  const split = inter ? { cgst: 0, sgst: 0, igst: money.round2(tax) } : { ...money.splitTax(tax), igst: 0 };
+  return {
+    id, description: str(it.name), hsn: str(it.hsn_code), quantity: qty, unit: str(it.uqc) || 'NOS',
+    uqc: str(it.uqc) || 'NOS', rate: money.round2(taxable / qty), discount: 0, gstRate: num(it.gst_rate),
+    taxableAmount: money.round2(taxable), ...split, cess: money.round2(it.cess), total: money.round2(taxable + tax),
+    inclusiveTotal: money.round2(taxable + tax),
+  };
+}
+
+function noteLineToPhone(it) {
+  const qty = num(it.quantity) || 1;
+  return {
+    name: str(it.description), hsn_code: str(it.hsn), quantity: qty, unit_price: money.round2(num(it.total) / qty),
+    gst_rate: num(it.gstRate), discount_percent: 0, cess: money.round2(it.cess), uqc: str(it.uqc || it.unit) || 'NOS',
+    taxable_value: money.round2(it.taxableAmount), gst_amount: money.round2(num(it.cgst) + num(it.sgst) + num(it.igst)),
+    cgst: money.round2(it.cgst), sgst: money.round2(it.sgst), igst: money.round2(it.igst), total: money.round2(it.total),
+  };
+}
+
+function noteKind(numberKey, phoneNumberKey) {
+  return {
+    toWeb(p, prev = {}, now = new Date().toISOString()) {
+      const inter = (p.items || []).some((it) => num(it.igst) > 0);
+      return {
+        ...prev,
+        id: str(p.id),
+        [numberKey]: str(p[phoneNumberKey]),
+        invoiceId: str(p.invoice_id) || undefined,
+        customerName: str(p.customer_name),
+        customerId: str(p.customer_id) || undefined,
+        reason: str(p.reason),
+        items: (p.items || []).map((it, i) => noteLineToWeb(it, `${p.id}-${i}`, inter)),
+        subtotal: money.round2(p.subtotal),
+        totalGstAmount: money.round2(p.total_gst_amount),
+        totalAmount: money.round2(p.total_amount),
+        notes: str(p.notes),
+        status: str(p.status) || 'active',
+        date: day(p.created_at),
+        createdAt: str(p.created_at) || now,
+        updatedAt: now,
+      };
+    },
+    toPhone(w, now = new Date().toISOString()) {
+      return {
+        id: str(w.id),
+        [phoneNumberKey]: str(w[numberKey]),
+        invoice_id: str(w.invoiceId) || null,
+        customer_name: str(w.customerName),
+        customer_id: str(w.customerId) || null,
+        reason: str(w.reason),
+        items: (w.items || []).map(noteLineToPhone),
+        subtotal: money.round2(w.subtotal),
+        total_gst_amount: money.round2(w.totalGstAmount),
+        total_amount: money.round2(w.totalAmount),
+        notes: str(w.notes),
+        status: str(w.status) || 'active',
+        created_at: str(w.date) || str(w.createdAt),
+        updated_at: now,
+      };
+    },
+  };
+}
+const creditNoteKind = noteKind('creditNoteNumber', 'credit_note_number');
+const debitNoteKind = noteKind('debitNoteNumber', 'debit_note_number');
+
 // ------------------------------------------------------------- merge
 
 const KINDS = {
@@ -322,6 +396,8 @@ const KINDS = {
     include: (p) => (p.type || 'customer') === 'customer',
   },
   inventory: { webKey: 'stock', phoneFp: phoneStockFp, webFp: webStockFp, toWeb: phoneToWebStock, toPhone: webToPhoneStock },
+  creditNotes: { webKey: 'creditNotes', phoneFp: phoneNoteFp, webFp: webNoteFp, ...creditNoteKind },
+  debitNotes: { webKey: 'debitNotes', phoneFp: phoneNoteFp, webFp: webNoteFp, ...debitNoteKind },
 };
 
 /**

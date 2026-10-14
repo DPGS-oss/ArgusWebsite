@@ -70,6 +70,11 @@ export function Purchases({ data, onSaved }: Props) {
       return;
     }
     const split = splitInclusive(amount, gstRate);
+    const supplier = data.parties.find((p) => p.name.toLowerCase() === supplierName.trim().toLowerCase());
+    const supplierState = (supplierGstin.trim() || supplier?.gstin || "").slice(0, 2);
+    const ownBusiness = data.businesses.find((b) => b.id === data.activeBusinessId) || data.businesses[0];
+    const ownState = ((ownBusiness?.gstin || "").slice(0, 2) || ownBusiness?.stateCode || "").trim();
+    const interState = /^\d{2}$/.test(supplierState) && /^\d{2}$/.test(ownState) && supplierState !== ownState;
     const isCredit = paymentMethod === "Credit";
     const paid = isCredit ? 0 : paidTouched ? Math.min(paidAmount, amount) : amount;
     const now = new Date().toISOString();
@@ -83,12 +88,12 @@ export function Purchases({ data, onSaved }: Props) {
       discount: 0,
       gstRate,
       taxableAmount: split.taxable,
-      cgst: splitTaxPaise(toPaise(split.gst)).cgst / 100,
-      sgst: splitTaxPaise(toPaise(split.gst)).sgst / 100,
-      igst: 0,
+      // A supplier in another state charges IGST; claim it under IGST in GSTR-3B.
+      cgst: interState ? 0 : splitTaxPaise(toPaise(split.gst)).cgst / 100,
+      sgst: interState ? 0 : splitTaxPaise(toPaise(split.gst)).sgst / 100,
+      igst: interState ? split.gst : 0,
       total: split.total,
     };
-    const supplier = data.parties.find((p) => p.name.toLowerCase() === supplierName.trim().toLowerCase());
     const p: Purchase = {
       id: generateId(),
       purchaseNumber: `PUR-${Date.now()}`,

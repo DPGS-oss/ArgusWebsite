@@ -133,3 +133,30 @@ test('a bill of supply stays a bill of supply across phone and web', () => {
   assert.equal(w.type, 'bill_of_supply');
   assert.equal(webToPhoneInvoice(w).document_type, 'BOS');
 });
+
+test('credit and debit notes sync both ways and keep their GST split', () => {
+  const { mergePhoneSync } = require('./phone_sync');
+  const phoneNote = {
+    id: 'cn1', credit_note_number: 'CN/26-27/0001', invoice_id: 'inv1', customer_name: 'Mehta', status: 'active',
+    subtotal: 100, total_gst_amount: 18, total_amount: 118, created_at: '2026-10-12T10:00:00',
+    items: [{ name: 'Almirah', hsn_code: '9403', quantity: 1, unit_price: 118, gst_rate: 18, taxable_value: 100, gst_amount: 18, cgst: 9, sgst: 9, igst: 0, total: 118 }],
+  };
+  const first = mergePhoneSync(null, { creditNotes: [phoneNote], debitNotes: [] });
+  const web = first.appData.creditNotes[0];
+  assert.equal(web.creditNoteNumber, 'CN/26-27/0001');
+  assert.equal(web.invoiceId, 'inv1');
+  assert.equal(web.date, '2026-10-12');
+  assert.deepEqual([web.items[0].taxableAmount, web.items[0].cgst, web.items[0].sgst, web.items[0].gstRate], [100, 9, 9, 18]);
+  // Unchanged on the next sync: nothing to send back.
+  const second = mergePhoneSync(first.appData, { creditNotes: [phoneNote], debitNotes: [] });
+  assert.deepEqual(second.toPhone.creditNotes, []);
+  // A note made on the web reaches the phone.
+  const appData = { ...second.appData, debitNotes: [{ id: 'dn1', debitNoteNumber: 'DN/26-27/W0001', invoiceId: 'inv1', customerName: 'Mehta', status: 'active', subtotal: 50, totalGstAmount: 9, totalAmount: 59, date: '2026-10-12', items: [] }] };
+  const third = mergePhoneSync(appData, { creditNotes: [phoneNote], debitNotes: [] });
+  assert.equal(third.toPhone.debitNotes[0].debit_note_number, 'DN/26-27/W0001');
+  assert.equal(third.toPhone.debitNotes[0].total_amount, 59);
+  // Older apps that send no notes lose nothing.
+  const old = mergePhoneSync(third.appData, { invoices: [] });
+  assert.equal(old.appData.creditNotes.length, 1);
+  assert.equal(old.appData.debitNotes.length, 1);
+});
