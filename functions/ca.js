@@ -18,6 +18,7 @@ const {
   monthBounds,
 } = require('./_shared/ca-exports');
 const { buildEinvoiceJson, buildEinvoiceBatch } = require('./_shared/einvoice');
+const { readBooks } = require('./_shared/books_store');
 
 const SCOPES = [
   'read:invoices',
@@ -323,10 +324,10 @@ async function handleClients(req, res, decoded) {
 }
 
 async function loadOwnerAppData(ownerId) {
-  const doc = await getDb().collection('users').doc(ownerId).collection('app_data').doc('main').get();
+  const { exists, doc } = await readBooks(getDb(), ownerId);
   return {
-    appData: doc.exists ? (doc.data().appData || {}) : {},
-    updated_at: doc.exists ? doc.data().updated_at : null,
+    appData: exists ? (doc.appData || {}) : {},
+    updated_at: exists ? doc.updated_at : null,
   };
 }
 
