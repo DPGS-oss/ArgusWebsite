@@ -1331,3 +1331,16 @@ export function billOfSupplyNote(invoice: Pick<Invoice, "type">, business: Pick<
   if (!isRegisteredGstin(business.gstin)) return "Supplier not registered under GST. No GST charged.";
   return null;
 }
+
+/**
+ * Rule 33 pure-agent courier cost: collected on the bill, outside taxable
+ * value. Round-off (if the bill is rounded) applies to the whole amount payable.
+ */
+export function withReimbursement<T extends { grandTotal: number; roundOff: number; deliveryReimbursement?: number }>(
+  invoice: T, amount: number, roundOffOn: boolean,
+): T {
+  if (!(amount > 0)) return invoice;
+  const raw = toPaise(invoice.grandTotal) - toPaise(invoice.roundOff || 0) + toPaise(amount);
+  const ro = roundOffOn ? roundOffPaise(raw) : 0;
+  return { ...invoice, deliveryReimbursement: round2(amount), roundOff: ro / 100, grandTotal: (raw + ro) / 100 };
+}

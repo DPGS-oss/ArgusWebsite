@@ -69,7 +69,9 @@ test('billing-only users do not see or change purchases, expenses, payroll, sett
   assert.equal(saved.settings.invoicePrefix, 'INV');
   assert.deepEqual(saved.deleted.purchases, {});
   assert.deepEqual(saved.deleted.invoices, { d1: 'now' });
-  assert.equal(team.mergeMemberSave(stored, incoming, 'full'), incoming);
+  const full = team.mergeMemberSave(stored, incoming, 'full');
+  assert.equal(full.invoices.length, 2);
+  assert.equal(full.businesses[0].gstin, 'CHANGED', 'full access can edit the business');
 });
 
 test('extra users cost ₹50 a month to the end of the period', () => {
@@ -77,4 +79,15 @@ test('extra users cost ₹50 a month to the end of the period', () => {
   assert.deepEqual(team.seatQuote(2, '2026-10-20T00:00:00Z', NOW), { months: 1, amount: 10000 });
   assert.deepEqual(team.seatQuote(1, null, NOW), { months: 1, amount: 5000 });
   assert.equal(team.seatQuote(1, '2030-01-01T00:00:00Z', NOW).months, 12);
+});
+
+test('nobody on the team can remove an issued bill; drafts can go', () => {
+  const stored = { invoices: [{ id: 'i1', status: 'paid' }, { id: 'd1', status: 'draft' }], creditNotes: [{ id: 'c1', status: 'issued' }] };
+  for (const access of ['billing', 'full']) {
+    const saved = team.mergeMemberSave(stored, { invoices: [], creditNotes: [], deleted: { invoices: { i1: 'x', d1: 'x' }, creditNotes: { c1: 'x' } } }, access);
+    assert.deepEqual(saved.invoices.map((i) => i.id), ['i1']);
+    assert.deepEqual(saved.creditNotes.map((c) => c.id), ['c1']);
+    assert.deepEqual(Object.keys(saved.deleted.invoices), ['d1']);
+    assert.deepEqual(saved.deleted.creditNotes, {});
+  }
 });

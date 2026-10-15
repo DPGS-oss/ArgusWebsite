@@ -107,12 +107,13 @@ test('output has no undefined values (Firestore rejects them)', () => {
 });
 
 test('a draft deleted on the phone disappears from the web and stays gone', () => {
-  const first = mergePhoneSync({}, { invoices: [phoneBill()], customers: [customer] });
+  const draft = { ...phoneBill(), status: 'draft' };
+  const first = mergePhoneSync({}, { invoices: [draft], customers: [customer] });
   const next = mergePhoneSync(first.appData, { invoices: [], customers: [customer], deleted: { invoices: ['inv-phone-1'] } });
   assert.deepEqual(next.appData.invoices, []);
   assert.ok(next.appData.deleted.invoices['inv-phone-1']);
   // A second phone that still has it is told to drop it, and it is not re-added.
-  const other = mergePhoneSync(next.appData, { invoices: [phoneBill()] });
+  const other = mergePhoneSync(next.appData, { invoices: [draft] });
   assert.deepEqual(other.appData.invoices, []);
   assert.deepEqual(other.toPhone.deleted.invoices, ['inv-phone-1']);
 });
@@ -252,4 +253,13 @@ test('item recipe, valuation and batches survive the round trip; old items keep 
   assert.equal(w.trackBatches, true);
   assert.deepEqual(w.bom, [{ itemId: 'a', qty: 2 }]);
   assert.deepEqual(mergePhoneSync(second.appData, { inventory: [plain, kit] }).toPhone.inventory, []);
+});
+
+test('a phone cannot delete an issued bill; a draft can be deleted', () => {
+  const { mergePhoneSync } = require('./phone_sync');
+  const data = { invoices: [{ id: 'i1', invoiceNumber: 'INV/26-27/0001', status: 'paid', items: [] }, { id: 'd1', invoiceNumber: 'D', status: 'draft', items: [] }] };
+  const r = mergePhoneSync(data, { deleted: { invoices: ['i1', 'd1'] } }, '2026-10-15T00:00:00Z');
+  assert.deepEqual(r.appData.invoices.map((i) => i.id), ['i1']);
+  assert.ok(!r.appData.deleted.invoices.i1);
+  assert.ok(r.appData.deleted.invoices.d1);
 });

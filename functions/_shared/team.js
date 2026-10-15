@@ -97,10 +97,36 @@ function viewFor(data, access) {
   return out;
 }
 
-/** A member's save: billing-only cannot change or delete what is locked. */
+const ISSUED = ['invoices', 'creditNotes', 'debitNotes'];
+const isDraftDoc = (d) => String((d && d.status) || '').toLowerCase() === 'draft';
+
+/**
+ * Issued bills and notes stay: a member cannot remove them by leaving them
+ * out or marking them deleted (only drafts can go).
+ */
+function keepIssued(base, out) {
+  const deleted = { ...(out.deleted || {}) };
+  for (const k of ISSUED) {
+    const was = Array.isArray(base[k]) ? base[k] : [];
+    const issued = new Map(was.filter((d) => d && d.id && !isDraftDoc(d)).map((d) => [String(d.id), d]));
+    if (deleted[k]) {
+      const ids = { ...deleted[k] };
+      for (const id of Object.keys(ids)) if (issued.has(id)) delete ids[id];
+      deleted[k] = ids;
+    }
+    const list = Array.isArray(out[k]) ? [...out[k]] : [];
+    const present = new Set(list.map((d) => String(d && d.id)));
+    for (const [id, d] of issued) if (!present.has(id)) list.push(d);
+    out[k] = list;
+  }
+  out.deleted = deleted;
+  return out;
+}
+
+/** A member's save: billing-only cannot change or delete what is locked; nobody removes issued bills. */
 function mergeMemberSave(stored, incoming, access) {
-  if (access !== 'billing') return incoming;
   const base = stored || {};
+  if (access !== 'billing') return keepIssued(base, { ...incoming });
   const out = { ...incoming };
   for (const k of LOCKED_FOR_BILLING) {
     if (base[k] !== undefined) out[k] = base[k];
@@ -112,7 +138,7 @@ function mergeMemberSave(stored, incoming, access) {
     deleted[k] = { ...(deleted[k] || {}), ...(ids || {}) };
   }
   out.deleted = deleted;
-  return out;
+  return keepIssued(base, out);
 }
 
 /** Cost of adding `add` users from now until `until` (whole months, at least one). */

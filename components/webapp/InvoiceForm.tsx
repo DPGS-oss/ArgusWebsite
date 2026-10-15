@@ -18,6 +18,7 @@ import {
   round2,
   gstRatePickerOptions,
   gstRateLabel,
+  withReimbursement,
   defaultGstRateForNew,
   resolvePlaceOfSupply,
   resolveShipTo,
@@ -172,13 +173,15 @@ export function InvoiceForm({ data, business: businessProp, editingInvoice, onSa
     ? (openedInvoice?.isInterState ?? computedInterState)
     : computedInterState;
 
+  // An existing bill keeps its own rounding (a bill made on the phone may differ from the setting).
+  const roundOffOn = editingInvoice ? toPaise(editingInvoice.roundOff || 0) !== 0 : !!data.settings.roundOff;
   const baseTotals = useMemo(() => {
     if (isTotalMode) {
       const afterDiscount = round2(totalAmount * (1 - totalDiscount / 100));
       const { taxableAmount: taxable, cgst, sgst, igst } = calculateItem({
         quantity: 1, rate: 0, discount: 0, gstRate: totalGstRate, isInterState: interState, inclusiveTotal: afterDiscount,
       });
-      const roundOff = data.settings.roundOff ? roundOffPaise(toPaise(afterDiscount)) / 100 : 0;
+      const roundOff = roundOffOn ? roundOffPaise(toPaise(afterDiscount)) / 100 : 0;
       const grandTotal = round2(afterDiscount + roundOff);
       const discountAmount = round2(totalAmount - afterDiscount);
       return {
@@ -194,8 +197,8 @@ export function InvoiceForm({ data, business: businessProp, editingInvoice, onSa
         grandTotal: round2(grandTotal),
       };
     }
-    return calculateInvoiceTotals(items, data.settings.roundOff);
-  }, [isTotalMode, totalAmount, totalGstRate, totalDiscount, interState, data.settings.roundOff, items]);
+    return calculateInvoiceTotals(items, roundOffOn);
+  }, [isTotalMode, totalAmount, totalGstRate, totalDiscount, interState, roundOffOn, items]);
 
   // Delivery: taxed with the goods (s.15(2)(c)) unless it is a pure-agent reimbursement.
   const totals = useMemo(() => {
@@ -207,7 +210,7 @@ export function InvoiceForm({ data, business: businessProp, editingInvoice, onSa
     const extra = deliveryIsReimbursement ? [] : deliveryItems(goods, amount, interState);
     const sum = (k: "taxableAmount" | "cgst" | "sgst" | "igst") => round2(extra.reduce((t, l) => t + l[k], 0));
     const raw = round2(baseTotals.grandTotal - baseTotals.roundOff + amount);
-    const grandTotal = data.settings.roundOff ? round2(raw + roundOffPaise(toPaise(raw)) / 100) : raw;
+    const grandTotal = roundOffOn ? round2(raw + roundOffPaise(toPaise(raw)) / 100) : raw;
     return {
       ...baseTotals,
       totalTaxable: round2(baseTotals.totalTaxable + sum("taxableAmount")),
@@ -219,7 +222,7 @@ export function InvoiceForm({ data, business: businessProp, editingInvoice, onSa
       grandTotal: round2(grandTotal),
       delivery: amount,
     };
-  }, [baseTotals, deliveryAmount, deliveryIsReimbursement, isTotalMode, totalAmount, totalDiscount, totalGstRate, items, interState, data.settings.roundOff]);
+  }, [baseTotals, deliveryAmount, deliveryIsReimbursement, isTotalMode, totalAmount, totalDiscount, totalGstRate, items, interState, roundOffOn]);
 
   // Voice: prices are what the customer pays (GST-inclusive), like the Android app.
   function applyVoiceBill(bill: VoiceBillResult) {
@@ -532,7 +535,8 @@ export function InvoiceForm({ data, business: businessProp, editingInvoice, onSa
       date,
       dueDate: dueDateVal,
       items: invoiceItems,
-      roundOffEnabled: data.settings.roundOff,
+      // An existing bill keeps its own rounding (a bill made on the phone may differ from this setting).
+      roundOffEnabled: roundOffOn,
       // "Paid" with nothing entered means paid in full.
       paidAmount: status === "paid" && paidAmount === 0 ? totals.grandTotal : paidAmount,
       paymentMode,
@@ -562,15 +566,12 @@ export function InvoiceForm({ data, business: businessProp, editingInvoice, onSa
       ewayBillDate: editingInvoice?.ewayBillDate,
       enteredTotal: isTotalMode ? totalAmount : undefined,
     };
-    if (deliveryAmount > 0 && deliveryIsReimbursement) {
-      // Rule 33 pure agent: collected on the bill, outside taxable value.
-      invoice.deliveryReimbursement = round2(deliveryAmount);
-      invoice.grandTotal = round2(invoice.grandTotal + deliveryAmount);
-    }
+    // Rule 33 pure agent: collected on the bill, outside taxable value; rounding covers the whole bill.
+    const final = deliveryIsReimbursement ? withReimbursement(invoice, deliveryAmount, roundOffOn) : invoice;
 
     // Edits to an issued bill are logged, never silently overwritten.
     // Balance counts payments and any credit or debit notes against the bill.
-    onSave(withHistory(openedInvoice, withBalance(data, invoice)));
+    onSave(withHistory(openedInvoice, withBalance(data, final)));
   }
 
   const hsnResults = hsnSearch !== null ? searchHSN(hsnSearch) : [];

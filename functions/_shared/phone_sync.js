@@ -581,6 +581,9 @@ function mergeStockMoves(data, sent, sentGodowns, now) {
   return kept.filter((m) => !sentIds.has(str(m.id)) || differs.has(str(m.id)));
 }
 
+const ISSUED_DOCS = new Set(['invoices', 'creditNotes', 'debitNotes']);
+const isDraft = (w) => str(w.status).toLowerCase() === 'draft';
+
 /**
  * Merge what the phone sent into `appData` (mutated copy returned) and work
  * out which records the phone must upsert.
@@ -593,8 +596,14 @@ function mergePhoneSync(appData, phone, now = new Date().toISOString()) {
   const phoneDeleted = (phone && phone.deleted) || {};
   for (const [kind, k] of Object.entries(KINDS)) {
     const tomb = (deleted[k.webKey] = deleted[k.webKey] || {});
+    // Issued bills and notes are never deleted (GST law: cancel or issue a note);
+    // only drafts, or records the cloud never had, can be removed.
+    const current = new Map((Array.isArray(data[k.webKey]) ? data[k.webKey] : []).map((w) => [str(w && w.id), w]));
     for (const id of Array.isArray(phoneDeleted[kind]) ? phoneDeleted[kind] : []) {
-      if (str(id)) tomb[str(id)] = tomb[str(id)] || now;
+      if (!str(id)) continue;
+      const w = current.get(str(id));
+      if (ISSUED_DOCS.has(kind) && w && !isDraft(w)) continue;
+      tomb[str(id)] = tomb[str(id)] || now;
     }
     const web = (Array.isArray(data[k.webKey]) ? data[k.webKey] : []).filter((w) => !(w && tomb[str(w.id)]));
     const index = new Map(web.map((w, i) => [str(w && w.id), i]));
@@ -686,6 +695,7 @@ function stripUndefined(v) {
 
 module.exports = {
   mergePhoneSync,
+  isDraft,
   mergeStockMoves,
   phoneToWebInvoice,
   webToPhoneInvoice,
