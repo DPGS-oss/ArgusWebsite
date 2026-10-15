@@ -160,3 +160,22 @@ test('credit and debit notes sync both ways and keep their GST split', () => {
   assert.equal(old.appData.creditNotes.length, 1);
   assert.equal(old.appData.debitNotes.length, 1);
 });
+
+test('purchases sync both ways with supplier, bill number and tax heads', () => {
+  const { mergePhoneSync } = require('./phone_sync');
+  const phone = {
+    id: 'pu1', purchase_number: 'PUR-1', supplier_name: 'Mumbai Steel', supplier_gstin: '27aapfu0939f1zv',
+    supplier_invoice_number: 'MS/0042', supplier_invoice_date: '2026-10-05', total_amount: 11800, total_gst_amount: 1800,
+    total_igst: 1800, total_cgst: 0, total_sgst: 0, reverse_charge: false, itc_eligible: true, created_at: '2026-10-05T10:00:00',
+    items: [{ name: 'Steel', hsn_code: '7308', quantity: 1, unit_price: 11800, gst_rate: 18, taxable_value: 10000, gst_amount: 1800, cgst: 0, sgst: 0, igst: 1800, total: 11800 }],
+  };
+  const first = mergePhoneSync(null, { purchases: [phone] });
+  const w = first.appData.purchases[0];
+  assert.equal(w.supplierGstin, '27AAPFU0939F1ZV');
+  assert.equal(w.supplierInvoiceNumber, 'MS/0042');
+  assert.equal(w.totalIgst, 1800);
+  assert.equal(w.items[0].igst, 1800);
+  assert.deepEqual(mergePhoneSync(first.appData, { purchases: [phone] }).toPhone.purchases, []);
+  const old = mergePhoneSync(first.appData, { invoices: [] });
+  assert.equal(old.appData.purchases.length, 1);
+});

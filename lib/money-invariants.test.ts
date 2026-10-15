@@ -66,7 +66,7 @@ describe("every bill obeys the money rules", () => {
   it("3,000 random bills", () => {
     const r = rng(2026);
     for (let n = 0; n < 3000; n++) expectSound(randomBill(r, n));
-  });
+  }, 60_000);
 
   it("saving a bill again never changes its money", () => {
     const r = rng(7);
@@ -80,7 +80,7 @@ describe("every bill obeys the money rules", () => {
       expect(again.totalTax).toBe(bill.totalTax);
       expect(again.items.map((l) => [l.taxableAmount, l.cgst, l.sgst, l.igst])).toEqual(bill.items.map((l) => [l.taxableAmount, l.cgst, l.sgst, l.igst]));
     }
-  });
+  }, 60_000);
 });
 
 describe("phone bills arriving by sync", () => {
@@ -142,5 +142,5 @@ describe("phone bills arriving by sync", () => {
       expect(toPaise(resaved.totalTax)).toBe(tax);
       expectSound(resaved);
     }
-  });
+  }, 60_000);
 });

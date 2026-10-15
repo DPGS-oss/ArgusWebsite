@@ -182,6 +182,8 @@ export interface AppData {
   payments: Payment[];
   templates: Template[];
   khataEntries: KhataEntry[];
+  /** GSTR-2B files uploaded, by return period "MMYYYY": credit per head and the match summary. */
+  gstr2b?: Record<string, { itc: { igst: number; cgst: number; sgst: number; cess: number }; summary?: Record<string, number>; uploadedAt: string }>;
   /** Tombstones: id -> deleted-at, per list, so sync does not resurrect deletions. */
   deleted?: Partial<Record<DeletableKey, Record<string, string>>>;
 }
@@ -419,6 +421,7 @@ export interface GSTRSection {
 
 export type View =
   | "dashboard"
+  | "gst-returns"
   | "invoices"
   | "invoice-form"
   | "invoice-preview"

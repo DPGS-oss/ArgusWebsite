@@ -42,6 +42,7 @@ const menuItems: { view: View; label: string; icon: typeof LayoutDashboard }[] =
   { view: "debit-notes", label: "Debit Notes", icon: ArrowLeftRight },
   { view: "payroll", label: "Payroll", icon: Banknote },
   { view: "compliance", label: "GST check", icon: ClipboardCheck },
+  { view: "gst-returns", label: "GST returns", icon: ClipboardCheck },
   { view: "delivery-challans", label: "Delivery Challans", icon: Truck },
   { view: "parties", label: "Parties", icon: Users },
   { view: "books", label: "Books", icon: BookOpen },

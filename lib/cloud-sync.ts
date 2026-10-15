@@ -152,6 +152,12 @@ export function mergeData(local: AppData, cloud: AppData): AppData {
     templates: mergeById(local.templates ?? [], cloud.templates ?? []),
     khataEntries: mergeById(local.khataEntries ?? [], cloud.khataEntries ?? []),
   };
+  // GSTR-2B uploads by month: the later upload of a month wins.
+  const gstr2b = { ...(local.gstr2b || {}) };
+  for (const [period, v] of Object.entries(cloud.gstr2b || {})) {
+    if (!gstr2b[period] || (v?.uploadedAt || "") > (gstr2b[period]?.uploadedAt || "")) gstr2b[period] = v;
+  }
+  if (Object.keys(gstr2b).length) merged.gstr2b = gstr2b;
 
   // Deletions on either side win over the other side's copy.
   const deleted: NonNullable<AppData["deleted"]> = {};

@@ -32,6 +32,7 @@
         { "source": "/api/data/load", "function": "apiDataLoad" },
         { "source": "/api/data/save", "function": "apiDataSave" },
         { "source": "/api/data/phone-sync", "function": "apiDataPhoneSync" },
+        { "source": "/api/reports/**", "function": "apiReports" },
         { "source": "/api/data/scan-result", "function": "apiDataScanResult" },
         { "source": "/api/files", "function": "apiFiles" },
         { "source": "/api/ca/**", "function": "apiCa" },
