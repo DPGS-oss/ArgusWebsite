@@ -59,12 +59,17 @@ export function godowns(data: AppData): string[] {
 export function recordMoves(data: AppData, moves: Omit<StockMove, "id" | "createdAt">[]): AppData {
   if (!moves.length) return data;
   const now = new Date().toISOString();
-  const added = moves.map((m) => ({ ...m, id: newId(), createdAt: now, godown: m.godown || MAIN_GODOWN, qty: round3(m.qty) }));
+  // Opening stock has a fixed id, so the phone and the website never both add one.
+  const have = new Set((data.stockMoves || []).map((m) => m.id));
+  const added = moves
+    .map((m) => ({ ...m, id: m.kind === "opening" ? `open_${m.itemId}` : newId(), createdAt: now, godown: m.godown || MAIN_GODOWN, qty: round3(m.qty) }))
+    .filter((m) => !have.has(m.id));
+  if (!added.length) return data;
   const all = [...(data.stockMoves || []), ...added];
-  const touched = new Set(added.map((m) => m.itemId));
-  const stock = data.stock.map((s) =>
-    touched.has(s.id) ? { ...s, currentStock: round3(all.filter((m) => m.itemId === s.id).reduce((t, m) => t + m.qty, 0)) } : s,
-  );
+  const delta = new Map<string, number>();
+  for (const m of added) delta.set(m.itemId, round3((delta.get(m.itemId) || 0) + m.qty));
+  // Add the change rather than re-summing, so a count changed elsewhere is not undone.
+  const stock = data.stock.map((s) => (delta.has(s.id) ? { ...s, currentStock: round3((s.currentStock || 0) + delta.get(s.id)!) } : s));
   return { ...data, stock, stockMoves: all };
 }
 

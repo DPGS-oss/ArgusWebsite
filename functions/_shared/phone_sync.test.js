@@ -196,3 +196,50 @@ test('edit log: append-only, merged both ways, each entry sent once', () => {
   const third = mergePhoneSync(second.appData, { auditLog: [{ ...phoneEntry, detail: 'changed' }], auditSince: '' }, '2026-10-15T13:00:00Z');
   assert.equal(third.appData.auditLog.find((e) => e.id === 'a1').detail, 'Bill for Mehta');
 });
+
+test('stock movements: union both ways, opening never doubled, gaps matched', () => {
+  const { mergePhoneSync } = require('./phone_sync');
+  const item = { id: 'it1', name: 'Paracetamol', hsn: '3004', gstRate: 5, rate: 20, currentStock: 7, minStock: 0, costPrice: 12 };
+  const webMoves = [
+    { id: 'open_it1', itemId: 'it1', date: '2026-10-01', kind: 'opening', qty: 10, godown: 'Main', unitCost: 12, createdAt: '2026-10-01T00:00:00Z' },
+    { id: 'w-sale', itemId: 'it1', date: '2026-10-02', kind: 'sale', qty: -3, godown: 'Main', createdAt: '2026-10-02T00:00:00Z' },
+  ];
+  const phoneItem = { id: 'it1', name: 'Paracetamol', hsn_code: '3004', gst_rate: 5, sell_price: 21, stock_on_hand: 7, reorder_level: 0, cost_price: 12 };
+  const phoneMoves = [
+    // The phone made its own opening for the same item: same fixed id, so it is not added twice.
+    { id: 'open_it1', itemId: 'it1', date: '2026-10-03', kind: 'opening', qty: 7, godown: 'Main', createdAt: '2026-10-03T00:00:00Z' },
+    { id: 'p-in', itemId: 'it1', date: '2026-10-04', kind: 'purchase', qty: 5, godown: 'Shop 2', batch: 'B1', expiry: '2027-01-31', unitCost: 11, createdAt: '2026-10-04T00:00:00Z' },
+  ];
+  const r = mergePhoneSync({ stock: [item], stockMoves: webMoves, godowns: [] },
+    { inventory: [{ ...phoneItem, stock_on_hand: 12 }], stockMoves: phoneMoves, godowns: ['Shop 2'] }, '2026-10-05T00:00:00Z');
+  const moves = r.appData.stockMoves;
+  assert.equal(moves.filter((m) => m.kind === 'opening').length, 1);
+  assert.equal(moves.find((m) => m.id === 'open_it1').qty, 10);
+  // Movements add up to the synced quantity on hand.
+  const stock = r.appData.stock[0].currentStock;
+  assert.equal(Math.round(moves.reduce((t, m) => t + m.qty, 0) * 1000) / 1000, stock);
+  // The phone gets the website's sale and any matching entry, not its own movements back.
+  const back = r.toPhone.stockMoves.map((m) => m.id);
+  assert.ok(back.includes('w-sale'));
+  assert.ok(!back.includes('p-in') && !back.includes('open_it1'));
+  assert.deepEqual(r.toPhone.godowns, ['Shop 2']);
+  assert.equal(r.appData.stock[0].costPrice, 12);
+  // Older app versions: nothing sent back, but the website's movements still match its stock.
+  const legacy = mergePhoneSync({ stock: [{ ...item, currentStock: 4 }], stockMoves: webMoves }, { inventory: [] }, '2026-10-06T00:00:00Z');
+  assert.equal(legacy.toPhone.stockMoves, undefined);
+  assert.equal(legacy.appData.stockMoves.reduce((t, m) => t + m.qty, 0), 4);
+});
+
+test('item recipe, valuation and batches survive the round trip; old items keep their hashes', () => {
+  const { mergePhoneSync } = require('./phone_sync');
+  const plain = { id: 'a', name: 'Bag', hsn_code: '4202', gst_rate: 18, sell_price: 118, stock_on_hand: 2, reorder_level: 0 };
+  const first = mergePhoneSync(null, { inventory: [plain] });
+  assert.deepEqual(mergePhoneSync(first.appData, { inventory: [plain] }).toPhone.inventory, []);
+  const kit = { ...plain, id: 'k', name: 'Kit', valuation: 'fifo', track_batches: true, cost_price: 50, bom: [{ itemId: 'a', qty: 2 }] };
+  const second = mergePhoneSync(first.appData, { inventory: [plain, kit] });
+  const w = second.appData.stock.find((s) => s.id === 'k');
+  assert.equal(w.valuation, 'fifo');
+  assert.equal(w.trackBatches, true);
+  assert.deepEqual(w.bom, [{ itemId: 'a', qty: 2 }]);
+  assert.deepEqual(mergePhoneSync(second.appData, { inventory: [plain, kit] }).toPhone.inventory, []);
+});
