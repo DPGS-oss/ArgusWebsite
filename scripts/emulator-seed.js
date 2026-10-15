@@ -8,8 +8,8 @@
  * verified emails, and prints their uids. Refuses to run against anything
  * but 127.0.0.1.
  */
-const AUTH = 'http://127.0.0.1:9099';
-const STORE = 'http://127.0.0.1:8080';
+const AUTH = `http://127.0.0.1:${Number(process.env.EMU_AUTH_PORT) || 9099}`;
+const STORE = `http://127.0.0.1:${Number(process.env.EMU_FIRESTORE_PORT) || 8080}`;
 const PROJECT = process.env.EMU_PROJECT || 'argus-invocing';
 
 // Test-only password for emulator accounts.
