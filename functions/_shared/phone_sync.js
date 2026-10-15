@@ -503,9 +503,10 @@ function mergeAudit(data, sent, since, now) {
 
 // ------------------------------------------------------------- stock movements
 // Movements never change once made, so both sides keep the union (by id).
-// An item's quantity on hand stays the synced number; when the movements
-// do not add up to it (older app versions changed stock without them, or
-// both sides sold at once), one "matched after sync" movement closes the gap.
+// With apps that record movements, the movements are the truth: each item's
+// quantity on hand is their sum, so a sale made on the phone and one made on
+// the website at the same time both count. Older app versions change stock
+// without movements; for them one "matched after sync" movement closes the gap.
 
 const MOVE_KINDS = new Set(['opening', 'purchase', 'sale', 'sale_return', 'purchase_return', 'transfer', 'adjust', 'produce', 'consume']);
 const r3 = (v) => Math.round(num(v) * 1000) / 1000;
@@ -525,17 +526,31 @@ function cleanMove(m) {
   return out;
 }
 
+const sameMove = (a, b) => r3(a.qty) === r3(b.qty) && str(a.godown || 'Main') === str(b.godown || 'Main') && str(a.batch) === str(b.batch) && str(a.itemId) === str(b.itemId);
+
+/**
+ * `sent` is the phone's movements (undefined from older app versions).
+ * Returns the movements the phone must add or replace (by id).
+ */
 function mergeStockMoves(data, sent, sentGodowns, now) {
+  const recordsMoves = Array.isArray(sent);
   const moves = Array.isArray(data.stockMoves) ? data.stockMoves.filter((m) => m && str(m.id)) : [];
-  const known = new Set(moves.map((m) => str(m.id)));
+  const byId = new Map(moves.map((m) => [str(m.id), m]));
   const sentIds = new Set();
-  for (const raw of Array.isArray(sent) ? sent.slice(0, 50000) : []) {
+  const differs = new Set();
+  for (const raw of recordsMoves ? sent.slice(0, 50000) : []) {
     if (!raw || !str(raw.id) || !str(raw.itemId)) continue;
     const id = str(raw.id);
     sentIds.add(id);
-    if (known.has(id)) continue;
-    moves.push(cleanMove(raw));
-    known.add(id);
+    const have = byId.get(id);
+    if (have) {
+      // Same id, different content (e.g. both sides made the opening stock): the cloud's copy wins.
+      if (!sameMove(have, raw)) differs.add(id);
+      continue;
+    }
+    const m = cleanMove(raw);
+    moves.push(m);
+    byId.set(id, m);
   }
   // Gone items take their movements with them.
   const items = new Map((data.stock || []).map((s) => [str(s.id), s]));
@@ -543,19 +558,27 @@ function mergeStockMoves(data, sent, sentGodowns, now) {
   const sums = new Map();
   for (const m of kept) sums.set(m.itemId, r3((sums.get(m.itemId) || 0) + num(m.qty)));
   for (const [itemId, sum] of sums) {
-    const gap = r3(num(items.get(itemId).currentStock) - sum);
+    const item = items.get(itemId);
+    const gap = r3(num(item.currentStock) - sum);
     if (Math.abs(gap) < 1e-9) continue;
-    kept.push({
-      id: `mv_sync_${crypto.randomUUID()}`, itemId, date: now.slice(0, 10), kind: 'adjust', qty: gap, godown: 'Main',
-      note: 'Matched to stock after sync', createdAt: now,
-    });
+    if (recordsMoves) {
+      // The movements are the truth; the phone works out the same sum, so keep both sides in step.
+      const inStep = item._sync && item._sync.w === webStockFp(item);
+      item.currentStock = sum;
+      if (inStep) item._sync = { p: phoneStockFp(webToPhoneStock(item)), w: webStockFp(item) };
+    } else {
+      kept.push({
+        id: `mv_sync_${crypto.randomUUID()}`, itemId, date: now.slice(0, 10), kind: 'adjust', qty: gap, godown: 'Main',
+        note: 'Matched to stock after sync', createdAt: now,
+      });
+    }
   }
   data.stockMoves = kept;
   const names = [...(Array.isArray(data.godowns) ? data.godowns : []), ...(Array.isArray(sentGodowns) ? sentGodowns : [])]
     .map((g) => str(g).slice(0, 60))
     .filter((g) => g && g !== 'Main');
   data.godowns = [...new Set(names)].slice(0, 100);
-  return kept.filter((m) => !sentIds.has(str(m.id)));
+  return kept.filter((m) => !sentIds.has(str(m.id)) || differs.has(str(m.id)));
 }
 
 /**
@@ -636,6 +659,8 @@ function mergePhoneSync(appData, phone, now = new Date().toISOString()) {
   if (Array.isArray(phone.stockMoves)) {
     out.stockMoves = newMoves;
     out.godowns = data.godowns;
+    const fresh = new Map(data.stock.map((w) => [str(w.id), w]));
+    out.inventory = (out.inventory || []).map((p) => (fresh.has(str(p.id)) ? webToPhoneStock(fresh.get(str(p.id)), now) : p));
   }
   return { appData: stripUndefined(data), toPhone: out };
 }

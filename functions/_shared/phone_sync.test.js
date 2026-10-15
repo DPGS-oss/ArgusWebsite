@@ -218,12 +218,22 @@ test('stock movements: union both ways, opening never doubled, gaps matched', ()
   // Movements add up to the synced quantity on hand.
   const stock = r.appData.stock[0].currentStock;
   assert.equal(Math.round(moves.reduce((t, m) => t + m.qty, 0) * 1000) / 1000, stock);
-  // The phone gets the website's sale and any matching entry, not its own movements back.
+  // Movements are the truth: 10 opening − 3 sold on the website + 5 bought on the phone.
+  assert.equal(stock, 12);
+  assert.ok(!moves.some((m) => m.id.startsWith('mv_sync_')), 'no correction entries for apps that record movements');
+  // The phone gets the website's sale and the cloud's opening stock (its own differed), not its own purchase back.
   const back = r.toPhone.stockMoves.map((m) => m.id);
   assert.ok(back.includes('w-sale'));
-  assert.ok(!back.includes('p-in') && !back.includes('open_it1'));
+  assert.ok(back.includes('open_it1'));
+  assert.ok(!back.includes('p-in'));
+  assert.equal(r.toPhone.stockMoves.find((m) => m.id === 'open_it1').qty, 10);
   assert.deepEqual(r.toPhone.godowns, ['Shop 2']);
   assert.equal(r.appData.stock[0].costPrice, 12);
+  // Both sides sell at the same time: both sales count.
+  const both = mergePhoneSync({ stock: [{ ...item, currentStock: 6 }], stockMoves: [...webMoves, { id: 'w-sale2', itemId: 'it1', date: '2026-10-05', kind: 'sale', qty: -1, godown: 'Main', createdAt: '2026-10-05T01:00:00Z' }] },
+    { inventory: [{ ...phoneItem, stock_on_hand: 6 }], stockMoves: [webMoves[0], webMoves[1], { id: 'p-sale', itemId: 'it1', date: '2026-10-05', kind: 'sale', qty: -1, godown: 'Main', createdAt: '2026-10-05T02:00:00Z' }] }, '2026-10-05T03:00:00Z');
+  assert.equal(both.appData.stock[0].currentStock, 5);
+  assert.equal(both.toPhone.inventory.find((i) => i.id === 'it1')?.stock_on_hand ?? 5, 5);
   // Older app versions: nothing sent back, but the website's movements still match its stock.
   const legacy = mergePhoneSync({ stock: [{ ...item, currentStock: 4 }], stockMoves: webMoves }, { inventory: [] }, '2026-10-06T00:00:00Z');
   assert.equal(legacy.toPhone.stockMoves, undefined);

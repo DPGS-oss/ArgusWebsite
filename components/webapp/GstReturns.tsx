@@ -154,7 +154,11 @@ function Gstr9Tab({ data }: { data: AppData }) {
     const start = Number(`20${thisFy.slice(0, 2)}`);
     return [0, 1, 2].map((k) => `${start - k}-${String((start - k + 1) % 100).padStart(2, "0")}`);
   }, [thisFy]);
-  const [fy, setFy] = useState(choices[1] || choices[0]);
+  // GSTR-9 is filed for a finished year: open last year if it has bills, else this year.
+  const [fy, setFy] = useState(() => {
+    const hasBills = (y: string) => data.invoices.some((i) => i.status !== "draft" && financialYear(i.date) === y.slice(2));
+    return choices.slice(1).find(hasBills) || choices[0];
+  });
   const r = useMemo(() => buildGstr9(data, fy), [data, fy]);
   const row = (table: string, label: string, h: Heads, creditOnly = false) => (
     <tr key={table + label} className="border-t border-bone">

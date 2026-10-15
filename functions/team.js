@@ -104,7 +104,7 @@ async function handle(req, uid, decoded) {
       if (team.liveMembers(t).length + 1 >= team.allowedUsers(t)) {
         throw new HttpError(402, `Your plan has room for ${team.allowedUsers(t)} users. Add a user for ₹50 a month.`, { needs_seats: true });
       }
-      const series = team.nextSeries(t);
+      const series = team.nextSeries(t, email);
       if (!series) throw new HttpError(409, 'No more bill series letters are free');
       t.ownerName = owner.business_name || owner.name || t.ownerName || '';
       t.members.push({ email, access, series, status: 'invited', uid: null, name: '', invitedAt: new Date().toISOString() });

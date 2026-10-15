@@ -20,3 +20,14 @@ describe("mergeData tombstones", () => {
     expect(mergeData(local, cloud).invoices.map((i) => i.id)).toEqual(["a"]);
   });
 });
+
+describe("bills from the phone made before a business existed", () => {
+  it("are attached to the business after merging, so they show in lists and reports", async () => {
+    const { mergeData } = await import("./cloud-sync");
+    const { getDefaultData } = await import("./storage");
+    const local = { ...getDefaultData(), businesses: [{ id: "b1", name: "Shop" }], activeBusinessId: "b1" } as never;
+    const cloud = { ...getDefaultData(), invoices: [{ id: "i1", invoiceNumber: "INV/26-27/0001", businessId: "" }] } as never;
+    const merged = mergeData(local, cloud);
+    expect(merged.invoices[0].businessId).toBe("b1");
+  });
+});

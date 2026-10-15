@@ -90,8 +90,11 @@ export default function AppPage() {
 
   // Books are opened per signed-in account; a different account gets its own store.
   // Someone on a team opens the owner's books, with their own bill series.
-  const storageUid = user?.books?.booksUid || firebaseUser?.uid || "";
-  setBooksUid(storageUid);
+  const booksUid = user?.books?.booksUid || firebaseUser?.uid || "";
+  setBooksUid(booksUid);
+  // A member keeps their own copy of the owner's books in this browser, so on a
+  // shared computer they never see what the owner's copy holds (purchases, profit).
+  const storageUid = user?.books?.role === "member" && firebaseUser ? `${booksUid}~${firebaseUser.uid}` : booksUid;
   setBillSeries(user?.books?.role === "member" ? user.books.series : "");
   const syncedUid = useRef("");
   useEffect(() => {

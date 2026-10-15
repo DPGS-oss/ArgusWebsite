@@ -30,10 +30,16 @@ test('only an active member listed by the owner opens the owner\'s books', () =>
   assert.equal(team.contextFor('u-a@x.in', 'owner1', removed, NOW).role, 'owner');
 });
 
-test('series letters are never reused, even after someone is removed', () => {
+test('series letters: a returning person gets theirs back; freed letters are reused last', () => {
   const t = { members: [member('a@x.in', { status: 'removed' })] };
-  assert.equal(team.nextSeries(t), 'C');
-  assert.equal(team.nextSeries(null), 'B');
+  assert.equal(team.nextSeries(t, 'new@x.in'), 'C');
+  assert.equal(team.nextSeries(t, 'a@x.in'), 'B');
+  assert.equal(team.nextSeries(null, 'x@x.in'), 'B');
+  const letters = 'BCDEFGHJKLMNPQRSTUVXYZ'.split('');
+  const crowded = { members: letters.map((l, i) => member(`m${i}@x.in`, { series: l, status: i === 3 ? 'removed' : 'active' })) };
+  assert.equal(team.nextSeries(crowded, 'late@x.in'), 'E');
+  crowded.members[3].status = 'active';
+  assert.equal(team.nextSeries(crowded, 'late@x.in'), null);
 });
 
 test('billing-only users do not see or change purchases, expenses, payroll, settings', () => {
@@ -47,6 +53,8 @@ test('billing-only users do not see or change purchases, expenses, payroll, sett
   assert.deepEqual(view.expenses, []);
   assert.deepEqual(view.gstr2b, {});
   assert.equal(view.businesses.length, 1, 'needed to make bills');
+  const withLog = team.viewFor({ ...stored, auditLog: [{ id: 'a', entity: 'bill' }, { id: 'b', entity: 'purchase' }, { id: 'c', entity: 'expense' }] }, 'billing');
+  assert.deepEqual(withLog.auditLog.map((e) => e.id), ['a']);
   assert.equal(team.viewFor(stored, 'full'), stored);
 
   const incoming = {

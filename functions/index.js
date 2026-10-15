@@ -1829,6 +1829,12 @@ exports.apiDataPhoneSync = onRequest({ region: 'us-central1', maxInstances: 10, 
   const uid = decoded.uid;
   // Someone on the owner's team works on the owner's books, under the owner's plan.
   const { ctx: books, planUser: user } = await teamAccess.booksAccess(getDb(), getUser, uid);
+  // Checked before the plan: someone who left a team (even without a plan of
+  // their own) must still be told to take the owner's books off their phone.
+  const sentBooks = req.body && typeof req.body.booksUid === 'string' ? req.body.booksUid : '';
+  if (sentBooks && sentBooks !== books.booksUid) {
+    return res.status(409).json({ error: 'books_changed', books_uid: books.booksUid });
+  }
   if (!hasActiveBusinessSubscription(user)) {
     return res.status(402).json({
       error: 'Business subscription required for cloud sync',
@@ -1892,7 +1898,9 @@ exports.apiDataPhoneSync = onRequest({ region: 'us-central1', maxInstances: 10, 
       }, { merge: true });
       return { toPhone, now };
     });
-    const toPhone = billingOnly ? { ...result.toPhone, purchases: [] } : result.toPhone;
+    const toPhone = billingOnly
+      ? { ...result.toPhone, purchases: [], auditLog: teamAccess.auditForBilling(result.toPhone.auditLog) }
+      : result.toPhone;
     const booksInfo = { booksUid: books.booksUid, role: books.role, access: books.access, series: books.series };
     return res.status(200).json({ success: true, updated_at: result.now, ...toPhone, books: booksInfo });
   } catch (error) {

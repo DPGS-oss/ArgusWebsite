@@ -161,7 +161,7 @@ export function Reports({ data }: ReportsProps) {
                       {section.invoices.map((inv) => (
                         <tr key={inv.id} className="border-b border-lead/10">
                           <td className="py-2 pr-4 text-starlight">{inv.invoiceNumber}</td>
-                          <td className="py-2 pr-4 text-silver">{inv.partyName}</td>
+                          <td className="py-2 pr-4 text-silver">{inv.partyName || "Walk-in"}</td>
                           <td className="py-2 pr-4 text-silver">{formatDate(inv.date)}</td>
                           <td className="py-2 pr-4 text-right text-silver">{formatCurrency(inv.totalTaxable)}</td>
                           <td className="py-2 pr-4 text-right text-silver">{formatCurrency(inv.totalCgst)}</td>

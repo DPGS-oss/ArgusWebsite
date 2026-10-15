@@ -151,7 +151,7 @@ export function Dashboard({ data, business, onNavigate, onEditInvoice }: Dashboa
                 >
                   <div className="flex-1 overflow-hidden">
                     <p className="truncate text-sm font-bold text-ink">{inv.invoiceNumber}</p>
-                    <p className="truncate text-xs text-slate">{inv.partyName}</p>
+                    <p className="truncate text-xs text-slate">{inv.partyName || "Walk-in"}</p>
                     <p className="text-xs text-slate">{formatDate(inv.date)}</p>
                   </div>
                   <div className="ml-3 text-right">
@@ -189,7 +189,7 @@ export function Dashboard({ data, business, onNavigate, onEditInvoice }: Dashboa
                   {recentInvoices.map((inv) => (
                     <tr key={inv.id} className="border-b border-bone/50">
                       <td className="py-3 pr-4 text-ink">{inv.invoiceNumber}</td>
-                      <td className="py-3 pr-4 text-slate">{inv.partyName}</td>
+                      <td className="py-3 pr-4 text-slate">{inv.partyName || "Walk-in"}</td>
                       <td className="py-3 pr-4 text-slate">{formatDate(inv.date)}</td>
                       <td className="py-3 pr-4 font-bold text-ink">{formatCurrency(inv.grandTotal)}</td>
                       <td className="py-3 pr-4">

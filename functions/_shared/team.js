@@ -52,9 +52,18 @@ function membersWithAccess(team, now = Date.now()) {
   return liveMembers(team).slice(0, Math.max(0, allowedUsers(team, now) - 1));
 }
 
-function nextSeries(team) {
-  const used = new Set((team && Array.isArray(team.members) ? team.members : []).map((m) => m && m.series));
-  return SERIES.find((s) => !used.has(s)) || null;
+/**
+ * Bill series letter for a new member: their old letter if they were here
+ * before, else one never used, else one freed by someone removed. Reusing is
+ * safe: numbering continues after the highest number already in the books.
+ */
+function nextSeries(team, email = '') {
+  const all = team && Array.isArray(team.members) ? team.members : [];
+  const live = new Set(liveMembers(team).map((m) => m.series));
+  const before = all.find((m) => m && m.email === email && m.series && !live.has(m.series));
+  if (before) return before.series;
+  const ever = new Set(all.map((m) => m && m.series));
+  return SERIES.find((s) => !ever.has(s)) || SERIES.find((s) => !live.has(s)) || null;
 }
 
 /** What one person may do in a set of books. */
@@ -75,11 +84,16 @@ function contextFor(uid, ownerUid, team, now = Date.now()) {
   };
 }
 
+// Edit-log lines about what billing-only users cannot see.
+const HIDDEN_LOG_ENTITIES = new Set(['purchase', 'expense', 'payroll', 'business', 'settings', 'user']);
+const auditForBilling = (log) => (Array.isArray(log) ? log.filter((e) => !(e && HIDDEN_LOG_ENTITIES.has(e.entity))) : log);
+
 /** Books as a billing-only member sees them. */
 function viewFor(data, access) {
   if (!data || access !== 'billing') return data;
   const out = { ...data };
   for (const k of HIDDEN_FROM_BILLING) out[k] = Array.isArray(data[k]) ? [] : k === 'gstr2b' ? {} : data[k];
+  out.auditLog = auditForBilling(data.auditLog);
   return out;
 }
 
@@ -201,6 +215,7 @@ module.exports = {
   nextSeries,
   contextFor,
   viewFor,
+  auditForBilling,
   mergeMemberSave,
   seatQuote,
   teamSummary,

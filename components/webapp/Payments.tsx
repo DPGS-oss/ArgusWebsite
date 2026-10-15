@@ -80,7 +80,7 @@ export function Payments({ data, onSaved }: Props) {
               <select value={invoiceId} onChange={(e) => setInvoiceId(e.target.value)} className="input-field">
                 <option value="">Select invoice...</option>
                 {data.invoices.map((inv) => (
-                  <option key={inv.id} value={inv.id}>{inv.invoiceNumber} — {inv.partyName}</option>
+                  <option key={inv.id} value={inv.id}>{inv.invoiceNumber} — {inv.partyName || "Walk-in"}</option>
                 ))}
               </select>
             </div>

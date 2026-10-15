@@ -97,7 +97,7 @@ function Godown({ value, onChange, places, label = "Godown" }: { value: string; 
   );
 }
 
-function StockIn({ item, places, picker, onSaved }: FormProps) {
+function StockIn({ data, item, places, picker, onSaved }: FormProps) {
   const [qty, setQty] = useState("");
   const [cost, setCost] = useState(String(item.costPrice || ""));
   const [godown, setGodown] = useState(MAIN_GODOWN);
@@ -109,8 +109,11 @@ function StockIn({ item, places, picker, onSaved }: FormProps) {
     const q = Number(qty);
     if (!(q > 0)) return setMsg("Enter how many came in.");
     if (item.trackBatches && !batch.trim()) return setMsg("This item tracks batches: enter the batch number.");
+    // Goods on a purchase bill already entered: link to it, so its cost is counted once.
+    const billNo = ref.trim().toLowerCase();
+    const bill = billNo ? (data.purchases || []).find((p) => [p.supplierInvoiceNumber, p.purchaseNumber].some((n) => (n || "").trim().toLowerCase() === billNo)) : undefined;
     saveStockMoves(
-      [{ itemId: item.id, date: todayIST(), kind: "purchase", qty: q, godown, batch: batch.trim() || undefined, expiry: expiry || undefined, unitCost: Number(cost) || item.costPrice || 0, ref: ref.trim() || undefined }],
+      [{ itemId: item.id, date: todayIST(), kind: "purchase", qty: q, godown, batch: batch.trim() || undefined, expiry: expiry || undefined, unitCost: Number(cost) || item.costPrice || 0, ref: ref.trim() || undefined, refId: bill?.id }],
       { ref: item.name, detail: `${q} ${item.unit} in to ${godown}${batch ? `, batch ${batch}` : ""} at ₹${Number(cost) || 0} each` },
     );
     setQty(""); setBatch(""); setExpiry(""); setRef(""); setMsg("Saved.");
@@ -125,6 +128,7 @@ function StockIn({ item, places, picker, onSaved }: FormProps) {
       <label className="block text-sm text-silver">Batch{item.trackBatches ? "" : " (optional)"}<input className={field} value={batch} onChange={(e) => setBatch(e.target.value)} /></label>
       <label className="block text-sm text-silver">Expiry (optional)<input type="date" className={field} value={expiry} onChange={(e) => setExpiry(e.target.value)} /></label>
       <label className="block text-sm text-silver">Supplier bill no. (optional)<input className={field} value={ref} onChange={(e) => setRef(e.target.value)} /></label>
+      <p className="text-xs text-ash sm:col-span-2">If these goods are on a purchase you entered under Purchases, type its bill number so the cost is counted once.</p>
       <div className="sm:col-span-3 flex items-center gap-3"><button className="btn-primary" onClick={save}>Add to stock</button><span className="text-sm text-silver">{msg}</span></div>
     </div>
   );

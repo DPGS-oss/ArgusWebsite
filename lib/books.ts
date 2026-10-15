@@ -161,7 +161,9 @@ export function postPurchaseLedger(data: AppData, purchase: Purchase): AppData {
   // GST-registered business; for anyone else it is part of the cost.
   const business = data.businesses.find((b) => b.id === data.activeBusinessId) || data.businesses[0];
   const claimable = !!business && isRegisteredGstin(business.gstin) && !business.composition;
-  const gst = claimable ? round2(Math.min(purchase.totalGstAmount || 0, purchase.totalAmount)) : 0;
+  // …and only on an eligible bill from a valid supplier GSTIN (same rule as profit and loss).
+  const recoverable = claimable && purchase.itcEligible !== false && isRegisteredGstin(purchase.supplierGstin);
+  const gst = recoverable ? round2(Math.min(purchase.totalGstAmount || 0, purchase.totalAmount)) : 0;
   next.push(
     line({
       customerId: "",
@@ -309,12 +311,22 @@ export function profitAndLoss(data: AppData) {
   const business = data.businesses.find((b) => b.id === data.activeBusinessId) || data.businesses[0];
   const claimable = !!business && isRegisteredGstin(business.gstin) && !business.composition;
   let cogsPaise = (data.purchases || []).reduce(
-    (s, p) => s + toPaise(p.totalAmount) - (claimable ? toPaise(Math.min(p.totalGstAmount || 0, p.totalAmount)) : 0),
+    // GST is recoverable only on an eligible bill from a valid supplier GSTIN; otherwise it is part of the cost.
+    (s, p) => s + toPaise(p.totalAmount) -
+      (claimable && p.itcEligible !== false && isRegisteredGstin(p.supplierGstin) ? toPaise(Math.min(p.totalGstAmount || 0, p.totalAmount)) : 0),
     0,
   );
   const expensesPaise = (data.expenses || []).reduce((s, e) => s + toPaise(e.amount), 0);
   // With stock tracked: cost of goods sold = opening stock + purchases − closing stock.
   if ((data.stockMoves || []).length) {
+    // Goods received through Stock in without a purchase bill are purchases too.
+    const billed = new Set((data.purchases || []).map((p) => p.id));
+    const costOf = new Map(data.stock.map((s) => [s.id, s.costPrice || 0]));
+    for (const m of data.stockMoves || []) {
+      if (m.kind === "purchase" && m.qty > 0 && !(m.refId && billed.has(m.refId))) {
+        cogsPaise += toPaise(m.qty * (m.unitCost ?? costOf.get(m.itemId) ?? 0));
+      }
+    }
     cogsPaise += toPaise(openingStockValue(data)) - toPaise(stockValuation(data).total);
   }
   return {

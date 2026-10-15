@@ -329,8 +329,9 @@ export function InvoiceForm({ data, business: businessProp, editingInvoice, onSa
       setTotalDescription(stock.name);
       setTotalGstRate(stock.gstRate);
       setTotalStockItemId(stock.id);
+      // This box is the total the customer pays, so it includes GST; the item's rate does not.
       if (totalAmount === 0) {
-        setTotalAmount(stock.rate);
+        setTotalAmount(round2(stock.rate * (1 + (stock.gstRate || 0) / 100)));
       }
       return;
     }
@@ -477,7 +478,8 @@ export function InvoiceForm({ data, business: businessProp, editingInvoice, onSa
       invoiceItems = [{
         id: generateId(),
         description: totalDescription || "Total Amount",
-        hsn: "",
+        // An item picked from stock keeps its HSN on the bill (Rule 46).
+        hsn: (totalStockItemId && data.stock.find((st) => st.id === totalStockItemId)?.hsn) || "",
         quantity: 1,
         unit: "NOS",
         uqc: "NOS",
@@ -531,7 +533,8 @@ export function InvoiceForm({ data, business: businessProp, editingInvoice, onSa
       dueDate: dueDateVal,
       items: invoiceItems,
       roundOffEnabled: data.settings.roundOff,
-      paidAmount,
+      // "Paid" with nothing entered means paid in full.
+      paidAmount: status === "paid" && paidAmount === 0 ? totals.grandTotal : paidAmount,
       paymentMode,
       notes,
       terms,
@@ -654,7 +657,11 @@ export function InvoiceForm({ data, business: businessProp, editingInvoice, onSa
                 Status
                 <select
                   value={status}
-                  onChange={(e) => setStatus(e.target.value as InvoiceStatus)}
+                  onChange={(e) => {
+                    const next = e.target.value as InvoiceStatus;
+                    setStatus(next);
+                    if (next === "paid" && paidAmount === 0) setPaidAmount(totals.grandTotal);
+                  }}
                   className="mt-1 w-full rounded-btn border border-lead/30 bg-graphite px-4 py-2.5 text-starlight outline-none focus:border-mercury-blue"
                 >
                   <option value="draft">Draft</option>

@@ -646,7 +646,24 @@ export function saveBusiness(business: BusinessProfile): void {
     data.businesses.push(business);
   }
   if (!data.activeBusinessId) data.activeBusinessId = business.id;
-  saveData(data);
+  saveData(adoptOrphanDocs(data));
+}
+
+/**
+ * Bills and notes that arrived without a business (made on the phone before
+ * a business existed on the website) belong to the active business; without
+ * this they would be hidden from lists and reports.
+ */
+export function adoptOrphanDocs(data: AppData): AppData {
+  const id = data.activeBusinessId;
+  if (!id) return data;
+  const fix = <T extends { businessId?: string }>(list: T[] | undefined): T[] | undefined =>
+    list && list.some((x) => !x.businessId) ? list.map((x) => (x.businessId ? x : { ...x, businessId: id })) : list;
+  const invoices = fix(data.invoices) || data.invoices;
+  const creditNotes = fix(data.creditNotes as { businessId?: string }[] | undefined) as AppData["creditNotes"];
+  const debitNotes = fix(data.debitNotes as { businessId?: string }[] | undefined) as AppData["debitNotes"];
+  if (invoices === data.invoices && creditNotes === data.creditNotes && debitNotes === data.debitNotes) return data;
+  return { ...data, invoices, creditNotes, debitNotes };
 }
 
 export function saveParty(party: Party): void {
@@ -942,7 +959,41 @@ export function savePurchase(purchase: Purchase): void {
   }
   if (idx >= 0) data.purchases[idx] = purchase;
   else data.purchases.push(purchase);
-  saveData(data);
+  saveData(stockForPurchase(data, purchase));
+}
+
+/**
+ * Goods on a purchase bill come into stock (lines picked from stock), at their
+ * cost before GST and linked to the bill, so the profit and loss counts them
+ * once. Editing the bill posts only what changed; deleting takes them out.
+ */
+function stockForPurchase(data: AppData, purchase: Purchase | null, purchaseId = purchase?.id || ""): AppData {
+  const want = new Map<string, { qty: number; cost: number }>();
+  for (const line of purchase?.items || []) {
+    // Only lines picked from stock carry a real quantity (the quick form has none).
+    const itemId = line.stockItemId;
+    if (!itemId || !(line.quantity > 0)) continue;
+    const w = want.get(itemId) || { qty: 0, cost: 0 };
+    want.set(itemId, { qty: w.qty + line.quantity, cost: w.cost + (line.taxableAmount || 0) });
+  }
+  const have = new Map<string, number>();
+  for (const m of data.stockMoves || []) {
+    if (m.refId !== purchaseId || (m.kind !== "purchase" && m.kind !== "purchase_return")) continue;
+    have.set(m.itemId, (have.get(m.itemId) || 0) + m.qty);
+  }
+  const date = (purchase?.supplierInvoiceDate || purchase?.createdAt || todayIST()).slice(0, 10);
+  const ref = purchase ? purchase.supplierInvoiceNumber || purchase.purchaseNumber : "Purchase deleted";
+  const moves: Omit<StockMove, "id" | "createdAt">[] = [];
+  for (const itemId of new Set([...want.keys(), ...have.keys()])) {
+    const w = want.get(itemId);
+    const delta = Math.round(((w?.qty || 0) - (have.get(itemId) || 0)) * 1000) / 1000;
+    if (Math.abs(delta) < 1e-9) continue;
+    moves.push({
+      itemId, date, kind: delta > 0 ? "purchase" : "purchase_return", qty: delta, godown: MAIN_GODOWN,
+      unitCost: w && w.qty > 0 ? Math.round((w.cost / w.qty) * 100) / 100 : undefined, ref, refId: purchaseId,
+    });
+  }
+  return moves.length ? recordMoves(ensureOpeningMoves(data), moves) : data;
 }
 
 export function deletePurchase(id: string): void {
@@ -952,7 +1003,8 @@ export function deletePurchase(id: string): void {
   data.purchases = data.purchases.filter((p) => p.id !== id);
   markDeleted(data, "purchases", id);
   data.khataEntries = (data.khataEntries || []).filter((e) => e.sourceId !== id);
-  saveData(data);
+  // Goods from a deleted bill go back out of stock.
+  saveData(stockForPurchase(data, null, id));
 }
 
 // ─── Payments ──────────────────────────────────────────────────

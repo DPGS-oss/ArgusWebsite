@@ -1,7 +1,7 @@
 "use client";
 
 import Script from "next/script";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth, hasValidSubscription } from "@/lib/auth-provider";
 import { startRazorpayCheckout, validatePromoCode, type PromoOffer } from "@/lib/razorpay";
 import { isBusinessPlanName, startBusinessTrial } from "@/lib/subscription";
@@ -18,6 +18,31 @@ export function SubscriptionGate() {
   const [promoLoading, setPromoLoading] = useState(false);
   const [yearly, setYearly] = useState(true);
   const trialUsed = !!(user?.trial_used || user?.trial_started_at);
+  // Someone invited to a shop's books uses the shop's plan: let them join from here.
+  const [invite, setInvite] = useState<{ ownerName: string; access: string } | null>(null);
+  useEffect(() => {
+    if (!token) return;
+    fetch("/api/team", { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((me) => setInvite(me && me.invite ? me.invite : null))
+      .catch(() => {});
+  }, [token]);
+
+  async function handleJoin() {
+    if (!token) return;
+    setLoading("join");
+    setError("");
+    try {
+      const res = await fetch("/api/team/accept", { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: "{}" });
+      const out = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(out.error || "Could not join");
+      await refreshProfile();
+      window.location.reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not join");
+      setLoading(null);
+    }
+  }
 
   async function handleApplyPromo() {
     if (!token || !user) return;
@@ -117,6 +142,18 @@ export function SubscriptionGate() {
               : "Web books, GSTR summaries, and the CA portal are Business. Android Free covers 20 bills a month — it does not unlock this web suite. Start a 14-day trial, or subscribe below."}
           </p>
         </div>
+
+        {invite && (
+          <div className="mb-8 w-full max-w-md rounded-card border border-brand-violet bg-white p-5 text-center">
+            <p className="text-ink">
+              <b>{invite.ownerName || "A business"}</b> invited you to make bills in their books
+              ({invite.access === "full" ? "full access" : "billing only"}). Their plan covers you.
+            </p>
+            <button onClick={handleJoin} disabled={loading === "join"} className="btn-primary mt-4 px-6 py-2.5 text-sm">
+              {loading === "join" ? "Joining…" : "Join their books"}
+            </button>
+          </div>
+        )}
 
         {error && (
           <p className="mb-6 rounded-card bg-red-500/10 px-4 py-2 text-sm text-red-600">
