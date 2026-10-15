@@ -6,7 +6,7 @@ import { useAuth } from "@/lib/auth-provider";
 import { BrandLogo } from "./BrandLogo";
 
 /** Bump when Privacy/Terms materially change so users re-consent. */
-export const WEB_LEGAL_VERSION = "2026-08-27";
+export const WEB_LEGAL_VERSION = "2026-10-15";
 
 function storageKey(uid: string) {
   return `argus_web_legal_${uid}`;
@@ -84,12 +84,14 @@ export function LegalConsentGate() {
             advice, and not GSP filing / e-invoice IRN / e-way generation.
           </li>
           <li>
-            We process account, business, and books data to run Argus. Optional cloud sync and CA
-            shares send data to processors (including Google Cloud in the US). See Privacy for
+            We process account, business, and books data to run Argus. Optional cloud sync, people
+            you add to your books, and CA shares send data to processors (including Google Cloud in
+            the US); people you add see your books with the access you choose. See Privacy for
             rights, retention, and the Grievance Officer.
           </li>
           <li>
-            Cancelled subscriptions are not prorated or refunded for unused time. Lifetime covers
+            Cancelled subscriptions and extra users (₹50 per user per month) are not prorated or
+            refunded for unused time. Lifetime covers
             the current Business generation (max 25 years or earlier discontinuation); add-ons and
             major overhauls are separate.
           </li>

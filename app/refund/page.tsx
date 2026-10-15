@@ -4,7 +4,7 @@ import { LegalLayout } from "@/components/LegalLayout";
 export default function RefundPage() {
   return (
     <LegalLayout title="Refund Policy">
-      <p className="text-sm text-slate">Last updated: 27 August 2026</p>
+      <p className="text-sm text-slate">Last updated: 15 October 2026</p>
 
       <p>
         This Refund Policy applies to Argus purchases from{" "}
@@ -28,6 +28,14 @@ export default function RefundPage() {
         after a confirmed successful payment. Lifetime scope is defined in the Terms (current
         product generation; add-ons and major overhauls excluded; maximum 25 years or earlier
         discontinuation of that generation).
+      </p>
+
+      <h2 className="mt-8 text-xl font-semibold text-ink">2a. Extra users</h2>
+      <p>
+        Payments for extra users (₹50 per user per month) cover the period shown when you pay. They
+        are <strong>not refunded</strong> if you remove a user, cancel your plan, or stop using the
+        extra users early, except where mandatory Indian law requires otherwise or we failed to
+        give access after a confirmed successful payment.
       </p>
 
       <h2 className="mt-8 text-xl font-semibold text-ink">3. Limited goodwill window (website)</h2>
