@@ -11,6 +11,8 @@ const { apiAdmin } = require('./admin');
 exports.apiAdmin = apiAdmin;
 const { apiAsk } = require('./ask');
 exports.apiAsk = apiAsk;
+const { apiReports } = require('./reports');
+exports.apiReports = apiReports;
 const { rotateAdminAccessKey } = require('./_shared/admin-key');
 const { notifySubscriptionChange } = require('./_shared/subscription-email');
 const { checkRateLimit } = require('./_shared/rate-limit');
@@ -1798,6 +1800,7 @@ exports.apiDataPhoneSync = onRequest({ region: 'us-central1', maxInstances: 10, 
     inventory: Array.isArray(body.inventory) ? body.inventory : [],
     creditNotes: Array.isArray(body.creditNotes) ? body.creditNotes : [],
     debitNotes: Array.isArray(body.debitNotes) ? body.debitNotes : [],
+    purchases: Array.isArray(body.purchases) ? body.purchases : [],
     deleted: body.deleted && typeof body.deleted === 'object' ? body.deleted : {},
   };
   if (Buffer.byteLength(JSON.stringify(phone), 'utf8') > 4_000_000) {

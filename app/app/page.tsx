@@ -33,6 +33,7 @@ const BusinessManager = dynamic(() => import("@/components/webapp/BusinessManage
 const Parties = dynamic(() => import("@/components/webapp/Parties").then((m) => m.Parties), { loading: ViewLoading });
 const Settings = dynamic(() => import("@/components/webapp/Settings").then((m) => m.Settings), { loading: ViewLoading });
 const Inventory = dynamic(() => import("@/components/webapp/Inventory").then((m) => m.Inventory), { loading: ViewLoading });
+const GstReturns = dynamic(() => import("@/components/webapp/GstReturns").then((m) => m.GstReturns), { loading: ViewLoading });
 const CreditNotes = dynamic(() => import("@/components/webapp/CreditNotes").then((m) => m.CreditNotes), { loading: ViewLoading });
 const DebitNotes = dynamic(() => import("@/components/webapp/DebitNotes").then((m) => m.DebitNotes), { loading: ViewLoading });
 const Payroll = dynamic(() => import("@/components/webapp/Payroll").then((m) => m.Payroll), { loading: ViewLoading });
@@ -407,6 +408,8 @@ export default function AppPage() {
 
       case "compliance":
         return <Compliance data={d} onSaved={refresh} />;
+      case "gst-returns":
+        return <GstReturns data={d} onSaved={refresh} />;
 
       case "delivery-challans":
         return <DeliveryChallans data={d} onSaved={refresh} />;

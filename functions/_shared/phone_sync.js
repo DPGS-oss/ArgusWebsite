@@ -384,6 +384,59 @@ function noteKind(numberKey, phoneNumberKey) {
     },
   };
 }
+// ------------------------------------------------------------- purchases
+// So GSTR-9, GSTR-2B matching and the CA see purchases made on the phone.
+
+const phonePurchaseFp = (p) => hash([str(p.supplier_name), str(p.supplier_gstin), str(p.supplier_invoice_number), day(p.supplier_invoice_date), r2(p.total_amount), r2(p.total_gst_amount), p.reverse_charge === true, p.itc_eligible !== false]);
+const webPurchaseFp = (w) => hash([str(w.supplierName), str(w.supplierGstin), str(w.supplierInvoiceNumber), day(w.supplierInvoiceDate), r2(w.totalAmount), r2(w.totalGstAmount), w.reverseCharge === true, w.itcEligible !== false]);
+
+const purchaseKind = {
+  toWeb(p, prev = {}, now = new Date().toISOString()) {
+    const inter = num(p.total_igst) > 0 || (p.items || []).some((it) => num(it.igst) > 0);
+    return {
+      ...prev,
+      id: str(p.id),
+      purchaseNumber: str(p.purchase_number) || prev.purchaseNumber || str(p.id),
+      supplierName: str(p.supplier_name),
+      supplierId: str(p.supplier_id) || undefined,
+      supplierGstin: str(p.supplier_gstin).toUpperCase() || undefined,
+      supplierInvoiceNumber: str(p.supplier_invoice_number),
+      supplierInvoiceDate: day(p.supplier_invoice_date) || undefined,
+      reverseCharge: p.reverse_charge === true,
+      itcEligible: p.itc_eligible !== false,
+      createdAt: str(p.created_at) || now,
+      totalAmount: money.round2(p.total_amount),
+      totalGstAmount: money.round2(p.total_gst_amount),
+      totalCgst: money.round2(p.total_cgst),
+      totalSgst: money.round2(p.total_sgst),
+      totalIgst: money.round2(p.total_igst),
+      items: (p.items || []).map((it, i) => noteLineToWeb(it, `${p.id}-${i}`, inter)),
+      paymentMethod: prev.paymentMethod,
+      paidAmount: prev.paidAmount,
+    };
+  },
+  toPhone(w, now = new Date().toISOString()) {
+    return {
+      id: str(w.id),
+      purchase_number: str(w.purchaseNumber),
+      supplier_name: str(w.supplierName),
+      supplier_id: str(w.supplierId) || null,
+      created_at: str(w.createdAt) || now,
+      total_amount: money.round2(w.totalAmount),
+      total_gst_amount: money.round2(w.totalGstAmount),
+      items: (w.items || []).map(noteLineToPhone),
+      supplier_gstin: str(w.supplierGstin),
+      supplier_invoice_number: str(w.supplierInvoiceNumber),
+      supplier_invoice_date: day(w.supplierInvoiceDate),
+      reverse_charge: w.reverseCharge === true,
+      itc_eligible: w.itcEligible !== false,
+      total_cgst: money.round2(w.totalCgst),
+      total_sgst: money.round2(w.totalSgst),
+      total_igst: money.round2(w.totalIgst),
+    };
+  },
+};
+
 const creditNoteKind = noteKind('creditNoteNumber', 'credit_note_number');
 const debitNoteKind = noteKind('debitNoteNumber', 'debit_note_number');
 
@@ -398,6 +451,7 @@ const KINDS = {
   inventory: { webKey: 'stock', phoneFp: phoneStockFp, webFp: webStockFp, toWeb: phoneToWebStock, toPhone: webToPhoneStock },
   creditNotes: { webKey: 'creditNotes', phoneFp: phoneNoteFp, webFp: webNoteFp, ...creditNoteKind },
   debitNotes: { webKey: 'debitNotes', phoneFp: phoneNoteFp, webFp: webNoteFp, ...debitNoteKind },
+  purchases: { webKey: 'purchases', phoneFp: phonePurchaseFp, webFp: webPurchaseFp, ...purchaseKind },
 };
 
 /**
