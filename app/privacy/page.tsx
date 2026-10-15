@@ -5,7 +5,7 @@ import { LegalLayout } from "@/components/LegalLayout";
 export default function PrivacyPage() {
   return (
     <LegalLayout title="Privacy Policy">
-      <p className="text-sm text-slate">Last updated: 11 October 2026</p>
+      <p className="text-sm text-slate">Last updated: 15 October 2026</p>
 
       <p>
         <strong>Argus</strong> (website{" "}
@@ -38,6 +38,10 @@ export default function PrivacyPage() {
         </li>
         <li>App crash reports (device model, app version, error details) and security logs when cloud features are used (IP-derived signals, device labels)</li>
         <li>CA portal: who you invited, when, and their read-only access</li>
+        <li>
+          Users of your books: the email you invite, their name once they join, the access you give
+          them (Billing only or Full access), and the edit log of who changed what and when
+        </li>
       </ul>
       <p>
         We do not require Aadhaar, biometrics, or other sensitive categories. Do not enter such data
@@ -105,14 +109,25 @@ export default function PrivacyPage() {
         programmes.
       </p>
 
-      <h2 className="mt-8 text-xl font-semibold text-ink">5. Cloud sync and CA / accountant sharing</h2>
+      <h2 className="mt-8 text-xl font-semibold text-ink">5. Cloud sync, users of your books, and CA / accountant sharing</h2>
       <p>
         With cloud sync on (Business plan), your books are stored in Google Cloud Firestore,
         encrypted in transit and at rest by Google, and read by our servers to sync your phone and
         the web app. When you invite a CA, they get read-only access to those books through our CA
-        portal until you stop sharing (Settings &gt; Share with your CA). Only you and the CAs you
-        invite can see your books; our staff access them only to fix a problem you report or when
-        the law requires.
+        portal until you stop sharing (Settings &gt; Share with your CA). Only you, the users you
+        add to your books, and the CAs you invite can see your books; our staff access them only to
+        fix a problem you report or when the law requires.
+      </p>
+      <p>
+        <strong>Users of your books.</strong> When you add someone (Settings &gt; Users), they can
+        see and work in your synced books on the app and the website, with the access you choose:
+        <em>Billing only</em> (bills, customers, stock and payments; not purchases, expenses,
+        payroll, GST returns, profit or business settings) or <em>Full access</em>. Each change
+        they make is recorded in the edit log with their name, which you can see. You can change
+        their access or remove them at any time; your books are then taken off their devices the
+        next time they open Argus. If you join someone else&apos;s books, that business sees the
+        bills you make there and your name in its edit log; your own books stay set aside on your
+        phone and come back when you leave.
       </p>
 
       <h2 className="mt-8 text-xl font-semibold text-ink">6. Retention</h2>
@@ -126,6 +141,10 @@ export default function PrivacyPage() {
           Indian tax, accounting, or legal compliance
         </li>
         <li>Security / rate-limit logs: shorter operational windows</li>
+        <li>
+          Edit log (who changed what in the books): kept as long as the books, and cannot be edited
+          or cleared by users, as audit-trail rules require
+        </li>
       </ul>
 
       <h2 className="mt-8 text-xl font-semibold text-ink">7. Your rights (DPDP)</h2>

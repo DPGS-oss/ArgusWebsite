@@ -52,19 +52,19 @@ export default function sitemap(): MetadataRoute.Sitemap {
     },
     {
       url: `${SITE_URL}/privacy/`,
-      lastModified: now,
+      lastModified: new Date("2026-10-15"),
       changeFrequency: "yearly",
       priority: 0.4,
     },
     {
       url: `${SITE_URL}/terms/`,
-      lastModified: now,
+      lastModified: new Date("2026-10-15"),
       changeFrequency: "yearly",
       priority: 0.4,
     },
     {
       url: `${SITE_URL}/refund/`,
-      lastModified: now,
+      lastModified: new Date("2026-10-15"),
       changeFrequency: "yearly",
       priority: 0.3,
     },

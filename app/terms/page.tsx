@@ -5,7 +5,7 @@ import { GRIEVANCE_OFFICER, LEGAL_ENTITY } from "@/lib/legal";
 export default function TermsPage() {
   return (
     <LegalLayout title="Terms of Service">
-      <p className="text-sm text-slate">Last updated: 11 October 2026</p>
+      <p className="text-sm text-slate">Last updated: 15 October 2026</p>
 
       <p>
         These Terms of Service (&quot;Terms&quot;) govern use of Argus (the website at
@@ -64,6 +64,15 @@ export default function TermsPage() {
         our <Link href="/refund/">Refund Policy</Link> allows it.
       </p>
 
+      <p>
+        <strong>Users.</strong> The Business plan includes 2 users: you and one more person. Each
+        extra user costs <strong>₹50 per month</strong> (inclusive of taxes), paid on the website in
+        one payment up to the end of your current extra-user or plan period. Extra users end with
+        that period unless you pay again; if they lapse, the users you added first keep access.
+        Payments for extra users are not refunded if you remove a user or cancel, except where
+        Indian law requires otherwise.
+      </p>
+
       <h2 className="mt-8 text-xl font-semibold text-ink">5. Free trial</h2>
       <p>
         Where offered, a Business trial is limited (for example 14 days) and may be restricted to
@@ -111,12 +120,19 @@ export default function TermsPage() {
         Indian law requires a refund or as stated in the Refund Policy for non-delivery of access.
       </p>
 
-      <h2 className="mt-8 text-xl font-semibold text-ink">7. Cloud sync and CA portal</h2>
+      <h2 className="mt-8 text-xl font-semibold text-ink">7. Cloud sync, users and CA portal</h2>
       <p>
         Cloud sync requires an active Business (or valid trial/Lifetime) plan. When it is on, your
         books are stored on Google Cloud (encrypted at rest by Google) so your phone, the web app
         and your CA can see them. A CA you invite gets read-only access until you stop sharing,
         which you can do at any time in Settings. You are responsible for whom you invite.
+      </p>
+      <p>
+        You can add people to your books (Settings &gt; Users). They act for your business: you are
+        responsible for what they do in your books, for the access you give them, and for removing
+        them when they should no longer have it. Issued bills cannot be deleted by anyone; they are
+        cancelled or corrected with a credit or debit note, and every change is kept in the edit
+        log.
       </p>
 
       <h2 className="mt-8 text-xl font-semibold text-ink">8. Your data and your customers&apos; data</h2>
