@@ -17,6 +17,9 @@ if (process.env.NODE_ENV === "development") {
   );
   const rewrites: { source: string; function?: string }[] = site?.rewrites ?? [];
 
+  // The Android app (debug build on an emulator) posts to /api/... without a
+  // trailing slash; Hosting does not redirect those, so neither does dev.
+  nextConfig.skipTrailingSlashRedirect = true;
   nextConfig.rewrites = async () =>
     rewrites
       .filter((r) => r.function && r.source.startsWith("/api/"))
