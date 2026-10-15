@@ -6,6 +6,7 @@ import type { AppData, StockItem, GSTRate } from "@/lib/types";
 import { UNITS } from "@/lib/types";
 import { formatCurrency, gstRatePickerOptions, gstRateLabel } from "@/lib/gst";
 import { saveStockItem, deleteStockItem, bulkSaveStockItems, generateId } from "@/lib/storage";
+import { STOCK_TABS, StockDepth, type StockTab } from "./StockDepth";
 import { BarcodeScannerModal } from "./BarcodeScannerModal";
 import JsBarcode from "jsbarcode";
 
@@ -35,6 +36,7 @@ export function Inventory({ data, onSaved }: InventoryProps) {
   const [showForm, setShowForm] = useState(false);
   const [showBarcode, setShowBarcode] = useState<StockItem | null>(null);
   const [showScanner, setShowScanner] = useState(false);
+  const [tab, setTab] = useState<"items" | StockTab>("items");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   function handleAdd() {
@@ -136,6 +138,14 @@ export function Inventory({ data, onSaved }: InventoryProps) {
 
   return (
     <div className="space-y-6">
+      <div className="flex flex-wrap gap-2">
+        <button onClick={() => setTab("items")} className={tab === "items" ? "btn-primary !py-1.5 text-xs" : "btn-secondary !py-1.5 text-xs"}>Items</button>
+        {STOCK_TABS.map(([id, label]) => (
+          <button key={id} onClick={() => setTab(id)} className={tab === id ? "btn-primary !py-1.5 text-xs" : "btn-secondary !py-1.5 text-xs"}>{label}</button>
+        ))}
+      </div>
+      {tab !== "items" ? <StockDepth data={data} onSaved={onSaved} tab={tab} /> : null}
+      {tab === "items" ? (<>
       {low.length > 0 && (
         <div className="rounded-lg border border-orange-300 bg-orange-50 px-4 py-3 text-sm text-orange-900">
           Low stock: {low.map((s) => `${s.name} (${s.currentStock})`).join(", ")}
@@ -282,6 +292,7 @@ export function Inventory({ data, onSaved }: InventoryProps) {
       {showForm && editing && (
         <StockItemForm
           item={editing}
+          allItems={data.stock}
           onChange={setEditing}
           onSave={handleSave}
           onCancel={() => { setShowForm(false); setEditing(null); }}
@@ -299,18 +310,45 @@ export function Inventory({ data, onSaved }: InventoryProps) {
           onDetected={handleScanDetected}
         />
       )}
+      </>) : null}
+    </div>
+  );
+}
+
+/** What one unit is made from (for "Make items"). */
+function RecipeEditor({ item, items, onChange }: { item: StockItem; items: StockItem[]; onChange: (bom: { itemId: string; qty: number }[]) => void }) {
+  const bom = item.bom || [];
+  const others = items.filter((s) => s.id !== item.id);
+  if (!others.length) return null;
+  return (
+    <div className="text-sm text-silver sm:col-span-2">
+      <p>Made from (optional): components for one {item.unit || "unit"}</p>
+      {bom.map((c, k) => (
+        <div key={k} className="mt-1 flex gap-2">
+          <select className="flex-1 rounded-btn border border-lead/30 bg-graphite px-3 py-2 text-sm text-starlight" value={c.itemId}
+            onChange={(e) => onChange(bom.map((x, j) => (j === k ? { ...x, itemId: e.target.value } : x)))}>
+            {others.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+          <input type="number" className="w-24 rounded-btn border border-lead/30 bg-graphite px-3 py-2 text-sm text-starlight" value={c.qty}
+            onChange={(e) => onChange(bom.map((x, j) => (j === k ? { ...x, qty: parseFloat(e.target.value) || 0 } : x)))} />
+          <button className="btn-secondary !py-1" onClick={() => onChange(bom.filter((_, j) => j !== k))}>Remove</button>
+        </div>
+      ))}
+      <button className="btn-secondary mt-1 !py-1 text-xs" onClick={() => onChange([...bom, { itemId: others[0].id, qty: 1 }])}>+ Add component</button>
     </div>
   );
 }
 
 function StockItemForm({
   item,
+  allItems,
   onChange,
   onSave,
   onCancel,
   onScan,
 }: {
   item: StockItem;
+  allItems: StockItem[];
   onChange: (item: StockItem) => void;
   onSave: () => void;
   onCancel: () => void;
@@ -409,6 +447,31 @@ function StockItemForm({
               {gstRatePickerOptions(item.gstRate).map((r) => <option key={r} value={r}>{gstRateLabel(r)}</option>)}
             </select>
           </label>
+          <label className="block text-sm text-silver">
+            Cost price before GST (₹)
+            <input
+              type="number"
+              value={item.costPrice ?? ""}
+              onChange={(e) => update({ costPrice: parseFloat(e.target.value) || 0 })}
+              className="mt-1 w-full rounded-btn border border-lead/30 bg-graphite px-4 py-2.5 text-sm text-starlight outline-none focus:border-mercury-blue"
+            />
+          </label>
+          <label className="block text-sm text-silver">
+            Value stock at
+            <select
+              value={item.valuation || "average"}
+              onChange={(e) => update({ valuation: e.target.value as "average" | "fifo" })}
+              className="mt-1 w-full rounded-btn border border-lead/30 bg-graphite px-4 py-2.5 text-sm text-starlight outline-none focus:border-mercury-blue"
+            >
+              <option value="average">Average cost</option>
+              <option value="fifo">First in, first out</option>
+            </select>
+          </label>
+          <label className="flex items-center gap-2 text-sm text-silver sm:col-span-2">
+            <input type="checkbox" checked={!!item.trackBatches} onChange={(e) => update({ trackBatches: e.target.checked })} />
+            Track batches and expiry (medicines, food, cosmetics)
+          </label>
+          <RecipeEditor item={item} items={allItems} onChange={(bom) => update({ bom })} />
           <label className="block text-sm text-silver sm:col-span-2">
             Barcode / SKU
             <div className="mt-1 flex gap-2">

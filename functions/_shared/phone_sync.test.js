@@ -107,12 +107,13 @@ test('output has no undefined values (Firestore rejects them)', () => {
 });
 
 test('a draft deleted on the phone disappears from the web and stays gone', () => {
-  const first = mergePhoneSync({}, { invoices: [phoneBill()], customers: [customer] });
+  const draft = { ...phoneBill(), status: 'draft' };
+  const first = mergePhoneSync({}, { invoices: [draft], customers: [customer] });
   const next = mergePhoneSync(first.appData, { invoices: [], customers: [customer], deleted: { invoices: ['inv-phone-1'] } });
   assert.deepEqual(next.appData.invoices, []);
   assert.ok(next.appData.deleted.invoices['inv-phone-1']);
   // A second phone that still has it is told to drop it, and it is not re-added.
-  const other = mergePhoneSync(next.appData, { invoices: [phoneBill()] });
+  const other = mergePhoneSync(next.appData, { invoices: [draft] });
   assert.deepEqual(other.appData.invoices, []);
   assert.deepEqual(other.toPhone.deleted.invoices, ['inv-phone-1']);
 });
@@ -178,4 +179,87 @@ test('purchases sync both ways with supplier, bill number and tax heads', () => 
   assert.deepEqual(mergePhoneSync(first.appData, { purchases: [phone] }).toPhone.purchases, []);
   const old = mergePhoneSync(first.appData, { invoices: [] });
   assert.equal(old.appData.purchases.length, 1);
+});
+
+test('edit log: append-only, merged both ways, each entry sent once', () => {
+  const { mergePhoneSync } = require('./phone_sync');
+  const phoneEntry = { id: 'a1', at: '2026-10-15T10:00:00Z', byUid: 'u1', byName: 'Owner', device: 'android', action: 'created', entity: 'bill', entityId: 'i1', ref: 'INV/26-27/0001', detail: 'Bill for Mehta' };
+  const webEntry = { id: 'w1', at: '2026-10-15T09:00:00Z', byUid: 'u1', byName: 'Owner', device: 'web', action: 'edited', entity: 'customer', entityId: 'c1', ref: 'Mehta', detail: 'Phone: — → 98' };
+  const first = mergePhoneSync({ auditLog: [webEntry] }, { auditLog: [phoneEntry], auditSince: '' }, '2026-10-15T11:00:00Z');
+  assert.deepEqual(first.appData.auditLog.map((e) => e.id), ['w1', 'a1']);
+  assert.deepEqual(first.toPhone.auditLog.map((e) => e.id), ['w1']);
+  assert.equal(first.toPhone.auditSince, '2026-10-15T11:00:00Z');
+  // Next sync: nothing new either way; the phone re-sending does not duplicate.
+  const second = mergePhoneSync(first.appData, { auditLog: [phoneEntry], auditSince: first.toPhone.auditSince }, '2026-10-15T12:00:00Z');
+  assert.equal(second.appData.auditLog.length, 2);
+  assert.deepEqual(second.toPhone.auditLog, []);
+  // An entry cannot be rewritten by sending it again with other text.
+  const third = mergePhoneSync(second.appData, { auditLog: [{ ...phoneEntry, detail: 'changed' }], auditSince: '' }, '2026-10-15T13:00:00Z');
+  assert.equal(third.appData.auditLog.find((e) => e.id === 'a1').detail, 'Bill for Mehta');
+});
+
+test('stock movements: union both ways, opening never doubled, gaps matched', () => {
+  const { mergePhoneSync } = require('./phone_sync');
+  const item = { id: 'it1', name: 'Paracetamol', hsn: '3004', gstRate: 5, rate: 20, currentStock: 7, minStock: 0, costPrice: 12 };
+  const webMoves = [
+    { id: 'open_it1', itemId: 'it1', date: '2026-10-01', kind: 'opening', qty: 10, godown: 'Main', unitCost: 12, createdAt: '2026-10-01T00:00:00Z' },
+    { id: 'w-sale', itemId: 'it1', date: '2026-10-02', kind: 'sale', qty: -3, godown: 'Main', createdAt: '2026-10-02T00:00:00Z' },
+  ];
+  const phoneItem = { id: 'it1', name: 'Paracetamol', hsn_code: '3004', gst_rate: 5, sell_price: 21, stock_on_hand: 7, reorder_level: 0, cost_price: 12 };
+  const phoneMoves = [
+    // The phone made its own opening for the same item: same fixed id, so it is not added twice.
+    { id: 'open_it1', itemId: 'it1', date: '2026-10-03', kind: 'opening', qty: 7, godown: 'Main', createdAt: '2026-10-03T00:00:00Z' },
+    { id: 'p-in', itemId: 'it1', date: '2026-10-04', kind: 'purchase', qty: 5, godown: 'Shop 2', batch: 'B1', expiry: '2027-01-31', unitCost: 11, createdAt: '2026-10-04T00:00:00Z' },
+  ];
+  const r = mergePhoneSync({ stock: [item], stockMoves: webMoves, godowns: [] },
+    { inventory: [{ ...phoneItem, stock_on_hand: 12 }], stockMoves: phoneMoves, godowns: ['Shop 2'] }, '2026-10-05T00:00:00Z');
+  const moves = r.appData.stockMoves;
+  assert.equal(moves.filter((m) => m.kind === 'opening').length, 1);
+  assert.equal(moves.find((m) => m.id === 'open_it1').qty, 10);
+  // Movements add up to the synced quantity on hand.
+  const stock = r.appData.stock[0].currentStock;
+  assert.equal(Math.round(moves.reduce((t, m) => t + m.qty, 0) * 1000) / 1000, stock);
+  // Movements are the truth: 10 opening − 3 sold on the website + 5 bought on the phone.
+  assert.equal(stock, 12);
+  assert.ok(!moves.some((m) => m.id.startsWith('mv_sync_')), 'no correction entries for apps that record movements');
+  // The phone gets the website's sale and the cloud's opening stock (its own differed), not its own purchase back.
+  const back = r.toPhone.stockMoves.map((m) => m.id);
+  assert.ok(back.includes('w-sale'));
+  assert.ok(back.includes('open_it1'));
+  assert.ok(!back.includes('p-in'));
+  assert.equal(r.toPhone.stockMoves.find((m) => m.id === 'open_it1').qty, 10);
+  assert.deepEqual(r.toPhone.godowns, ['Shop 2']);
+  assert.equal(r.appData.stock[0].costPrice, 12);
+  // Both sides sell at the same time: both sales count.
+  const both = mergePhoneSync({ stock: [{ ...item, currentStock: 6 }], stockMoves: [...webMoves, { id: 'w-sale2', itemId: 'it1', date: '2026-10-05', kind: 'sale', qty: -1, godown: 'Main', createdAt: '2026-10-05T01:00:00Z' }] },
+    { inventory: [{ ...phoneItem, stock_on_hand: 6 }], stockMoves: [webMoves[0], webMoves[1], { id: 'p-sale', itemId: 'it1', date: '2026-10-05', kind: 'sale', qty: -1, godown: 'Main', createdAt: '2026-10-05T02:00:00Z' }] }, '2026-10-05T03:00:00Z');
+  assert.equal(both.appData.stock[0].currentStock, 5);
+  assert.equal(both.toPhone.inventory.find((i) => i.id === 'it1')?.stock_on_hand ?? 5, 5);
+  // Older app versions: nothing sent back, but the website's movements still match its stock.
+  const legacy = mergePhoneSync({ stock: [{ ...item, currentStock: 4 }], stockMoves: webMoves }, { inventory: [] }, '2026-10-06T00:00:00Z');
+  assert.equal(legacy.toPhone.stockMoves, undefined);
+  assert.equal(legacy.appData.stockMoves.reduce((t, m) => t + m.qty, 0), 4);
+});
+
+test('item recipe, valuation and batches survive the round trip; old items keep their hashes', () => {
+  const { mergePhoneSync } = require('./phone_sync');
+  const plain = { id: 'a', name: 'Bag', hsn_code: '4202', gst_rate: 18, sell_price: 118, stock_on_hand: 2, reorder_level: 0 };
+  const first = mergePhoneSync(null, { inventory: [plain] });
+  assert.deepEqual(mergePhoneSync(first.appData, { inventory: [plain] }).toPhone.inventory, []);
+  const kit = { ...plain, id: 'k', name: 'Kit', valuation: 'fifo', track_batches: true, cost_price: 50, bom: [{ itemId: 'a', qty: 2 }] };
+  const second = mergePhoneSync(first.appData, { inventory: [plain, kit] });
+  const w = second.appData.stock.find((s) => s.id === 'k');
+  assert.equal(w.valuation, 'fifo');
+  assert.equal(w.trackBatches, true);
+  assert.deepEqual(w.bom, [{ itemId: 'a', qty: 2 }]);
+  assert.deepEqual(mergePhoneSync(second.appData, { inventory: [plain, kit] }).toPhone.inventory, []);
+});
+
+test('a phone cannot delete an issued bill; a draft can be deleted', () => {
+  const { mergePhoneSync } = require('./phone_sync');
+  const data = { invoices: [{ id: 'i1', invoiceNumber: 'INV/26-27/0001', status: 'paid', items: [] }, { id: 'd1', invoiceNumber: 'D', status: 'draft', items: [] }] };
+  const r = mergePhoneSync(data, { deleted: { invoices: ['i1', 'd1'] } }, '2026-10-15T00:00:00Z');
+  assert.deepEqual(r.appData.invoices.map((i) => i.id), ['i1']);
+  assert.ok(!r.appData.deleted.invoices.i1);
+  assert.ok(r.appData.deleted.invoices.d1);
 });

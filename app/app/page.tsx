@@ -5,7 +5,9 @@ import dynamic from "next/dynamic";
 import { Menu, X, Cloud, CloudOff, RefreshCw } from "lucide-react";
 import type { AppData, BusinessProfile, Invoice, View } from "@/lib/types";
 import { loadData, saveInvoice, deleteInvoice, cancelInvoice, pickFolder, deductStockForInvoice, saveData, generateId, initStorage, isFileSystemSupported, isUsingFileSystem, getFolderName } from "@/lib/storage";
-import { syncFromCloud, syncToCloud, getLastSyncTime, type SyncStatus } from "@/lib/cloud-sync";
+import { syncFromCloud, syncToCloud, getLastSyncTime, setBooksUid, type SyncStatus } from "@/lib/cloud-sync";
+import { setBillSeries } from "@/lib/storage";
+import { canOpenView } from "@/lib/team";
 import { Sidebar } from "@/components/webapp/Sidebar";
 import { Dashboard } from "@/components/webapp/Dashboard";
 import { InvoiceList } from "@/components/webapp/InvoiceList";
@@ -21,6 +23,7 @@ import {
 import { KeyboardShortcuts } from "@/components/webapp/KeyboardShortcuts";
 import { getExpiryIso } from "@/lib/subscription";
 import { todayIST } from "@/lib/dates";
+import { loadRateBook } from "@/lib/gst-rates";
 
 // Screens load on first open; only the shell (sidebar, dashboard, invoice list) ships up front.
 function ViewLoading() {
@@ -33,6 +36,8 @@ const BusinessManager = dynamic(() => import("@/components/webapp/BusinessManage
 const Parties = dynamic(() => import("@/components/webapp/Parties").then((m) => m.Parties), { loading: ViewLoading });
 const Settings = dynamic(() => import("@/components/webapp/Settings").then((m) => m.Settings), { loading: ViewLoading });
 const Inventory = dynamic(() => import("@/components/webapp/Inventory").then((m) => m.Inventory), { loading: ViewLoading });
+const Team = dynamic(() => import("@/components/webapp/Team").then((m) => m.Team), { loading: ViewLoading });
+const EditLog = dynamic(() => import("@/components/webapp/EditLog").then((m) => m.EditLog), { loading: ViewLoading });
 const GstReturns = dynamic(() => import("@/components/webapp/GstReturns").then((m) => m.GstReturns), { loading: ViewLoading });
 const CreditNotes = dynamic(() => import("@/components/webapp/CreditNotes").then((m) => m.CreditNotes), { loading: ViewLoading });
 const DebitNotes = dynamic(() => import("@/components/webapp/DebitNotes").then((m) => m.DebitNotes), { loading: ViewLoading });
@@ -79,10 +84,18 @@ export default function AppPage() {
 
   useEffect(() => {
     setLastSync(getLastSyncTime());
+    // GST rates come from /data/gst-rates.json, so rate changes reach everyone without a release.
+    void loadRateBook();
   }, []);
 
   // Books are opened per signed-in account; a different account gets its own store.
-  const storageUid = firebaseUser?.uid || "";
+  // Someone on a team opens the owner's books, with their own bill series.
+  const booksUid = user?.books?.booksUid || firebaseUser?.uid || "";
+  setBooksUid(booksUid);
+  // A member keeps their own copy of the owner's books in this browser, so on a
+  // shared computer they never see what the owner's copy holds (purchases, profit).
+  const storageUid = user?.books?.role === "member" && firebaseUser ? `${booksUid}~${firebaseUser.uid}` : booksUid;
+  setBillSeries(user?.books?.role === "member" ? user.books.series : "");
   const syncedUid = useRef("");
   useEffect(() => {
     let cancelled = false;
@@ -90,7 +103,7 @@ export default function AppPage() {
       syncedUid.current = storageUid;
       hasSyncedFromCloud.current = false;
     }
-    initStorage(storageUid).then((local) => {
+    initStorage(storageUid, { claimLegacy: storageUid === firebaseUser?.uid }).then((local) => {
       if (cancelled) return;
       setStorageBooted(true);
       if (isUsingFileSystem()) setFolderName(getFolderName());
@@ -246,6 +259,7 @@ export default function AppPage() {
   const daysLeft = trialDaysLeft(user);
 
   function navigate(view: View) {
+    if (!canOpenView(view, user)) return;
     setView(view);
     setEditingInvoice(null);
     setPreviewInvoice(null);
@@ -408,6 +422,10 @@ export default function AppPage() {
 
       case "compliance":
         return <Compliance data={d} onSaved={refresh} />;
+      case "edit-log":
+        return <EditLog data={d} />;
+      case "team":
+        return <Team />;
       case "gst-returns":
         return <GstReturns data={d} onSaved={refresh} />;
 
@@ -507,6 +525,7 @@ export default function AppPage() {
       >
         <Sidebar
           view={view}
+          canOpen={(v) => canOpenView(v, user)}
           onNavigate={navigate}
           onPickFolder={handlePickFolder}
           onSync={handleManualSync}

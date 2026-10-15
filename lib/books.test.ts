@@ -111,7 +111,7 @@ describe("books", () => {
       reverseCharge: false, isTotalMode: false, createdAt: "", preserveStoredTax: false,
       items: [{ id: "a", description: "Almirah", hsn: "9403", unit: "NOS", uqc: "NOS", ...calculateItem({ quantity: 1, rate: 100, discount: 0, gstRate: 18, isInterState: false }) } as InvoiceItem],
     });
-    d = { ...d, invoices: [bill], purchases: [{ id: "pu", purchaseNumber: "P1", supplierName: "Wholesaler", totalAmount: 118, totalGstAmount: 18, items: [], createdAt: "", updatedAt: "", paidAmount: 118, paymentMethod: "cash" } as unknown as AppData["purchases"][number]] };
+    d = { ...d, invoices: [bill], purchases: [{ id: "pu", purchaseNumber: "P1", supplierName: "Wholesaler", supplierGstin: "27AAACC1234F1Z8", totalAmount: 118, totalGstAmount: 18, items: [], createdAt: "", updatedAt: "", paidAmount: 118, paymentMethod: "cash" } as unknown as AppData["purchases"][number]] };
     d = postPurchaseLedger(postInvoiceLedger(d, bill), d.purchases[0]);
     expect(profitAndLoss(d)).toEqual({ sales: 100, cogs: 100, expenses: 0, profit: 0 });
     const gst = d.khataEntries.filter((e) => e.accountType === "gst").reduce((s, e) => s + (e.isCredit ? -1 : 1) * e.amount, 0);
@@ -145,5 +145,31 @@ describe("what a customer still owes on a bill", () => {
     const more = withBalance({ creditNotes: [], debitNotes: [{ id: "d", invoiceId: bill.id, totalAmount: 118, status: "active" } as never] }, { ...bill, paidAmount: 1180, status: "paid" });
     expect(more.balanceDue).toBe(118);
     expect(more.status).toBe("unpaid");
+  });
+});
+
+describe("profit with stock", () => {
+  it("cost of goods sold = opening stock + purchases − closing stock", async () => {
+    const { recordMoves, MAIN_GODOWN } = await import("./stock");
+    let d = { ...data(), stock: [{ id: "s", name: "Almirah", hsn: "9403", unit: "NOS", openingStock: 0, currentStock: 0, minStock: 0, rate: 150, gstRate: 18 }] } as unknown as AppData;
+    // Bought 10 at ₹100 (+18% GST, claimable); sold 4 at ₹150 before GST.
+    d = { ...d, purchases: [{ id: "pu", purchaseNumber: "P1", supplierName: "W", supplierGstin: "07AAPFU0939F1ZX", totalAmount: 1180, totalGstAmount: 180, items: [], createdAt: "2026-10-01", paidAmount: 1180 } as unknown as AppData["purchases"][number]] };
+    d = recordMoves(d, [
+      { itemId: "s", date: "2026-10-01", kind: "purchase", qty: 10, godown: MAIN_GODOWN, unitCost: 100, refId: "pu" },
+      { itemId: "s", date: "2026-10-02", kind: "sale", qty: -4, godown: MAIN_GODOWN },
+    ]);
+    d = { ...d, invoices: [{ id: "i", status: "paid", grandTotal: 708, totalTax: 108 } as unknown as Invoice] };
+    expect(profitAndLoss(d)).toEqual({ sales: 600, cogs: 400, expenses: 0, profit: 200 });
+  });
+
+  it("goods received without a purchase bill still count as bought (profit is not inflated)", async () => {
+    const { recordMoves, MAIN_GODOWN } = await import("./stock");
+    let d = { ...data(), stock: [{ id: "s", name: "Almirah", hsn: "9403", unit: "NOS", openingStock: 0, currentStock: 0, minStock: 0, rate: 150, gstRate: 18 }] } as unknown as AppData;
+    d = recordMoves(d, [
+      { itemId: "s", date: "2026-10-01", kind: "purchase", qty: 10, godown: MAIN_GODOWN, unitCost: 100 },
+      { itemId: "s", date: "2026-10-02", kind: "sale", qty: -4, godown: MAIN_GODOWN },
+    ]);
+    d = { ...d, invoices: [{ id: "i", status: "paid", grandTotal: 708, totalTax: 108 } as unknown as Invoice] };
+    expect(profitAndLoss(d)).toEqual({ sales: 600, cogs: 400, expenses: 0, profit: 200 });
   });
 });

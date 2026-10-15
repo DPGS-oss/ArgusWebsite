@@ -100,6 +100,17 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Shared books (teams): Cloud Functions only.
+    match /teams/{ownerUid} {
+      allow read, write: if false;
+    }
+    match /memberIndex/{email} {
+      allow read, write: if false;
+    }
+    match /memberships/{memberUid} {
+      allow read, write: if false;
+    }
+
     match /deletion_requests/{docId} {
       allow read, write: if false;
     }

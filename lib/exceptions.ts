@@ -8,6 +8,8 @@ import { runningBook, unbalancedPostings } from "./books";
 import { billBalance } from "./notes";
 import { todayIST, addDays } from "./dates";
 import { toPaise } from "./money";
+import { expiring } from "./stock";
+import { isValidGstin } from "./gstin";
 
 export type ExceptionItem = {
   group: string;
@@ -31,6 +33,16 @@ export function exceptionReport(data: AppData, today: string = todayIST()): Exce
         detail: "More was sold than recorded. Add the missing purchase or correct the stock count.",
       });
     }
+  }
+
+  // Batches expired or expiring within 30 days.
+  for (const lot of expiring(data, 30, today)) {
+    const gone = (lot.expiry || "") < today;
+    out.push({
+      group: "Stock", severity: gone ? "error" : "warn",
+      title: `${lot.name}${lot.batch ? ` (batch ${lot.batch})` : ""}: ${lot.qty} ${gone ? "expired on" : "expires on"} ${lot.expiry}`,
+      detail: gone ? "Do not sell it. Write it off with a stock adjustment." : "Sell it first, or return it to the supplier before it expires.",
+    });
   }
 
   // Cash or bank went below zero at some point.
@@ -90,6 +102,19 @@ export function exceptionReport(data: AppData, today: string = todayIST()): Exce
         detail: age > 180
           ? "Over 180 days: the GST you claimed on this must be added back until you pay. Tell your CA."
           : "Pay within 180 days of the bill to keep the GST you claimed on it.",
+      });
+    }
+  }
+
+  // GST on a purchase is claimable only from a valid supplier GSTIN.
+  for (const p of data.purchases || []) {
+    const gstin = (p.supplierGstin || "").trim().toUpperCase();
+    const tax = toPaise(p.totalGstAmount || 0);
+    if (!p.reverseCharge && p.itcEligible !== false && tax > 0 && gstin && gstin !== "URP" && !isValidGstin(gstin)) {
+      out.push({
+        group: "Purchases", severity: "warn", amount: tax / 100,
+        title: `${p.supplierName} (${p.supplierInvoiceNumber || p.purchaseNumber}): supplier GSTIN ${gstin} is not valid`,
+        detail: "The GST on this bill is not counted as input credit until the GSTIN is corrected. Check it on the supplier's bill.",
       });
     }
   }

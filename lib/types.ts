@@ -1,7 +1,7 @@
-export type GSTRate = 0 | 0.25 | 3 | 5 | 12 | 18 | 28 | 40;
+export type GSTRate = 0 | 0.25 | 1 | 1.5 | 3 | 5 | 12 | 18 | 28 | 40;
 
 /** GST 2.0 slabs offered on new invoices. 12% and 28% are legacy-only. */
-export const GST_2_0_RATES: GSTRate[] = [0, 0.25, 3, 5, 18, 40];
+export const GST_2_0_RATES: GSTRate[] = [0, 0.25, 1, 1.5, 3, 5, 18, 40];
 
 export type InvoiceStatus = "draft" | "paid" | "unpaid" | "cancelled";
 
@@ -162,6 +162,14 @@ export interface StockItem {
   rate: number;
   gstRate: GSTRate;
   barcode?: string;
+  /** Cost per unit before GST, for valuing stock. */
+  costPrice?: number;
+  /** Track batches and expiry for this item. */
+  trackBatches?: boolean;
+  /** Stock valuation: moving average (default) or first-in-first-out. */
+  valuation?: "average" | "fifo";
+  /** Bill of materials: components to make one unit. */
+  bom?: { itemId: string; qty: number }[];
 }
 
 export interface AppData {
@@ -182,6 +190,12 @@ export interface AppData {
   payments: Payment[];
   templates: Template[];
   khataEntries: KhataEntry[];
+  /** Every stock movement (lib/stock.ts); items' currentStock is their sum. */
+  stockMoves?: import("./stock").StockMove[];
+  /** Godowns (stock locations) besides "Main". */
+  godowns?: string[];
+  /** Edit log: every change, who made it and when. Append-only (lib/audit.ts). */
+  auditLog?: import("./audit").AuditEntry[];
   /** GSTR-2B files uploaded, by return period "MMYYYY": credit per head and the match summary. */
   gstr2b?: Record<string, { itc: { igst: number; cgst: number; sgst: number; cess: number }; summary?: Record<string, number>; uploadedAt: string }>;
   /** Tombstones: id -> deleted-at, per list, so sync does not resurrect deletions. */
@@ -422,6 +436,8 @@ export interface GSTRSection {
 export type View =
   | "dashboard"
   | "gst-returns"
+  | "edit-log"
+  | "team"
   | "invoices"
   | "invoice-form"
   | "invoice-preview"

@@ -18,6 +18,7 @@ import {
   round2,
   gstRatePickerOptions,
   gstRateLabel,
+  withReimbursement,
   defaultGstRateForNew,
   resolvePlaceOfSupply,
   resolveShipTo,
@@ -32,6 +33,7 @@ import { generateId, generateInvoiceNumber, saveBusiness } from "@/lib/storage";
 import { BarcodeScannerModal } from "./BarcodeScannerModal";
 import { validateGstin } from "@/lib/gstin";
 import { roundOffPaise, toPaise } from "@/lib/money";
+import { getRateBook, rateOptions, type RateOptions } from "@/lib/gst-rates";
 import { withBalance } from "@/lib/notes";
 import { addDays, addPeriod, todayIST } from "@/lib/dates";
 
@@ -108,8 +110,9 @@ export function InvoiceForm({ data, business: businessProp, editingInvoice, onSa
   const [terms, setTerms] = useState(openedInvoice?.terms || data.settings.defaultTerms);
   const [paidAmount, setPaidAmount] = useState(openedInvoice?.paidAmount || 0);
   const [hsnSearch, setHsnSearch] = useState<string | null>(null);
+  const [rateChoice, setRateChoice] = useState<{ idx: number; code: string; options: RateOptions } | null>(null);
   const [hsnItemIdx, setHsnItemIdx] = useState<number | null>(null);
-  const [aiSuggestions, setAiSuggestions] = useState<{ idx: number; suggestions: { code: string; description: string; gstRate: GSTRate }[] } | null>(null);
+  const [aiSuggestions, setAiSuggestions] = useState<{ idx: number; suggestions: { code: string; description: string; gstRate: GSTRate; varies?: boolean }[] } | null>(null);
   const [isTotalMode, setIsTotalMode] = useState(openedInvoice?.isTotalMode ?? true);
   const [totalAmount, setTotalAmount] = useState(
     openedInvoice?.isTotalMode ? openedInvoice.enteredTotal ?? openedInvoice.grandTotal : 0
@@ -170,13 +173,15 @@ export function InvoiceForm({ data, business: businessProp, editingInvoice, onSa
     ? (openedInvoice?.isInterState ?? computedInterState)
     : computedInterState;
 
+  // An existing bill keeps its own rounding (a bill made on the phone may differ from the setting).
+  const roundOffOn = editingInvoice ? toPaise(editingInvoice.roundOff || 0) !== 0 : !!data.settings.roundOff;
   const baseTotals = useMemo(() => {
     if (isTotalMode) {
       const afterDiscount = round2(totalAmount * (1 - totalDiscount / 100));
       const { taxableAmount: taxable, cgst, sgst, igst } = calculateItem({
         quantity: 1, rate: 0, discount: 0, gstRate: totalGstRate, isInterState: interState, inclusiveTotal: afterDiscount,
       });
-      const roundOff = data.settings.roundOff ? roundOffPaise(toPaise(afterDiscount)) / 100 : 0;
+      const roundOff = roundOffOn ? roundOffPaise(toPaise(afterDiscount)) / 100 : 0;
       const grandTotal = round2(afterDiscount + roundOff);
       const discountAmount = round2(totalAmount - afterDiscount);
       return {
@@ -192,8 +197,8 @@ export function InvoiceForm({ data, business: businessProp, editingInvoice, onSa
         grandTotal: round2(grandTotal),
       };
     }
-    return calculateInvoiceTotals(items, data.settings.roundOff);
-  }, [isTotalMode, totalAmount, totalGstRate, totalDiscount, interState, data.settings.roundOff, items]);
+    return calculateInvoiceTotals(items, roundOffOn);
+  }, [isTotalMode, totalAmount, totalGstRate, totalDiscount, interState, roundOffOn, items]);
 
   // Delivery: taxed with the goods (s.15(2)(c)) unless it is a pure-agent reimbursement.
   const totals = useMemo(() => {
@@ -205,7 +210,7 @@ export function InvoiceForm({ data, business: businessProp, editingInvoice, onSa
     const extra = deliveryIsReimbursement ? [] : deliveryItems(goods, amount, interState);
     const sum = (k: "taxableAmount" | "cgst" | "sgst" | "igst") => round2(extra.reduce((t, l) => t + l[k], 0));
     const raw = round2(baseTotals.grandTotal - baseTotals.roundOff + amount);
-    const grandTotal = data.settings.roundOff ? round2(raw + roundOffPaise(toPaise(raw)) / 100) : raw;
+    const grandTotal = roundOffOn ? round2(raw + roundOffPaise(toPaise(raw)) / 100) : raw;
     return {
       ...baseTotals,
       totalTaxable: round2(baseTotals.totalTaxable + sum("taxableAmount")),
@@ -217,7 +222,7 @@ export function InvoiceForm({ data, business: businessProp, editingInvoice, onSa
       grandTotal: round2(grandTotal),
       delivery: amount,
     };
-  }, [baseTotals, deliveryAmount, deliveryIsReimbursement, isTotalMode, totalAmount, totalDiscount, totalGstRate, items, interState, data.settings.roundOff]);
+  }, [baseTotals, deliveryAmount, deliveryIsReimbursement, isTotalMode, totalAmount, totalDiscount, totalGstRate, items, interState, roundOffOn]);
 
   // Voice: prices are what the customer pays (GST-inclusive), like the Android app.
   function applyVoiceBill(bill: VoiceBillResult) {
@@ -299,9 +304,17 @@ export function InvoiceForm({ data, business: businessProp, editingInvoice, onSa
     setHsnSearch(query);
   }
 
-  function selectHsn(code: string, gstRate: GSTRate) {
-    if (hsnItemIdx !== null) {
-      updateItem(hsnItemIdx, { hsn: code, gstRate });
+  function selectHsn(code: string, gstRate: GSTRate, idx: number | null = hsnItemIdx) {
+    if (idx !== null) {
+      const book = getRateBook();
+      const options = book ? rateOptions(book, code) : null;
+      if (options && options.main.length > 1) {
+        // The rate depends on the item: ask, with the law's condition for each rate.
+        updateItem(idx, { hsn: code });
+        setRateChoice({ idx, code, options });
+      } else {
+        updateItem(idx, { hsn: code, gstRate: (options?.main[0]?.rate ?? gstRate) as GSTRate });
+      }
     }
     setHsnSearch(null);
     setHsnItemIdx(null);
@@ -319,8 +332,9 @@ export function InvoiceForm({ data, business: businessProp, editingInvoice, onSa
       setTotalDescription(stock.name);
       setTotalGstRate(stock.gstRate);
       setTotalStockItemId(stock.id);
+      // This box is the total the customer pays, so it includes GST; the item's rate does not.
       if (totalAmount === 0) {
-        setTotalAmount(stock.rate);
+        setTotalAmount(round2(stock.rate * (1 + (stock.gstRate || 0) / 100)));
       }
       return;
     }
@@ -467,7 +481,8 @@ export function InvoiceForm({ data, business: businessProp, editingInvoice, onSa
       invoiceItems = [{
         id: generateId(),
         description: totalDescription || "Total Amount",
-        hsn: "",
+        // An item picked from stock keeps its HSN on the bill (Rule 46).
+        hsn: (totalStockItemId && data.stock.find((st) => st.id === totalStockItemId)?.hsn) || "",
         quantity: 1,
         unit: "NOS",
         uqc: "NOS",
@@ -520,8 +535,10 @@ export function InvoiceForm({ data, business: businessProp, editingInvoice, onSa
       date,
       dueDate: dueDateVal,
       items: invoiceItems,
-      roundOffEnabled: data.settings.roundOff,
-      paidAmount,
+      // An existing bill keeps its own rounding (a bill made on the phone may differ from this setting).
+      roundOffEnabled: roundOffOn,
+      // "Paid" with nothing entered means paid in full.
+      paidAmount: status === "paid" && paidAmount === 0 ? totals.grandTotal : paidAmount,
       paymentMode,
       notes,
       terms,
@@ -549,15 +566,12 @@ export function InvoiceForm({ data, business: businessProp, editingInvoice, onSa
       ewayBillDate: editingInvoice?.ewayBillDate,
       enteredTotal: isTotalMode ? totalAmount : undefined,
     };
-    if (deliveryAmount > 0 && deliveryIsReimbursement) {
-      // Rule 33 pure agent: collected on the bill, outside taxable value.
-      invoice.deliveryReimbursement = round2(deliveryAmount);
-      invoice.grandTotal = round2(invoice.grandTotal + deliveryAmount);
-    }
+    // Rule 33 pure agent: collected on the bill, outside taxable value; rounding covers the whole bill.
+    const final = deliveryIsReimbursement ? withReimbursement(invoice, deliveryAmount, roundOffOn) : invoice;
 
     // Edits to an issued bill are logged, never silently overwritten.
     // Balance counts payments and any credit or debit notes against the bill.
-    onSave(withHistory(openedInvoice, withBalance(data, invoice)));
+    onSave(withHistory(openedInvoice, withBalance(data, final)));
   }
 
   const hsnResults = hsnSearch !== null ? searchHSN(hsnSearch) : [];
@@ -644,7 +658,11 @@ export function InvoiceForm({ data, business: businessProp, editingInvoice, onSa
                 Status
                 <select
                   value={status}
-                  onChange={(e) => setStatus(e.target.value as InvoiceStatus)}
+                  onChange={(e) => {
+                    const next = e.target.value as InvoiceStatus;
+                    setStatus(next);
+                    if (next === "paid" && paidAmount === 0) setPaidAmount(totals.grandTotal);
+                  }}
                   className="mt-1 w-full rounded-btn border border-lead/30 bg-graphite px-4 py-2.5 text-starlight outline-none focus:border-mercury-blue"
                 >
                   <option value="draft">Draft</option>
@@ -908,12 +926,12 @@ export function InvoiceForm({ data, business: businessProp, editingInvoice, onSa
                             {hsnResults.map((h) => (
                               <button
                                 key={h.code}
-                                onClick={() => selectHsn(h.code, h.gstRate)}
+                                onClick={() => selectHsn(h.code, h.gstRate, idx)}
                                 className="flex w-full items-center justify-between px-3 py-2 text-left text-xs hover:bg-graphite"
                               >
                                 <span className="text-starlight">{h.code}</span>
                                 <span className="text-silver">{h.description}</span>
-                                <span className="text-mercury-blue">{h.gstRate}%</span>
+                                <span className="text-mercury-blue">{h.varies ? "pick rate" : `${h.gstRate}%`}</span>
                               </button>
                             ))}
                           </div>
@@ -970,6 +988,28 @@ export function InvoiceForm({ data, business: businessProp, editingInvoice, onSa
                     </div>
                   </div>
 
+                  {rateChoice && rateChoice.idx === idx && (
+                    <div className="mt-2 rounded-lg border border-mercury-blue/30 bg-abyss p-3 text-xs">
+                      <p className="mb-2 text-starlight">GST on {rateChoice.code} depends on the item. Pick the one that fits:</p>
+                      {[...rateChoice.options.main, ...rateChoice.options.special].map((o, k) => (
+                        <button
+                          key={k}
+                          onClick={() => {
+                            updateItem(idx, { gstRate: o.rate as GSTRate });
+                            setRateChoice(null);
+                          }}
+                          className="mb-1 flex w-full gap-3 rounded-btn border border-lead/30 px-2 py-1.5 text-left hover:border-mercury-blue"
+                        >
+                          <span className="w-16 shrink-0 font-semibold text-mercury-blue">{o.outside ? "No GST" : `${o.rate}%`}</span>
+                          <span className="text-silver">
+                            {k >= rateChoice.options.main.length ? "Special case: " : ""}
+                            {o.notes.join(" · ")}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
                   {aiSuggestions && aiSuggestions.idx === idx && (
                     <div className="mt-2 rounded-lg bg-abyss p-2">
                       <p className="mb-1 flex items-center gap-1 text-xs text-mercury-blue">
@@ -983,12 +1023,12 @@ export function InvoiceForm({ data, business: businessProp, editingInvoice, onSa
                             <button
                               key={s.code}
                               onClick={() => {
-                                selectHsn(s.code, s.gstRate);
+                                selectHsn(s.code, s.gstRate, idx);
                                 setAiSuggestions(null);
                               }}
                               className="rounded-btn border border-mercury-blue/30 px-2 py-1 text-xs text-silver hover:border-mercury-blue"
                             >
-                              {s.code} - {s.description} ({s.gstRate}%)
+                              {s.code} - {s.description} ({s.varies ? "rate depends on the item" : `${s.gstRate}%`})
                             </button>
                           ))
                         )}

@@ -1,5 +1,6 @@
 "use client";
 
+import { isValidGstin } from "@/lib/gstin";
 import { useState } from "react";
 import { Plus, Trash2, ShoppingCart } from "lucide-react";
 import type { AppData, GSTRate, InvoiceItem, Purchase } from "@/lib/types";
@@ -125,6 +126,8 @@ export function Purchases({ data, onSaved }: Props) {
 
   const totalPurchases = purchases.reduce((s, p) => s + p.totalAmount, 0);
   const totalGstPaid = purchases.reduce((s, p) => s + p.totalGstAmount, 0);
+  // Claimable only on an eligible bill from a valid GSTIN (reverse charge is claimed once paid).
+  const claimable = purchases.reduce((s, p) => s + (p.itcEligible !== false && isValidGstin(p.supplierGstin) ? p.totalGstAmount : 0), 0);
 
   return (
     <div>
@@ -141,8 +144,9 @@ export function Purchases({ data, onSaved }: Props) {
           <div className="text-xl font-bold text-ink">₹{totalPurchases.toFixed(2)}</div>
         </div>
         <div className="rounded-xl border border-bone bg-white p-4">
-          <div className="text-xs text-ash">GST Paid (ITC)</div>
-          <div className="text-xl font-bold text-emerald-600">₹{totalGstPaid.toFixed(2)}</div>
+          <div className="text-xs text-ash">GST you can claim back</div>
+          <div className="text-xl font-bold text-emerald-600">₹{claimable.toFixed(2)}</div>
+          {totalGstPaid - claimable > 0.005 ? <div className="text-xs text-ash">of ₹{totalGstPaid.toFixed(2)} paid · see GST check</div> : null}
         </div>
         <div className="rounded-xl border border-bone bg-white p-4">
           <div className="text-xs text-ash">Count</div>

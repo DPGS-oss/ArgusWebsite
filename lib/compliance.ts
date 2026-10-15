@@ -4,6 +4,7 @@ import { generateGstnJson, notesAsInvoices, purchaseTax } from "./gst";
 import { unbalancedPostings } from "./books";
 import { istDate } from "./dates";
 import { roundPaise, toPaise } from "./money";
+import { getRateBook, rateOptions, type RateBook } from "./gst-rates";
 
 /** Owner-facing wording is plain language; `law` is a short reference for the CA. */
 export type Issue = { severity: "error" | "warn"; title: string; detail: string; law?: string };
@@ -40,7 +41,7 @@ function ageInDays(date: string, today: Date): number {
 const isNote = (i: Invoice) =>
   i.type === "credit_note" || i.type === "debit_note" || i.documentType === "CRN" || i.documentType === "DBN";
 
-export function checkBooks(data: AppData, today: Date = new Date()): Issue[] {
+export function checkBooks(data: AppData, today: Date = new Date(), book: RateBook | null = getRateBook()): Issue[] {
   const issues: Issue[] = [];
   const seller = data.businesses.find((b) => b.id === data.activeBusinessId)?.gstin || "";
   const above5 = !!data.settings.turnoverAbove5Cr;
@@ -132,6 +133,36 @@ export function checkBooks(data: AppData, today: Date = new Date()): Issue[] {
         });
       }
       if (hsnFlagged && rateFlagged) break;
+    }
+
+    // Each line's rate must be one the law gives its HSN code (bills dated after
+    // the current rate book took effect; older bills keep the rate of their time).
+    if (book && inv.type !== "bill_of_supply" && !isNote(inv) && (inv.date || "") >= book.effectiveFrom) {
+      for (const item of inv.items) {
+        const hsn = (item.hsn || "").replace(/\s/g, "");
+        if (hsn.length < 4) continue;
+        const o = rateOptions(book, hsn);
+        const has = (l: { rate: number }[]) => l.some((x) => Math.abs(x.rate - item.gstRate) < 0.001);
+        if (!o.main.length || has(o.main)) continue;
+        const usual = [...new Set(o.main.map((x) => x.rate))].sort((a, b) => a - b).join("%, ");
+        const special = o.special.find((x) => Math.abs(x.rate - item.gstRate) < 0.001);
+        issues.push(
+          special
+            ? {
+                severity: "warn",
+                title: `Check the GST rate on ${number}`,
+                detail: `${item.description} (HSN ${hsn}) is at ${item.gstRate}%, which applies only to: ${special.notes[0]}. Otherwise this code is ${usual}%.`,
+                law: "Notification 9/2025-CT(Rate) as amended",
+              }
+            : {
+                severity: "error",
+                title: `Wrong GST rate on ${number}`,
+                detail: `${item.description} (HSN ${hsn}) is at ${item.gstRate}%. The law gives this code ${usual}%. Fix the item, and issue a credit or debit note if the bill was sent.`,
+                law: "Notification 9/2025-CT(Rate) as amended",
+              },
+        );
+        break;
+      }
     }
 
     // Tax must be the GST rate applied to the value (within ₹1 per bill), and CGST = SGST.

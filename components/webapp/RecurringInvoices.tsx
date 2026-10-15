@@ -316,7 +316,7 @@ export function RecurringInvoices({ data, onSaved }: Props) {
             return (
               <div key={inv.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-bone bg-white p-4">
                 <div>
-                  <div className="font-semibold text-ink">{inv.partyName}</div>
+                  <div className="font-semibold text-ink">{inv.partyName || "Walk-in"}</div>
                   <div className="text-sm text-slate">
                     {inv.invoiceNumber} · {inv.items[0]?.description || "Recurring bill"}
                   </div>

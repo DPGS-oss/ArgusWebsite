@@ -1,11 +1,17 @@
 "use client";
 
 import type { AppData, DeletableKey } from "./types";
-import { loadData, saveData, getDefaultData } from "./storage";
+import { loadData, saveData, getDefaultData, adoptOrphanDocs } from "./storage";
 
 const SYNC_VERSION = 1;
 const LAST_SYNC_KEY = "argus_last_sync";
 const CLOUD_UPDATED_KEY = "argus_cloud_updated";
+
+/** Whose books this browser holds (the owner's, for someone on a team). */
+let booksUid = "";
+export function setBooksUid(uid: string) {
+  booksUid = uid;
+}
 
 export type SyncStatus = "idle" | "syncing" | "synced" | "error" | "offline";
 
@@ -64,10 +70,19 @@ export async function saveCloudData(
         version: SYNC_VERSION,
         device,
         base_updated_at: baseUpdatedAt,
+        books_uid: booksUid || undefined,
       }),
     });
 
-    if (response.status === 409) return "conflict";
+    if (response.status === 409) {
+      const body = await response.clone().json().catch(() => ({}));
+      // Joined or left a team since this page opened: start again with the right books.
+      if (body && body.error === "books_changed") {
+        window.location.reload();
+        return false;
+      }
+      return "conflict";
+    }
     if (!response.ok) return false;
 
     const result = await response.json();
@@ -151,6 +166,11 @@ export function mergeData(local: AppData, cloud: AppData): AppData {
     payments: mergeById(local.payments ?? [], cloud.payments ?? []),
     templates: mergeById(local.templates ?? [], cloud.templates ?? []),
     khataEntries: mergeById(local.khataEntries ?? [], cloud.khataEntries ?? []),
+    // Stock movements are never edited, only added: keep both sides'.
+    stockMoves: mergeById(local.stockMoves ?? [], cloud.stockMoves ?? []),
+    godowns: [...new Set([...(local.godowns ?? []), ...(cloud.godowns ?? [])])],
+    // The edit log only grows: keep every entry from both sides, oldest first.
+    auditLog: mergeById(local.auditLog ?? [], cloud.auditLog ?? []).sort((a, b) => a.at.localeCompare(b.at)),
   };
   // GSTR-2B uploads by month: the later upload of a month wins.
   const gstr2b = { ...(local.gstr2b || {}) };
@@ -174,7 +194,26 @@ export function mergeData(local: AppData, cloud: AppData): AppData {
   }
   if (Object.keys(deleted).length) merged.deleted = deleted;
 
-  return merged;
+  return adoptOrphanDocs(stockFromMoves(merged));
+}
+
+/**
+ * Stock on hand is the sum of an item's movements, so a sale made on the
+ * phone and one made here at the same time both count after a merge.
+ */
+export function stockFromMoves(data: AppData): AppData {
+  const moves = data.stockMoves || [];
+  if (!moves.length) return data;
+  const sums = new Map<string, number>();
+  for (const m of moves) sums.set(m.itemId, Math.round(((sums.get(m.itemId) || 0) + m.qty) * 1000) / 1000);
+  let changed = false;
+  const stock = data.stock.map((s) => {
+    const sum = sums.get(s.id);
+    if (sum === undefined || Math.abs((s.currentStock || 0) - sum) < 1e-9) return s;
+    changed = true;
+    return { ...s, currentStock: sum };
+  });
+  return changed ? { ...data, stock } : data;
 }
 
 function mergeById<T extends { id: string; updatedAt?: string }>(

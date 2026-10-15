@@ -115,7 +115,7 @@ export function InvoiceList({ data, business, onNew, onEdit, onPreview, onDelete
                     {inv.status}
                   </span>
                 </div>
-                <p className="mb-1 text-sm text-silver">{inv.partyName}</p>
+                <p className="mb-1 text-sm text-silver">{inv.partyName || "Walk-in"}</p>
                 <div className="mb-3 flex items-center justify-between text-xs text-silver">
                   <span>{formatDate(inv.date)}</span>
                   <span className="font-bold text-starlight">{formatCurrency(inv.grandTotal)}</span>
@@ -169,7 +169,7 @@ export function InvoiceList({ data, business, onNew, onEdit, onPreview, onDelete
                 {invoices.map((inv) => (
                   <tr key={inv.id} className="border-b border-lead/10 hover:bg-graphite/50">
                     <td className="p-4 text-starlight">{inv.invoiceNumber}</td>
-                    <td className="p-4 text-silver">{inv.partyName}</td>
+                    <td className="p-4 text-silver">{inv.partyName || "Walk-in"}</td>
                     <td className="p-4 text-silver">{formatDate(inv.date)}</td>
                     <td className="p-4 text-silver">{inv.type.replace(/_/g, " ")}</td>
                     <td className="p-4 text-right text-starlight">{formatCurrency(inv.grandTotal)}</td>

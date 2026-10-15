@@ -13,6 +13,7 @@ const RATE_LIMITS = {
   data_save: { windowMs: 60 * 1000, maxCalls: 30 },
   data_load: { windowMs: 60 * 1000, maxCalls: 30 },
   reports: { windowMs: 60 * 1000, maxCalls: 20 },
+  team: { windowMs: 60 * 1000, maxCalls: 20 },
   contact_form: { windowMs: 60 * 60 * 1000, maxCalls: 5 },
   account_delete: { windowMs: 60 * 60 * 1000, maxCalls: 3 },
   admin_portal: { windowMs: 60 * 1000, maxCalls: 30 },

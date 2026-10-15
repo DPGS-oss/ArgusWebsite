@@ -52,8 +52,18 @@ const phoneNoteFp = (p) => hash([str(p.credit_note_number || p.debit_note_number
 const webNoteFp = (w) => hash([str(w.creditNoteNumber || w.debitNoteNumber), str(w.status), r2(w.totalAmount), str(w.invoiceId), (w.items || []).length]);
 const phoneCustomerFp = (c) => hash([c.name, c.gstin, c.phone, c.email, c.billing_address ?? c.address, c.city, c.state, c.pincode].map(str));
 const webPartyFp = (p) => hash([p.name, p.gstin, p.phone, p.email, p.address, p.city, p.state, p.pincode].map(str));
-const phoneStockFp = (s) => hash([str(s.name), str(s.hsn_code), r2(s.gst_rate), r2(s.sell_price), r2(s.stock_on_hand), r2(s.reorder_level), str(s.barcode)]);
-const webStockFp = (s) => hash([str(s.name), str(s.hsn), r2(s.gstRate), r2(s.rate), r2(s.currentStock), r2(s.minStock), str(s.barcode)]);
+const stockExtras = (cost, valuation, batches, bom) => {
+  const bomKey = (Array.isArray(bom) ? bom : []).map((c) => `${str(c && c.itemId)}:${r2(c && c.qty)}`).join(',');
+  return cost || valuation === 'fifo' || batches || bomKey ? [r2(cost), valuation === 'fifo' ? 'fifo' : 'average', !!batches, bomKey] : [];
+};
+const phoneStockFp = (s) => hash([str(s.name), str(s.hsn_code), r2(s.gst_rate), r2(s.sell_price), r2(s.stock_on_hand), r2(s.reorder_level), str(s.barcode),
+  ...stockExtras(num(s.cost_price), str(s.valuation), s.track_batches === true, s.bom)]);
+const webStockFp = (s) => hash([str(s.name), str(s.hsn), r2(s.gstRate), r2(s.rate), r2(s.currentStock), r2(s.minStock), str(s.barcode),
+  ...stockExtras(num(s.costPrice), str(s.valuation), s.trackBatches === true, s.bom)]);
+const cleanBom = (bom) => (Array.isArray(bom) ? bom : [])
+  .filter((c) => c && str(c.itemId) && num(c.qty) > 0)
+  .slice(0, 50)
+  .map((c) => ({ itemId: str(c.itemId), qty: num(c.qty) }));
 
 // ------------------------------------------------------------- invoices
 
@@ -300,6 +310,10 @@ function phoneToWebStock(s, prev = {}) {
     rate: r2(num(s.sell_price) / (1 + gstRate / 100)),
     gstRate,
     barcode: str(s.barcode) || undefined,
+    costPrice: num(s.cost_price) || prev.costPrice || 0,
+    valuation: str(s.valuation) === 'fifo' ? 'fifo' : 'average',
+    trackBatches: s.track_batches === true,
+    bom: cleanBom(s.bom),
   };
 }
 
@@ -312,6 +326,10 @@ const webToPhoneStock = (s, now = new Date().toISOString()) => ({
   sell_price: r2(num(s.rate) * (1 + num(s.gstRate) / 100)),
   stock_on_hand: num(s.currentStock),
   reorder_level: num(s.minStock),
+  cost_price: num(s.costPrice),
+  valuation: s.valuation === 'fifo' ? 'fifo' : 'average',
+  track_batches: s.trackBatches === true,
+  bom: cleanBom(s.bom),
   updated_at: now,
 });
 
@@ -454,6 +472,118 @@ const KINDS = {
   purchases: { webKey: 'purchases', phoneFp: phonePurchaseFp, webFp: webPurchaseFp, ...purchaseKind },
 };
 
+// ------------------------------------------------------------- edit log
+// Append-only. The phone sends entries it has not sent before; the server
+// stamps `syncedAt` on every entry the first time it reaches the cloud and
+// returns those stamped after the phone's last sync (`auditSince`).
+
+const AUDIT_FIELDS = ['id', 'at', 'byUid', 'byName', 'device', 'action', 'entity', 'entityId', 'ref', 'detail'];
+
+function mergeAudit(data, sent, since, now) {
+  const log = Array.isArray(data.auditLog) ? data.auditLog.filter((e) => e && str(e.id)) : [];
+  const known = new Set(log.map((e) => str(e.id)));
+  for (const e of log) if (!e.syncedAt) e.syncedAt = now;
+  const sentIds = new Set();
+  for (const raw of Array.isArray(sent) ? sent.slice(0, 5000) : []) {
+    if (!raw || !str(raw.id)) continue;
+    const id = str(raw.id);
+    sentIds.add(id);
+    if (known.has(id)) continue;
+    const e = {};
+    for (const k of AUDIT_FIELDS) e[k] = str(raw[k]).slice(0, k === 'detail' ? 2000 : 200);
+    e.device = e.device === 'web' ? 'web' : 'android';
+    e.syncedAt = now;
+    log.push(e);
+    known.add(id);
+  }
+  log.sort((a, b) => str(a.at).localeCompare(str(b.at)));
+  data.auditLog = log;
+  return log.filter((e) => !sentIds.has(str(e.id)) && (!since || str(e.syncedAt) > since));
+}
+
+// ------------------------------------------------------------- stock movements
+// Movements never change once made, so both sides keep the union (by id).
+// With apps that record movements, the movements are the truth: each item's
+// quantity on hand is their sum, so a sale made on the phone and one made on
+// the website at the same time both count. Older app versions change stock
+// without movements; for them one "matched after sync" movement closes the gap.
+
+const MOVE_KINDS = new Set(['opening', 'purchase', 'sale', 'sale_return', 'purchase_return', 'transfer', 'adjust', 'produce', 'consume']);
+const r3 = (v) => Math.round(num(v) * 1000) / 1000;
+
+function cleanMove(m) {
+  const out = {
+    id: str(m.id).slice(0, 80),
+    itemId: str(m.itemId).slice(0, 80),
+    date: str(m.date).slice(0, 10),
+    kind: MOVE_KINDS.has(str(m.kind)) ? str(m.kind) : 'adjust',
+    qty: r3(m.qty),
+    godown: str(m.godown).slice(0, 60) || 'Main',
+    createdAt: str(m.createdAt).slice(0, 40),
+  };
+  for (const k of ['batch', 'expiry', 'ref', 'refId', 'note']) if (str(m[k])) out[k] = str(m[k]).slice(0, k === 'note' ? 200 : 80);
+  if (m.unitCost != null && Number.isFinite(Number(m.unitCost))) out.unitCost = num(m.unitCost);
+  return out;
+}
+
+const sameMove = (a, b) => r3(a.qty) === r3(b.qty) && str(a.godown || 'Main') === str(b.godown || 'Main') && str(a.batch) === str(b.batch) && str(a.itemId) === str(b.itemId);
+
+/**
+ * `sent` is the phone's movements (undefined from older app versions).
+ * Returns the movements the phone must add or replace (by id).
+ */
+function mergeStockMoves(data, sent, sentGodowns, now) {
+  const recordsMoves = Array.isArray(sent);
+  const moves = Array.isArray(data.stockMoves) ? data.stockMoves.filter((m) => m && str(m.id)) : [];
+  const byId = new Map(moves.map((m) => [str(m.id), m]));
+  const sentIds = new Set();
+  const differs = new Set();
+  for (const raw of recordsMoves ? sent.slice(0, 50000) : []) {
+    if (!raw || !str(raw.id) || !str(raw.itemId)) continue;
+    const id = str(raw.id);
+    sentIds.add(id);
+    const have = byId.get(id);
+    if (have) {
+      // Same id, different content (e.g. both sides made the opening stock): the cloud's copy wins.
+      if (!sameMove(have, raw)) differs.add(id);
+      continue;
+    }
+    const m = cleanMove(raw);
+    moves.push(m);
+    byId.set(id, m);
+  }
+  // Gone items take their movements with them.
+  const items = new Map((data.stock || []).map((s) => [str(s.id), s]));
+  const kept = moves.filter((m) => items.has(str(m.itemId)));
+  const sums = new Map();
+  for (const m of kept) sums.set(m.itemId, r3((sums.get(m.itemId) || 0) + num(m.qty)));
+  for (const [itemId, sum] of sums) {
+    const item = items.get(itemId);
+    const gap = r3(num(item.currentStock) - sum);
+    if (Math.abs(gap) < 1e-9) continue;
+    if (recordsMoves) {
+      // The movements are the truth; the phone works out the same sum, so keep both sides in step.
+      const inStep = item._sync && item._sync.w === webStockFp(item);
+      item.currentStock = sum;
+      if (inStep) item._sync = { p: phoneStockFp(webToPhoneStock(item)), w: webStockFp(item) };
+    } else {
+      kept.push({
+        id: `mv_sync_${crypto.randomUUID()}`, itemId, date: now.slice(0, 10), kind: 'adjust', qty: gap, godown: 'Main',
+        note: 'Matched to stock after sync', createdAt: now,
+      });
+    }
+  }
+  data.stockMoves = kept;
+  const names = [...(Array.isArray(data.godowns) ? data.godowns : []), ...(Array.isArray(sentGodowns) ? sentGodowns : [])]
+    .map((g) => str(g).slice(0, 60))
+    .filter((g) => g && g !== 'Main');
+  data.godowns = [...new Set(names)].slice(0, 100);
+  return kept.filter((m) => !sentIds.has(str(m.id)) || differs.has(str(m.id)));
+}
+
+const ISSUED_DOCS = new Set(['invoices', 'creditNotes', 'debitNotes']);
+const isDraft = (w) => str(w.status).toLowerCase() === 'draft';
+
 /**
  * Merge what the phone sent into `appData` (mutated copy returned) and work
  * out which records the phone must upsert.
@@ -466,8 +596,14 @@ function mergePhoneSync(appData, phone, now = new Date().toISOString()) {
   const phoneDeleted = (phone && phone.deleted) || {};
   for (const [kind, k] of Object.entries(KINDS)) {
     const tomb = (deleted[k.webKey] = deleted[k.webKey] || {});
+    // Issued bills and notes are never deleted (GST law: cancel or issue a note);
+    // only drafts, or records the cloud never had, can be removed.
+    const current = new Map((Array.isArray(data[k.webKey]) ? data[k.webKey] : []).map((w) => [str(w && w.id), w]));
     for (const id of Array.isArray(phoneDeleted[kind]) ? phoneDeleted[kind] : []) {
-      if (str(id)) tomb[str(id)] = tomb[str(id)] || now;
+      if (!str(id)) continue;
+      const w = current.get(str(id));
+      if (ISSUED_DOCS.has(kind) && w && !isDraft(w)) continue;
+      tomb[str(id)] = tomb[str(id)] || now;
     }
     const web = (Array.isArray(data[k.webKey]) ? data[k.webKey] : []).filter((w) => !(w && tomb[str(w.id)]));
     const index = new Map(web.map((w, i) => [str(w && w.id), i]));
@@ -524,6 +660,17 @@ function mergePhoneSync(appData, phone, now = new Date().toISOString()) {
   }
   data.invoiceCounter = Math.max(num(data.invoiceCounter), data.invoices.length);
   data.deleted = deleted;
+  out.auditLog = mergeAudit(data, phone.auditLog, str(phone.auditSince), now);
+  out.auditSince = now;
+  // Older app versions send no movements and get none back, but their stock
+  // changes are still matched in the website's movements.
+  const newMoves = mergeStockMoves(data, phone.stockMoves, phone.godowns, now);
+  if (Array.isArray(phone.stockMoves)) {
+    out.stockMoves = newMoves;
+    out.godowns = data.godowns;
+    const fresh = new Map(data.stock.map((w) => [str(w.id), w]));
+    out.inventory = (out.inventory || []).map((p) => (fresh.has(str(p.id)) ? webToPhoneStock(fresh.get(str(p.id)), now) : p));
+  }
   return { appData: stripUndefined(data), toPhone: out };
 }
 
@@ -548,6 +695,8 @@ function stripUndefined(v) {
 
 module.exports = {
   mergePhoneSync,
+  isDraft,
+  mergeStockMoves,
   phoneToWebInvoice,
   webToPhoneInvoice,
   phoneToWebParty,

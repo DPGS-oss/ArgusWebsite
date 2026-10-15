@@ -13,6 +13,9 @@ const { apiAsk } = require('./ask');
 exports.apiAsk = apiAsk;
 const { apiReports } = require('./reports');
 exports.apiReports = apiReports;
+const { apiTeam } = require('./team');
+exports.apiTeam = apiTeam;
+const teamAccess = require('./_shared/team');
 const { rotateAdminAccessKey } = require('./_shared/admin-key');
 const { notifySubscriptionChange } = require('./_shared/subscription-email');
 const { checkRateLimit } = require('./_shared/rate-limit');
@@ -98,6 +101,8 @@ const RAZORPAY_SECRETS = ['RAZORPAY_KEY_ID', 'RAZORPAY_KEY_SECRET', 'RAZORPAY_WE
 // Webhook HMAC is fail-closed in handler when RAZORPAY_WEBHOOK_SECRET is missing.
 
 const SUBSCRIPTION_PLANS = new Set(['business', 'business_monthly', 'business_yearly']);
+
+const escHtml = (v) => String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
 function extractToken(req) {
   const authHeader = req.headers.authorization || '';
@@ -193,8 +198,21 @@ exports.apiAuthSync = onRequest({ region: 'us-central1', maxInstances: 10, secre
     return res.status(200).json({ user, requires_subscription: true });
   }
 
-  return res.status(200).json({ user });
+  return res.status(200).json({ user: await withBooks(uid, user) });
 });
+
+/** A team member's profile carries the owner's plan and which books they open. */
+async function withBooks(uid, user) {
+  if (!user) return user;
+  try {
+    const { ctx, planUser } = await teamAccess.booksAccess(getDb(), getUser, uid);
+    const books = { booksUid: ctx.booksUid, role: ctx.role, access: ctx.access, series: ctx.series, ownerName: ctx.ownerName || '' };
+    return ctx.role === 'member' ? { ...user, subscription: planUser ? planUser.subscription || null : null, books } : { ...user, books };
+  } catch (e) {
+    console.error('team lookup failed', e);
+    return user;
+  }
+}
 
 // ==================== /api/user/profile ====================
 // ==================== /api/subscription/cancel ====================
@@ -364,7 +382,7 @@ exports.apiUserProfile = onRequest({ region: 'us-central1', maxInstances: 10, se
 
     const user = await getUser(uid);
     if (!user) return res.status(404).json({ error: 'User not found' });
-    return res.status(200).json({ user });
+    return res.status(200).json({ user: await withBooks(uid, user) });
   }
 
   if (req.method === 'PUT') {
@@ -477,12 +495,10 @@ exports.apiContact = onRequest(
         message,
       ].join('\n'),
       html: [
-        `<p><strong>From:</strong> ${name} &lt;${email}&gt;</p>`,
-        `<p><strong>Subject:</strong> ${subject}</p>`,
-        `<pre style="white-space:pre-wrap;font-family:inherit">${message
-          .replace(/&/g, '&amp;')
-          .replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;')}</pre>`,
+        // Everything the visitor typed is escaped: shown as text, never as HTML.
+        `<p><strong>From:</strong> ${escHtml(name)} &lt;${escHtml(email)}&gt;</p>`,
+        `<p><strong>Subject:</strong> ${escHtml(subject)}</p>`,
+        `<pre style="white-space:pre-wrap;font-family:inherit">${escHtml(message)}</pre>`,
       ].join('\n'),
     });
     if (!mail.sent) {
@@ -1625,6 +1641,8 @@ exports.apiAccountDelete = onRequest({ region: 'us-central1', maxInstances: 10, 
     }
     try {
       const auth = getAuth();
+      // Leave any shared books; close this person's own team.
+      await teamAccess.removeFromTeams(db, uid);
       // Delete Firestore user document
       await db.collection('users').doc(uid).delete();
       await db.collection('users').doc(uid).collection('app_data').doc('main').delete();
@@ -1661,7 +1679,8 @@ exports.apiDataLoad = onRequest({ region: 'us-central1', maxInstances: 10, secre
   }
 
   const uid = decoded.uid;
-  const user = await getUser(uid);
+  // Someone on the owner's team works on the owner's books, under the owner's plan.
+  const { ctx: books, planUser: user } = await teamAccess.booksAccess(getDb(), getUser, uid);
   if (!hasActiveBusinessSubscription(user)) {
     return res.status(402).json({
       error: 'Business subscription required for cloud sync',
@@ -1677,17 +1696,19 @@ exports.apiDataLoad = onRequest({ region: 'us-central1', maxInstances: 10, secre
   const db = getDb();
 
   try {
-    const doc = await db.collection('users').doc(uid).collection('app_data').doc('main').get();
+    const doc = await db.collection('users').doc(books.booksUid).collection('app_data').doc('main').get();
+    const booksInfo = { booksUid: books.booksUid, role: books.role, access: books.access, series: books.series };
     if (doc.exists) {
       const data = doc.data();
       const { resolveAppData } = require('./_shared/app_data');
       return res.status(200).json({
-        data: resolveAppData(data),
+        data: teamAccess.viewFor(resolveAppData(data), books.access),
         updated_at: data.updated_at || null,
         version: data.version || 1,
+        books: booksInfo,
       });
     }
-    return res.status(200).json({ data: null, updated_at: null, version: 0 });
+    return res.status(200).json({ data: null, updated_at: null, version: 0, books: booksInfo });
   } catch (error) {
     console.error('Data load error:', error);
     return res.status(500).json({ error: 'Failed to load data' });
@@ -1695,6 +1716,14 @@ exports.apiDataLoad = onRequest({ region: 'us-central1', maxInstances: 10, secre
 });
 
 // ==================== /api/data/save ====================
+/** Server copy of the edit log wins for every entry it has; new entries are added. */
+function keepAuditLog(stored, incoming) {
+  const byId = new Map();
+  for (const e of Array.isArray(incoming) ? incoming : []) if (e && e.id) byId.set(String(e.id), e);
+  for (const e of stored) if (e && e.id) byId.set(String(e.id), e);
+  return [...byId.values()].sort((a, b) => String(a.at || '').localeCompare(String(b.at || '')));
+}
+
 exports.apiDataSave = onRequest({ region: 'us-central1', maxInstances: 10, secrets: FIREBASE_SECRETS }, async (req, res) => {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -1709,7 +1738,8 @@ exports.apiDataSave = onRequest({ region: 'us-central1', maxInstances: 10, secre
   }
 
   const uid = decoded.uid;
-  const user = await getUser(uid);
+  // Someone on the owner's team works on the owner's books, under the owner's plan.
+  const { ctx: books, planUser: user } = await teamAccess.booksAccess(getDb(), getUser, uid);
   if (!hasActiveBusinessSubscription(user)) {
     return res.status(402).json({
       error: 'Business subscription required for cloud sync',
@@ -1736,9 +1766,14 @@ exports.apiDataSave = onRequest({ region: 'us-central1', maxInstances: 10, secre
     });
   }
 
+  // A browser that opened other books (joined or left a team since) must reload first.
+  if (books.role === 'member' && body.books_uid !== books.booksUid) {
+    return res.status(409).json({ error: 'books_changed', books_uid: books.booksUid });
+  }
+
   const db = getDb();
   const now = new Date().toISOString();
-  const ref = db.collection('users').doc(uid).collection('app_data').doc('main');
+  const ref = db.collection('users').doc(books.booksUid).collection('app_data').doc('main');
 
   try {
     // Optimistic concurrency: if the phone synced since this browser last
@@ -1749,8 +1784,15 @@ exports.apiDataSave = onRequest({ region: 'us-central1', maxInstances: 10, secre
       if (body.base_updated_at !== undefined && current && body.base_updated_at !== current) {
         return current;
       }
+      // The edit log only grows: entries already in the cloud are kept as they
+      // are, whatever the browser sends.
+      const storedData = snap.exists && snap.data().appData ? snap.data().appData : null;
+      const stored = storedData && Array.isArray(storedData.auditLog) ? storedData.auditLog : [];
+      // Billing-only users cannot change purchases, expenses, payroll or settings.
+      const incoming = books.role === 'member' ? teamAccess.mergeMemberSave(storedData, body.appData, books.access) : body.appData;
+      const appData = { ...incoming, auditLog: keepAuditLog(stored, body.appData.auditLog) };
       tx.set(ref, {
-        appData: body.appData,
+        appData,
         updated_at: now,
         version: body.version || 1,
         device: body.device || 'unknown',
@@ -1785,7 +1827,14 @@ exports.apiDataPhoneSync = onRequest({ region: 'us-central1', maxInstances: 10, 
   }
 
   const uid = decoded.uid;
-  const user = await getUser(uid);
+  // Someone on the owner's team works on the owner's books, under the owner's plan.
+  const { ctx: books, planUser: user } = await teamAccess.booksAccess(getDb(), getUser, uid);
+  // Checked before the plan: someone who left a team (even without a plan of
+  // their own) must still be told to take the owner's books off their phone.
+  const sentBooks = req.body && typeof req.body.booksUid === 'string' ? req.body.booksUid : '';
+  if (sentBooks && sentBooks !== books.booksUid) {
+    return res.status(409).json({ error: 'books_changed', books_uid: books.booksUid });
+  }
   if (!hasActiveBusinessSubscription(user)) {
     return res.status(402).json({
       error: 'Business subscription required for cloud sync',
@@ -1794,6 +1843,14 @@ exports.apiDataPhoneSync = onRequest({ region: 'us-central1', maxInstances: 10, 
   }
 
   const body = req.body || {};
+  // The phone says whose books it holds; after joining or leaving a team it
+  // must clear them first, so one person's bills never land in another's books.
+  if (books.role === 'member' && typeof body.booksUid !== 'string') {
+    return res.status(426).json({ error: 'Update the Argus app to use shared books.' });
+  }
+  if (typeof body.booksUid === 'string' && body.booksUid && body.booksUid !== books.booksUid) {
+    return res.status(409).json({ error: 'books_changed', books_uid: books.booksUid });
+  }
   const phone = {
     invoices: Array.isArray(body.invoices) ? body.invoices : [],
     customers: Array.isArray(body.customers) ? body.customers : [],
@@ -1801,8 +1858,17 @@ exports.apiDataPhoneSync = onRequest({ region: 'us-central1', maxInstances: 10, 
     creditNotes: Array.isArray(body.creditNotes) ? body.creditNotes : [],
     debitNotes: Array.isArray(body.debitNotes) ? body.debitNotes : [],
     purchases: Array.isArray(body.purchases) ? body.purchases : [],
+    auditLog: Array.isArray(body.auditLog) ? body.auditLog : [],
+    auditSince: typeof body.auditSince === 'string' ? body.auditSince : '',
     deleted: body.deleted && typeof body.deleted === 'object' ? body.deleted : {},
   };
+  if (Array.isArray(body.stockMoves)) phone.stockMoves = body.stockMoves;
+  if (Array.isArray(body.godowns)) phone.godowns = body.godowns;
+  const billingOnly = books.role === 'member' && books.access === 'billing';
+  if (billingOnly) {
+    phone.purchases = [];
+    phone.deleted = { ...phone.deleted, purchases: [] };
+  }
   if (Buffer.byteLength(JSON.stringify(phone), 'utf8') > 4_000_000) {
     return res.status(413).json({ error: 'Payload too large (max 4MB)' });
   }
@@ -1813,7 +1879,7 @@ exports.apiDataPhoneSync = onRequest({ region: 'us-central1', maxInstances: 10, 
   }
 
   const db = getDb();
-  const ref = db.collection('users').doc(uid).collection('app_data').doc('main');
+  const ref = db.collection('users').doc(books.booksUid).collection('app_data').doc('main');
   const { resolveAppData } = require('./_shared/app_data');
   const { mergePhoneSync } = require('./_shared/phone_sync');
 
@@ -1832,7 +1898,11 @@ exports.apiDataPhoneSync = onRequest({ region: 'us-central1', maxInstances: 10, 
       }, { merge: true });
       return { toPhone, now };
     });
-    return res.status(200).json({ success: true, updated_at: result.now, ...result.toPhone });
+    const toPhone = billingOnly
+      ? { ...result.toPhone, purchases: [], auditLog: teamAccess.auditForBilling(result.toPhone.auditLog) }
+      : result.toPhone;
+    const booksInfo = { booksUid: books.booksUid, role: books.role, access: books.access, series: books.series };
+    return res.status(200).json({ success: true, updated_at: result.now, ...toPhone, books: booksInfo });
   } catch (error) {
     console.error('Phone sync error:', error);
     return res.status(500).json({ error: 'Failed to sync' });
