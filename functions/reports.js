@@ -15,6 +15,7 @@ const { resolveAppData } = require('./_shared/app_data');
 const { buildGstr9, gstr9Rows, exemptReport } = require('./_shared/gstr9');
 const { parse2b, match2b, itcTotals } = require('./_shared/gstr2b');
 const { sellerGstinFromAppData } = require('./_shared/ca-exports');
+const { booksAccess } = require('./_shared/team');
 
 function extractToken(req) {
   const header = req.get('authorization') || '';
@@ -52,7 +53,10 @@ exports.apiReports = onRequest({ region: 'us-central1', maxInstances: 10, memory
   } catch (_) {
     return res.status(401).json({ error: 'Invalid or expired token' });
   }
-  const user = await getUser(decoded.uid);
+  // Someone on the owner's team works on the owner's books, under the owner's plan.
+  const { ctx, planUser: user } = await booksAccess(getDb(), getUser, decoded.uid);
+  if (ctx.access === 'billing') return res.status(403).json({ error: 'GST reports are for the owner and users with full access' });
+  const booksUid = ctx.booksUid;
   if (!hasActiveBusinessSubscription(user)) {
     return res.status(402).json({ error: 'GST reports need the Business plan', requires_subscription: true });
   }
@@ -63,7 +67,7 @@ exports.apiReports = onRequest({ region: 'us-central1', maxInstances: 10, memory
   try {
     if (req.method === 'GET' && path.endsWith('/reports/gstr9')) {
       const fy = /^\d{4}-\d{2}$/.test(String(req.query.fy || '')) ? String(req.query.fy) : currentFy();
-      const { data } = await loadBooks(decoded.uid);
+      const { data } = await loadBooks(booksUid);
       const report = buildGstr9(data, fy, itcByMonth(data));
       return res.status(200).json({ gstin: sellerGstinFromAppData(data), report, rows: gstr9Rows(report) });
     }
@@ -76,7 +80,7 @@ exports.apiReports = onRequest({ region: 'us-central1', maxInstances: 10, memory
       if (!parsed.docs.length && !parsed.period) {
         return res.status(400).json({ error: 'This does not look like a GSTR-2B file. Download it from Returns → GSTR-2B → Download JSON.' });
       }
-      const { ref, data } = await loadBooks(decoded.uid);
+      const { ref, data } = await loadBooks(booksUid);
       const own = String(sellerGstinFromAppData(data) || '').toUpperCase();
       if (parsed.gstin && own && parsed.gstin !== own) {
         return res.status(400).json({ error: `This GSTR-2B is for ${parsed.gstin}, but your business GSTIN is ${own}.` });
@@ -106,7 +110,7 @@ exports.apiReports = onRequest({ region: 'us-central1', maxInstances: 10, memory
     if (req.method === 'GET' && path.endsWith('/reports/exempt')) {
       const from = DAY.test(String(req.query.from || '')) ? String(req.query.from) : `${currentFy().slice(0, 4)}-04-01`;
       const to = DAY.test(String(req.query.to || '')) ? String(req.query.to) : new Date().toISOString().slice(0, 10);
-      const { data } = await loadBooks(decoded.uid);
+      const { data } = await loadBooks(booksUid);
       return res.status(200).json(exemptReport(data, from, to));
     }
 

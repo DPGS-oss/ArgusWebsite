@@ -140,8 +140,11 @@ async function idbDelete(key: string): Promise<void> {
   });
 }
 
+let claimLegacy = true;
+
 /** Pre-scoping books (single shared key) go to the first account that signs in, once. */
 async function claimLegacyBooks(uid: string): Promise<AppData | null> {
+  if (!claimLegacy) return null;
   try {
     const owner = await idbGet<string>(LEGACY_OWNER_KEY);
     if (owner && owner !== uid) return null;
@@ -163,7 +166,9 @@ async function claimLegacyBooks(uid: string): Promise<AppData | null> {
 }
 
 /** Call on web app boot, with the signed-in uid, before relying on loadData/saveData. */
-export async function initStorage(uid = ""): Promise<AppData> {
+export async function initStorage(uid = "", opts: { claimLegacy?: boolean } = {}): Promise<AppData> {
+  // Someone opening another person's books (a team) never takes this browser's old books there.
+  claimLegacy = opts.claimLegacy !== false;
   if (typeof window === "undefined") return getDefaultData();
   if (uid !== scopeUid) {
     // Account changed: persist anything pending under the old account, then start clean.
@@ -582,6 +587,15 @@ export function invoiceSeries(prefix: string, date: string = todayIST()): string
  * "INV/26-27/0001", so a phone working offline and the website can never hand
  * out the same number.
  */
+/**
+ * This person's bill series on the website: "W" for the owner, "W" plus a
+ * letter for each other user, so two people never issue the same number.
+ */
+let billSeries = "";
+export function setBillSeries(series: string) {
+  billSeries = String(series || "").replace(/[^A-Z]/g, "").slice(0, 1);
+}
+
 export function generateInvoiceNumber(
   invoices: ReadonlyArray<{ invoiceNumber: string }>,
   prefix: string,
@@ -590,14 +604,16 @@ export function generateInvoiceNumber(
   const p = cleanPrefix(prefix);
   const fy = financialYear(date);
   let max = 0;
+  const tag = `W${billSeries}`;
+  const pattern = new RegExp(`^([A-Z0-9-]{1,4})\\/(\\d{2}-\\d{2})\\/${tag}(\\d+)$`);
   for (const inv of invoices) {
-    const m = /^([A-Z0-9-]{1,4})\/(\d{2}-\d{2})\/W(\d+)$/.exec(inv.invoiceNumber || "");
+    const m = pattern.exec(inv.invoiceNumber || "");
     if (!m || m[2] !== fy || !p.startsWith(m[1])) continue;
     max = Math.max(max, Number(m[3]));
   }
   const num = String(max + 1).padStart(4, "0");
-  // "/26-27/W" is 8 characters; past 9,999 bills the prefix gives up a letter.
-  return `${p.slice(0, Math.max(1, Math.min(4, 16 - 8 - num.length)))}/${fy}/W${num}`;
+  // "/26-27/W" is 8 characters (9 with a user letter); past 9,999 bills the prefix gives up a letter.
+  return `${p.slice(0, Math.max(1, Math.min(4, 16 - 7 - tag.length - num.length)))}/${fy}/${tag}${num}`;
 }
 
 export function exportAllData(): string {

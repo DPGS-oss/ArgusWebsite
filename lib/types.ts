@@ -437,6 +437,7 @@ export type View =
   | "dashboard"
   | "gst-returns"
   | "edit-log"
+  | "team"
   | "invoices"
   | "invoice-form"
   | "invoice-preview"

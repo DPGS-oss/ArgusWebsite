@@ -29,8 +29,12 @@ import {
   keepSubscriptionOnSyncFailure,
 } from "./entitlement";
 
+import type { TeamBooks } from "./team";
+export type { TeamBooks } from "./team";
+
 export type AppUser = {
   name: string;
+  books?: TeamBooks;
   email: string;
   business_name?: string;
   gstin?: string;
@@ -124,8 +128,24 @@ function mapBackendUser(u: Record<string, unknown>): AppUser {
     referredBy: u.referred_by ? String(u.referred_by) : undefined,
     trial_used: u.trial_used === true,
     trial_started_at: u.trial_started_at ? String(u.trial_started_at) : undefined,
+    books: mapBooks(u.books),
   };
 }
+
+function mapBooks(b: unknown): TeamBooks | undefined {
+  if (!b || typeof b !== "object") return undefined;
+  const o = b as Record<string, unknown>;
+  if (!o.booksUid) return undefined;
+  return {
+    booksUid: String(o.booksUid),
+    role: o.role === "member" ? "member" : "owner",
+    access: o.access === "billing" ? "billing" : "full",
+    series: String(o.series || "").replace(/[^A-Z]/g, "").slice(0, 1),
+    ownerName: o.ownerName ? String(o.ownerName) : undefined,
+  };
+}
+
+export { canOpenView, OWNER_ONLY_VIEWS } from "./team";
 
 async function syncUserWithBackend(token: string, name?: string): Promise<AppUser | null> {
   const response = await fetch("/api/auth/sync", {

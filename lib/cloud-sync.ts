@@ -7,6 +7,12 @@ const SYNC_VERSION = 1;
 const LAST_SYNC_KEY = "argus_last_sync";
 const CLOUD_UPDATED_KEY = "argus_cloud_updated";
 
+/** Whose books this browser holds (the owner's, for someone on a team). */
+let booksUid = "";
+export function setBooksUid(uid: string) {
+  booksUid = uid;
+}
+
 export type SyncStatus = "idle" | "syncing" | "synced" | "error" | "offline";
 
 export function getLastSyncTime(): string | null {
@@ -64,10 +70,19 @@ export async function saveCloudData(
         version: SYNC_VERSION,
         device,
         base_updated_at: baseUpdatedAt,
+        books_uid: booksUid || undefined,
       }),
     });
 
-    if (response.status === 409) return "conflict";
+    if (response.status === 409) {
+      const body = await response.clone().json().catch(() => ({}));
+      // Joined or left a team since this page opened: start again with the right books.
+      if (body && body.error === "books_changed") {
+        window.location.reload();
+        return false;
+      }
+      return "conflict";
+    }
     if (!response.ok) return false;
 
     const result = await response.json();

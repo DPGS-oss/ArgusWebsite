@@ -32,6 +32,7 @@ type SidebarProps = {
   onPickFolder: () => void;
   onSync?: () => void;
   syncStatus?: string;
+  canOpen?: (view: View) => boolean;
 };
 
 const menuItems: { view: View; label: string; icon: typeof LayoutDashboard }[] = [
@@ -56,11 +57,12 @@ const menuItems: { view: View; label: string; icon: typeof LayoutDashboard }[] =
   { view: "reports", label: "GSTR Reports", icon: BarChart3 },
   { view: "business", label: "Business", icon: LayoutDashboard },
   { view: "edit-log", label: "Edit log", icon: ClipboardCheck },
+  { view: "team", label: "Users", icon: Users },
   { view: "settings", label: "Settings", icon: SettingsIcon },
   { view: "files", label: "Files", icon: FolderOpen },
 ];
 
-export function Sidebar({ view, onNavigate, onPickFolder, onSync, syncStatus }: SidebarProps) {
+export function Sidebar({ view, onNavigate, onPickFolder, onSync, syncStatus, canOpen }: SidebarProps) {
   const folderName = getFolderName();
   const usingFS = isUsingFileSystem();
 
@@ -71,7 +73,7 @@ export function Sidebar({ view, onNavigate, onPickFolder, onSync, syncStatus }: 
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3 py-4">
-        {menuItems.map(({ view: v, label, icon: Icon }) => (
+        {menuItems.filter(({ view: v }) => !canOpen || canOpen(v)).map(({ view: v, label, icon: Icon }) => (
           <button
             key={v}
             onClick={() => onNavigate(v)}
