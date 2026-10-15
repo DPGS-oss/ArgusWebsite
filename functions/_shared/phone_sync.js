@@ -654,12 +654,32 @@ function mergePhoneSync(appData, phone, now = new Date().toISOString()) {
     data[k.webKey] = web;
     out[kind] = toPhone;
   }
+  // The business itself: a phone that has one fills an empty website; the
+  // website's active business goes back so a new phone is set up at once.
+  const pb = phone.business && typeof phone.business === 'object' ? phone.business : null;
+  if (!data.businesses.length && pb && str(pb.name)) {
+    const gstin = str(pb.gstin).toUpperCase();
+    data.businesses = [{
+      id: 'biz-phone', name: str(pb.name).slice(0, 200), gstin, pan: gstin.length === 15 ? gstin.slice(2, 12) : '',
+      address: str(pb.address).slice(0, 500), city: str(pb.city).slice(0, 100), state: str(pb.state).slice(0, 100),
+      stateCode: /^\d{2}/.test(gstin) ? gstin.slice(0, 2) : '', pincode: str(pb.pincode).slice(0, 10),
+      phone: str(pb.phone).slice(0, 20), email: str(pb.email).slice(0, 200), composition: pb.composition === true,
+    }];
+  }
   if (!data.activeBusinessId && data.businesses[0]) data.activeBusinessId = data.businesses[0].id;
   for (const inv of data.invoices) {
     if (!inv.businessId && data.activeBusinessId) inv.businessId = data.activeBusinessId;
   }
   data.invoiceCounter = Math.max(num(data.invoiceCounter), data.invoices.length);
   data.deleted = deleted;
+  const active = data.businesses.find((b) => b && b.id === data.activeBusinessId) || data.businesses[0];
+  if (active) {
+    out.business = {
+      name: str(active.name), gstin: str(active.gstin), address: str(active.address), city: str(active.city),
+      state: str(active.state), pincode: str(active.pincode), phone: str(active.phone), email: str(active.email),
+      composition: active.composition === true,
+    };
+  }
   out.auditLog = mergeAudit(data, phone.auditLog, str(phone.auditSince), now);
   out.auditSince = now;
   // Older app versions send no movements and get none back, but their stock

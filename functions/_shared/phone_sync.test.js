@@ -263,3 +263,17 @@ test('a phone cannot delete an issued bill; a draft can be deleted', () => {
   assert.ok(!r.appData.deleted.invoices.i1);
   assert.ok(r.appData.deleted.invoices.d1);
 });
+
+test('business details: the phone fills an empty website; the website business goes to the phone', () => {
+  const { mergePhoneSync } = require('./phone_sync');
+  const fromPhone = mergePhoneSync({}, { business: { name: 'Mehta Medical', gstin: '27AAPFU0939F1ZV', state: 'Maharashtra' }, invoices: [] });
+  assert.equal(fromPhone.appData.businesses[0].name, 'Mehta Medical');
+  assert.equal(fromPhone.appData.businesses[0].stateCode, '27');
+  assert.equal(fromPhone.appData.activeBusinessId, 'biz-phone');
+  assert.equal(fromPhone.toPhone.business.gstin, '27AAPFU0939F1ZV');
+  // A website that already has a business keeps it.
+  const web = { businesses: [{ id: 'b1', name: 'Web Name', gstin: '07AAKFS1234M1ZZ' }], activeBusinessId: 'b1' };
+  const r = mergePhoneSync(web, { business: { name: 'Other' } });
+  assert.equal(r.appData.businesses.length, 1);
+  assert.equal(r.toPhone.business.name, 'Web Name');
+});
