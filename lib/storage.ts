@@ -4,6 +4,7 @@ import type { AppData, AppSettings, BusinessProfile, Invoice, Party, StockItem, 
 import { cancelledEntry } from "./invoice-history";
 import { financialYear, todayIST } from "./dates";
 import { appendAudit, auditEntry, describeFields } from "./audit";
+import { MAIN_GODOWN, ensureOpeningMoves, recordMoves, reverseMoves, saleMoves, type StockMove } from "./stock";
 import { describeChanges } from "./invoice-history";
 const inr = (n: number) => `₹${(Number(n) || 0).toFixed(2)}`;
 
@@ -705,25 +706,51 @@ export function cancelInvoice(id: string): void {
   // The goods on a cancelled bill go back into stock.
   const bill = before.find((i) => i.id === id && i.status !== "cancelled" && i.status !== "draft");
   if (bill) appendAudit(data, auditEntry({ action: "cancelled", entity: "bill", entityId: id, ref: bill.invoiceNumber, detail: `Bill cancelled (${inr(bill.grandTotal)}); stock returned` }));
-  for (const item of bill?.items || []) {
-    const stock = item.stockItemId ? data.stock.find((s) => s.id === item.stockItemId) : undefined;
-    if (stock) stock.currentStock += item.quantity;
+  let next = ensureOpeningMoves(data);
+  if (bill) {
+    let back: Omit<StockMove, "id" | "createdAt">[] = reverseMoves(next, id, "sale_return", todayIST(), `Bill ${bill.invoiceNumber} cancelled`);
+    // Bills from before stock movements were kept: put back what the bill lists.
+    if (!back.length) {
+      back = bill.items
+        .filter((l) => l.stockItemId && next.stock.some((s) => s.id === l.stockItemId))
+        .map((l) => ({ itemId: l.stockItemId!, date: todayIST(), kind: "sale_return" as const, qty: l.quantity, godown: MAIN_GODOWN, refId: id, ref: bill.invoiceNumber, note: `Bill ${bill.invoiceNumber} cancelled` }));
+    }
+    next = recordMoves(next, back);
   }
-  saveData(data);
+  saveData(next);
 }
 
 export function saveStockItem(item: StockItem): void {
-  const data = loadData();
+  let data = ensureOpeningMoves(loadData());
   const idx = data.stock.findIndex((s) => s.id === item.id);
+  const before = data.stock[idx];
   const changes = describeFields(data.stock[idx], item, { name: "Name", hsn: "HSN", rate: "Price", gstRate: "GST %", currentStock: "Stock", minStock: "Minimum stock" });
   if (idx < 0 || changes) {
     appendAudit(data, auditEntry({ action: idx < 0 ? "created" : "edited", entity: "stock", entityId: item.id, ref: item.name, detail: changes || `Item added with stock ${item.currentStock}` }));
   }
+  // Stock counts change only through movements: opening stock for a new
+  // item, an adjustment when the count is corrected by hand.
+  const target = item.currentStock || 0;
+  const was = before ? before.currentStock || 0 : 0;
   if (idx >= 0) {
-    data.stock[idx] = item;
+    data.stock[idx] = { ...item, currentStock: was };
   } else {
-    data.stock.push(item);
+    data.stock.push({ ...item, currentStock: 0 });
   }
+  if (target !== was) {
+    data = recordMoves(data, [{
+      itemId: item.id, date: todayIST(), kind: idx < 0 ? "opening" : "adjust", qty: target - was, godown: MAIN_GODOWN,
+      unitCost: target > was ? item.costPrice || 0 : undefined, note: idx < 0 ? "Opening stock" : "Stock count corrected",
+    }]);
+  }
+  saveData(data);
+}
+
+/** Records stock movements (purchases, transfers, adjustments, production). */
+export function saveStockMoves(moves: Omit<StockMove, "id" | "createdAt">[], audit?: { ref: string; detail: string }): void {
+  let data = ensureOpeningMoves(loadData());
+  data = recordMoves(data, moves);
+  if (audit && moves[0]) appendAudit(data, auditEntry({ action: "recorded", entity: "stock", entityId: moves[0].itemId, ref: audit.ref, detail: audit.detail }));
   saveData(data);
 }
 
@@ -740,16 +767,10 @@ export function bulkSaveStockItems(items: StockItem[]): void {
   saveData(data);
 }
 
+/** Takes a bill's goods out of stock (earliest-expiring batches first). */
 export function deductStockForInvoice(invoice: Invoice): void {
-  const data = loadData();
-  for (const item of invoice.items) {
-    if (item.stockItemId) {
-      const stockIdx = data.stock.findIndex((s) => s.id === item.stockItemId);
-      if (stockIdx >= 0) {
-        data.stock[stockIdx].currentStock = Math.max(0, data.stock[stockIdx].currentStock - item.quantity);
-      }
-    }
-  }
+  let data = ensureOpeningMoves(loadData());
+  data = recordMoves(data, saleMoves(data, invoice));
   saveData(data);
 }
 

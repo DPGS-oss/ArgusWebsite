@@ -147,3 +147,18 @@ describe("what a customer still owes on a bill", () => {
     expect(more.status).toBe("unpaid");
   });
 });
+
+describe("profit with stock", () => {
+  it("cost of goods sold = opening stock + purchases − closing stock", async () => {
+    const { recordMoves, MAIN_GODOWN } = await import("./stock");
+    let d = { ...data(), stock: [{ id: "s", name: "Almirah", hsn: "9403", unit: "NOS", openingStock: 0, currentStock: 0, minStock: 0, rate: 150, gstRate: 18 }] } as unknown as AppData;
+    // Bought 10 at ₹100 (+18% GST, claimable); sold 4 at ₹150 before GST.
+    d = { ...d, purchases: [{ id: "pu", purchaseNumber: "P1", supplierName: "W", supplierGstin: "07AAPFU0939F1ZX", totalAmount: 1180, totalGstAmount: 180, items: [], createdAt: "2026-10-01", paidAmount: 1180 } as unknown as AppData["purchases"][number]] };
+    d = recordMoves(d, [
+      { itemId: "s", date: "2026-10-01", kind: "purchase", qty: 10, godown: MAIN_GODOWN, unitCost: 100 },
+      { itemId: "s", date: "2026-10-02", kind: "sale", qty: -4, godown: MAIN_GODOWN },
+    ]);
+    d = { ...d, invoices: [{ id: "i", status: "paid", grandTotal: 708, totalTax: 108 } as unknown as Invoice] };
+    expect(profitAndLoss(d)).toEqual({ sales: 600, cogs: 400, expenses: 0, profit: 200 });
+  });
+});

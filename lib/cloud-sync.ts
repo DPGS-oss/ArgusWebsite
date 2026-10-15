@@ -151,6 +151,9 @@ export function mergeData(local: AppData, cloud: AppData): AppData {
     payments: mergeById(local.payments ?? [], cloud.payments ?? []),
     templates: mergeById(local.templates ?? [], cloud.templates ?? []),
     khataEntries: mergeById(local.khataEntries ?? [], cloud.khataEntries ?? []),
+    // Stock movements are never edited, only added: keep both sides'.
+    stockMoves: mergeById(local.stockMoves ?? [], cloud.stockMoves ?? []),
+    godowns: [...new Set([...(local.godowns ?? []), ...(cloud.godowns ?? [])])],
     // The edit log only grows: keep every entry from both sides, oldest first.
     auditLog: mergeById(local.auditLog ?? [], cloud.auditLog ?? []).sort((a, b) => a.at.localeCompare(b.at)),
   };

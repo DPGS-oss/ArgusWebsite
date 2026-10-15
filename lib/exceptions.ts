@@ -8,6 +8,7 @@ import { runningBook, unbalancedPostings } from "./books";
 import { billBalance } from "./notes";
 import { todayIST, addDays } from "./dates";
 import { toPaise } from "./money";
+import { expiring } from "./stock";
 
 export type ExceptionItem = {
   group: string;
@@ -31,6 +32,16 @@ export function exceptionReport(data: AppData, today: string = todayIST()): Exce
         detail: "More was sold than recorded. Add the missing purchase or correct the stock count.",
       });
     }
+  }
+
+  // Batches expired or expiring within 30 days.
+  for (const lot of expiring(data, 30, today)) {
+    const gone = (lot.expiry || "") < today;
+    out.push({
+      group: "Stock", severity: gone ? "error" : "warn",
+      title: `${lot.name}${lot.batch ? ` (batch ${lot.batch})` : ""}: ${lot.qty} ${gone ? "expired on" : "expires on"} ${lot.expiry}`,
+      detail: gone ? "Do not sell it. Write it off with a stock adjustment." : "Sell it first, or return it to the supplier before it expires.",
+    });
   }
 
   // Cash or bank went below zero at some point.

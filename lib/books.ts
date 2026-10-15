@@ -7,6 +7,7 @@ import { isRegisteredGstin } from "./gstin";
 import { round2, toPaise } from "./money";
 import { withBalance } from "./notes";
 import { appendAudit, auditEntry } from "./audit";
+import { openingStockValue, stockValuation } from "./stock";
 
 /** "gst" holds GST collected on sales (owed to the government) less GST paid on purchases. */
 export type LedgerAccount = "party" | "cash" | "bank" | "sales" | "purchase" | "expense" | "gst";
@@ -307,11 +308,15 @@ export function profitAndLoss(data: AppData) {
       .reduce((s, d) => s + toPaise(d.totalAmount) - toPaise(d.totalGstAmount || 0), 0);
   const business = data.businesses.find((b) => b.id === data.activeBusinessId) || data.businesses[0];
   const claimable = !!business && isRegisteredGstin(business.gstin) && !business.composition;
-  const cogsPaise = (data.purchases || []).reduce(
+  let cogsPaise = (data.purchases || []).reduce(
     (s, p) => s + toPaise(p.totalAmount) - (claimable ? toPaise(Math.min(p.totalGstAmount || 0, p.totalAmount)) : 0),
     0,
   );
   const expensesPaise = (data.expenses || []).reduce((s, e) => s + toPaise(e.amount), 0);
+  // With stock tracked: cost of goods sold = opening stock + purchases − closing stock.
+  if ((data.stockMoves || []).length) {
+    cogsPaise += toPaise(openingStockValue(data)) - toPaise(stockValuation(data).total);
+  }
   return {
     sales: salesPaise / 100,
     cogs: cogsPaise / 100,

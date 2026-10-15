@@ -162,6 +162,14 @@ export interface StockItem {
   rate: number;
   gstRate: GSTRate;
   barcode?: string;
+  /** Cost per unit before GST, for valuing stock. */
+  costPrice?: number;
+  /** Track batches and expiry for this item. */
+  trackBatches?: boolean;
+  /** Stock valuation: moving average (default) or first-in-first-out. */
+  valuation?: "average" | "fifo";
+  /** Bill of materials: components to make one unit. */
+  bom?: { itemId: string; qty: number }[];
 }
 
 export interface AppData {
@@ -182,6 +190,10 @@ export interface AppData {
   payments: Payment[];
   templates: Template[];
   khataEntries: KhataEntry[];
+  /** Every stock movement (lib/stock.ts); items' currentStock is their sum. */
+  stockMoves?: import("./stock").StockMove[];
+  /** Godowns (stock locations) besides "Main". */
+  godowns?: string[];
   /** Edit log: every change, who made it and when. Append-only (lib/audit.ts). */
   auditLog?: import("./audit").AuditEntry[];
   /** GSTR-2B files uploaded, by return period "MMYYYY": credit per head and the match summary. */
