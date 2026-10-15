@@ -1862,6 +1862,7 @@ exports.apiDataPhoneSync = onRequest({ region: 'us-central1', maxInstances: 10, 
     auditSince: typeof body.auditSince === 'string' ? body.auditSince : '',
     deleted: body.deleted && typeof body.deleted === 'object' ? body.deleted : {},
   };
+  if (body.business && typeof body.business === 'object' && !(books.role === 'member' && books.access === 'billing')) phone.business = body.business;
   if (Array.isArray(body.stockMoves)) phone.stockMoves = body.stockMoves;
   if (Array.isArray(body.godowns)) phone.godowns = body.godowns;
   const billingOnly = books.role === 'member' && books.access === 'billing';
