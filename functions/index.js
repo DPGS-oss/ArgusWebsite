@@ -102,6 +102,8 @@ const RAZORPAY_SECRETS = ['RAZORPAY_KEY_ID', 'RAZORPAY_KEY_SECRET', 'RAZORPAY_WE
 
 const SUBSCRIPTION_PLANS = new Set(['business', 'business_monthly', 'business_yearly']);
 
+const escHtml = (v) => String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+
 function extractToken(req) {
   const authHeader = req.headers.authorization || '';
   if (!authHeader.startsWith('Bearer ')) return null;
@@ -493,12 +495,10 @@ exports.apiContact = onRequest(
         message,
       ].join('\n'),
       html: [
-        `<p><strong>From:</strong> ${name} &lt;${email}&gt;</p>`,
-        `<p><strong>Subject:</strong> ${subject}</p>`,
-        `<pre style="white-space:pre-wrap;font-family:inherit">${message
-          .replace(/&/g, '&amp;')
-          .replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;')}</pre>`,
+        // Everything the visitor typed is escaped: shown as text, never as HTML.
+        `<p><strong>From:</strong> ${escHtml(name)} &lt;${escHtml(email)}&gt;</p>`,
+        `<p><strong>Subject:</strong> ${escHtml(subject)}</p>`,
+        `<pre style="white-space:pre-wrap;font-family:inherit">${escHtml(message)}</pre>`,
       ].join('\n'),
     });
     if (!mail.sent) {

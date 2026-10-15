@@ -991,3 +991,21 @@ describe("bill of supply declaration", () => {
     expect(billOfSupplyNote({ type: "tax_invoice" }, { gstin: "" })).toBeNull();
   });
 });
+
+describe("bill HTML is safe from typed text", () => {
+  it("escapes names, items and notes so they can never run as code", async () => {
+    const { generateInvoiceHTML } = await import("./gst");
+    const evil = '<img src=x onerror="alert(1)">';
+    const inv = {
+      id: "i", invoiceNumber: "INV/26-27/0001", type: "tax_invoice", status: "unpaid", businessId: "b", partyId: "", partyName: evil,
+      partyGstin: "", partyPhone: "", date: "2026-10-15", dueDate: "", placeOfSupply: "27", isInterState: false, notes: evil, terms: "",
+      items: [{ id: "l", description: evil, hsn: "3004", quantity: 1, unit: "NOS", rate: 100, discount: 0, gstRate: 5, taxableAmount: 100, cgst: 2.5, sgst: 2.5, igst: 0, total: 105 }],
+      subtotal: 100, totalDiscount: 0, totalTaxable: 100, totalCgst: 2.5, totalSgst: 2.5, totalIgst: 0, totalTax: 5, roundOff: 0, grandTotal: 105,
+      paidAmount: 0, balanceDue: 105, paymentMode: "", createdAt: "", updatedAt: "",
+    } as unknown as import("./types").Invoice;
+    const html = generateInvoiceHTML(inv, { name: "A & B <Stores>", gstin: "27AAPFU0939F1ZV", address: "", city: "", state: "", pincode: "", phone: "", email: "" });
+    expect(html).not.toContain("<img");
+    expect(html).toContain("&lt;img src=x onerror=&quot;alert(1)&quot;&gt;");
+    expect(html).toContain("A &amp; B &lt;Stores&gt;");
+  });
+});

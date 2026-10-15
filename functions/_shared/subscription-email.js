@@ -28,6 +28,8 @@ function sourceLabel(source) {
 
 function buildSubscriptionMessage({ name, event, subscription, previousSubscription, source }) {
   const greeting = name ? `Hi ${name},` : 'Hi,';
+  // The name is typed by the user: escape it in the HTML version.
+  const greetingHtml = String(greeting).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
   const plan = planLabel(subscription);
   const expiry = formatExpiry(subscription?.expiry_date);
   const prevPlan = planLabel(previousSubscription);
@@ -49,7 +51,7 @@ function buildSubscriptionMessage({ name, event, subscription, previousSubscript
         .filter(Boolean)
         .join('\n'),
       html: [
-        `<p>${greeting}</p>`,
+        `<p>${greetingHtml}</p>`,
         '<p>Your <strong>Argus Business</strong> subscription is no longer active.</p>',
         previousSubscription ? `<p>Previous plan: <strong>${prevPlan}</strong></p>` : '',
         '<p>You can still sign in and use free-tier features. To renew, visit <a href="https://argusinvoicing.com/#pricing">argusinvoicing.com</a>.</p>',
@@ -79,7 +81,7 @@ function buildSubscriptionMessage({ name, event, subscription, previousSubscript
         .filter(Boolean)
         .join('\n'),
       html: [
-        `<p>${greeting}</p>`,
+        `<p>${greetingHtml}</p>`,
         '<p>Your Argus subscription has been <strong>updated</strong>.</p>',
         `<p>New plan: <strong>${plan}</strong><br/>Valid until: <strong>${expiry}</strong><br/>Updated by: ${via}</p>`,
         previousSubscription && prevPlan !== plan
@@ -108,7 +110,7 @@ function buildSubscriptionMessage({ name, event, subscription, previousSubscript
       '— Argus GST Billing',
     ].join('\n'),
     html: [
-      `<p>${greeting}</p>`,
+      `<p>${greetingHtml}</p>`,
       '<p>Thank you — your <strong>Argus Business</strong> subscription is now <strong>active</strong>.</p>',
       `<p>Plan: <strong>${plan}</strong><br/>Valid until: <strong>${expiry}</strong><br/>Confirmed via: ${via}</p>`,
       `<p><a href="${SITE_APP_URL}">Launch the web app</a></p>`,

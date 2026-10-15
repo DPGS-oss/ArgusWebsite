@@ -1160,7 +1160,19 @@ function buildSection(section: string, description: string, invoices: Invoice[])
   return { section, description, invoices, ...sumSigned(invoices) };
 }
 
-export function generateInvoiceHTML(invoice: Invoice, business: {
+const HTML_ESC: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+
+/** Every string typed by people (names, items, notes) escaped for HTML; numbers untouched. */
+export function escapeForHtml<T>(value: T): T {
+  if (typeof value === "string") return value.replace(/[&<>"']/g, (c) => HTML_ESC[c]) as T;
+  if (Array.isArray(value)) return value.map(escapeForHtml) as T;
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, escapeForHtml(v)])) as T;
+  }
+  return value;
+}
+
+export function generateInvoiceHTML(rawInvoice: Invoice, rawBusiness: {
   name: string;
   gstin: string;
   address: string;
@@ -1174,6 +1186,10 @@ export function generateInvoiceHTML(invoice: Invoice, business: {
   bankIfsc?: string;
   upiId?: string;
 }, options: { showArgusBranding?: boolean } = {}): string {
+  // The bill can carry text typed by anyone on the team (or synced from a phone):
+  // escape it all so it shows as text and can never run as code.
+  const invoice = escapeForHtml(rawInvoice);
+  const business = escapeForHtml(rawBusiness);
   const itemsRows = invoice.items
     .map(
       (item) => `
