@@ -16,6 +16,7 @@ exports.apiReports = apiReports;
 const { apiTeam } = require('./team');
 exports.apiTeam = apiTeam;
 const teamAccess = require('./_shared/team');
+const booksStore = require('./_shared/books_store');
 const { rotateAdminAccessKey } = require('./_shared/admin-key');
 const { notifySubscriptionChange } = require('./_shared/subscription-email');
 const { checkRateLimit } = require('./_shared/rate-limit');
@@ -1645,7 +1646,7 @@ exports.apiAccountDelete = onRequest({ region: 'us-central1', maxInstances: 10, 
       await teamAccess.removeFromTeams(db, uid);
       // Delete Firestore user document
       await db.collection('users').doc(uid).delete();
-      await db.collection('users').doc(uid).collection('app_data').doc('main').delete();
+      await booksStore.deleteBooks(db, uid);
       await db.collection('users').doc(uid).collection('scan_results').doc('latest').delete();
       // Delete the auth account
       await auth.deleteUser(uid);
@@ -1696,10 +1697,9 @@ exports.apiDataLoad = onRequest({ region: 'us-central1', maxInstances: 10, secre
   const db = getDb();
 
   try {
-    const doc = await db.collection('users').doc(books.booksUid).collection('app_data').doc('main').get();
+    const { exists, doc: data } = await booksStore.readBooks(db, books.booksUid);
     const booksInfo = { booksUid: books.booksUid, role: books.role, access: books.access, series: books.series };
-    if (doc.exists) {
-      const data = doc.data();
+    if (exists) {
       const { resolveAppData } = require('./_shared/app_data');
       return res.status(200).json({
         data: teamAccess.viewFor(resolveAppData(data), books.access),
@@ -1773,30 +1773,29 @@ exports.apiDataSave = onRequest({ region: 'us-central1', maxInstances: 10, secre
 
   const db = getDb();
   const now = new Date().toISOString();
-  const ref = db.collection('users').doc(books.booksUid).collection('app_data').doc('main');
+  const ref = booksStore.booksRef(db, books.booksUid);
 
   try {
     // Optimistic concurrency: if the phone synced since this browser last
     // loaded, refuse the overwrite so the browser merges first.
     const conflict = await db.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
-      const current = snap.exists ? snap.data().updated_at || null : null;
+      const prev = await booksStore.readBooksTx(tx, ref);
+      const current = prev.exists ? prev.doc.updated_at || null : null;
       if (body.base_updated_at !== undefined && current && body.base_updated_at !== current) {
         return current;
       }
       // The edit log only grows: entries already in the cloud are kept as they
       // are, whatever the browser sends.
-      const storedData = snap.exists && snap.data().appData ? snap.data().appData : null;
+      const storedData = prev.exists && prev.doc.appData ? prev.doc.appData : null;
       const stored = storedData && Array.isArray(storedData.auditLog) ? storedData.auditLog : [];
       // Billing-only users cannot change purchases, expenses, payroll or settings.
       const incoming = books.role === 'member' ? teamAccess.mergeMemberSave(storedData, body.appData, books.access) : body.appData;
       const appData = { ...incoming, auditLog: keepAuditLog(stored, body.appData.auditLog) };
-      tx.set(ref, {
-        appData,
+      booksStore.writeBooksTx(tx, ref, prev, appData, {
         updated_at: now,
         version: body.version || 1,
         device: body.device || 'unknown',
-      }, { merge: true });
+      });
       return null;
     });
     if (conflict) {
@@ -1805,6 +1804,7 @@ exports.apiDataSave = onRequest({ region: 'us-central1', maxInstances: 10, secre
 
     return res.status(200).json({ success: true, updated_at: now });
   } catch (error) {
+    if (error instanceof booksStore.BooksTooLargeError) return res.status(413).json({ error: error.message });
     console.error('Data save error:', error);
     return res.status(500).json({ error: 'Failed to save data' });
   }
@@ -1879,23 +1879,17 @@ exports.apiDataPhoneSync = onRequest({ region: 'us-central1', maxInstances: 10, 
   }
 
   const db = getDb();
-  const ref = db.collection('users').doc(books.booksUid).collection('app_data').doc('main');
+  const ref = booksStore.booksRef(db, books.booksUid);
   const { resolveAppData } = require('./_shared/app_data');
   const { mergePhoneSync } = require('./_shared/phone_sync');
 
   try {
     const result = await db.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
+      const prev = await booksStore.readBooksTx(tx, ref);
       const now = new Date().toISOString();
-      const current = snap.exists ? resolveAppData(snap.data()) : null;
+      const current = prev.exists ? resolveAppData(prev.doc) : null;
       const { appData, toPhone } = mergePhoneSync(current, phone, now);
-      tx.set(ref, {
-        appData,
-        updated_at: now,
-        version: 1,
-        device: 'flutter-android',
-        data_compressed: require('firebase-admin/firestore').FieldValue.delete(),
-      }, { merge: true });
+      booksStore.writeBooksTx(tx, ref, prev, appData, { updated_at: now, version: 1, device: 'flutter-android' });
       return { toPhone, now };
     });
     const toPhone = billingOnly
@@ -1904,6 +1898,7 @@ exports.apiDataPhoneSync = onRequest({ region: 'us-central1', maxInstances: 10, 
     const booksInfo = { booksUid: books.booksUid, role: books.role, access: books.access, series: books.series };
     return res.status(200).json({ success: true, updated_at: result.now, ...toPhone, books: booksInfo });
   } catch (error) {
+    if (error instanceof booksStore.BooksTooLargeError) return res.status(413).json({ error: error.message });
     console.error('Phone sync error:', error);
     return res.status(500).json({ error: 'Failed to sync' });
   }

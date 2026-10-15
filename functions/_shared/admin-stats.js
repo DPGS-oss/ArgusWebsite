@@ -1,4 +1,4 @@
-const { resolveAppData } = require('./app_data');
+const { countableAppData } = require('./books_store');
 const { subscriptionStatus, normalizePlanKey } = require('./subscription-utils');
 
 function usageFromAppData(appData) {
@@ -34,7 +34,8 @@ function usageFromAppData(appData) {
 }
 
 function usageFromAppDataDoc(docData) {
-  const appData = resolveAppData(docData || {});
+  // Bills, edit log etc. may sit in chunk documents; their counts are in the manifest.
+  const appData = countableAppData(docData || {});
   const counts = usageFromAppData(appData);
   return {
     ...counts,

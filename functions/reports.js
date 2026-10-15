@@ -16,6 +16,7 @@ const { buildGstr9, gstr9Rows, exemptReport } = require('./_shared/gstr9');
 const { parse2b, match2b, itcTotals } = require('./_shared/gstr2b');
 const { sellerGstinFromAppData } = require('./_shared/ca-exports');
 const { booksAccess } = require('./_shared/team');
+const booksStore = require('./_shared/books_store');
 
 function extractToken(req) {
   const header = req.get('authorization') || '';
@@ -25,9 +26,9 @@ function extractToken(req) {
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 async function loadBooks(uid) {
-  const ref = getDb().collection('users').doc(uid).collection('app_data').doc('main');
-  const snap = await ref.get();
-  return { ref, data: snap.exists ? resolveAppData(snap.data()) || {} : {} };
+  const db = getDb();
+  const { exists, doc } = await booksStore.readBooks(db, uid);
+  return { ref: booksStore.booksRef(db, uid), data: exists ? resolveAppData(doc) || {} : {} };
 }
 
 /** Uploaded GSTR-2B credit per month, for GSTR-9 Table 8A. */
@@ -90,18 +91,14 @@ exports.apiReports = onRequest({ region: 'us-central1', maxInstances: 10, memory
         // Keep the month's 2B credit for GSTR-9 Table 8A. Written like phone sync:
         // the whole book in one transaction, so nothing else is lost or overwritten.
         await getDb().runTransaction(async (tx) => {
-          const snap = await tx.get(ref);
+          const prev = await booksStore.readBooksTx(tx, ref);
           const now = new Date().toISOString();
-          const current = (snap.exists ? resolveAppData(snap.data()) : null) || {};
+          const current = (prev.exists ? resolveAppData(prev.doc) : null) || {};
           const appData = {
             ...current,
             gstr2b: { ...(current.gstr2b || {}), [parsed.period]: { itc: itcTotals(parsed), summary: result.summary, uploadedAt: now } },
           };
-          tx.set(ref, {
-            appData,
-            updated_at: now,
-            data_compressed: require('firebase-admin/firestore').FieldValue.delete(),
-          }, { merge: true });
+          booksStore.writeBooksTx(tx, ref, prev, appData, { updated_at: now });
         });
       }
       return res.status(200).json({ gstin: parsed.gstin, ...result });

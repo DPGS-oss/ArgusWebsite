@@ -45,6 +45,11 @@ service cloud.firestore {
       match /app_data/{dataId} {
         allow read: if isOwner(userId);
         allow write: if false;
+
+        // Large parts of the books, gzipped (see functions/_shared/books_store.js).
+        match /chunks/{chunkId} {
+          allow read, write: if false;
+        }
       }
 
       match /scan_results/{scanId} {
