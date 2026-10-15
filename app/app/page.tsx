@@ -21,6 +21,7 @@ import {
 import { KeyboardShortcuts } from "@/components/webapp/KeyboardShortcuts";
 import { getExpiryIso } from "@/lib/subscription";
 import { todayIST } from "@/lib/dates";
+import { loadRateBook } from "@/lib/gst-rates";
 
 // Screens load on first open; only the shell (sidebar, dashboard, invoice list) ships up front.
 function ViewLoading() {
@@ -80,6 +81,8 @@ export default function AppPage() {
 
   useEffect(() => {
     setLastSync(getLastSyncTime());
+    // GST rates come from /data/gst-rates.json, so rate changes reach everyone without a release.
+    void loadRateBook();
   }, []);
 
   // Books are opened per signed-in account; a different account gets its own store.

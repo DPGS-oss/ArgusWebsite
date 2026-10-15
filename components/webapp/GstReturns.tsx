@@ -178,6 +178,7 @@ function Gstr9Tab({ data }: { data: AppData }) {
         </button>
       </div>
       <p className="text-sm text-slate">Figures from your books, by GSTR-9 table. Compare them with the auto-filled GSTR-9 on the portal, then file there.</p>
+      <p className="text-xs text-ash">GSTR-9 is optional when your turnover for the year is ₹2 crore or less (from 2024-25).</p>
       <div className="overflow-x-auto rounded-card border border-bone bg-white">
         <table className="w-full text-sm">
           <thead className="bg-mist text-left text-slate"><tr><th className="p-2">Table</th><th className="p-2">What it is</th><th className="p-2 text-right">Value</th><th className="p-2 text-right">GST</th></tr></thead>

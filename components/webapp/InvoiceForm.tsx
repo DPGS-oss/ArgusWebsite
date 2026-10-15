@@ -32,6 +32,7 @@ import { generateId, generateInvoiceNumber, saveBusiness } from "@/lib/storage";
 import { BarcodeScannerModal } from "./BarcodeScannerModal";
 import { validateGstin } from "@/lib/gstin";
 import { roundOffPaise, toPaise } from "@/lib/money";
+import { getRateBook, rateOptions, type RateOptions } from "@/lib/gst-rates";
 import { withBalance } from "@/lib/notes";
 import { addDays, addPeriod, todayIST } from "@/lib/dates";
 
@@ -108,8 +109,9 @@ export function InvoiceForm({ data, business: businessProp, editingInvoice, onSa
   const [terms, setTerms] = useState(openedInvoice?.terms || data.settings.defaultTerms);
   const [paidAmount, setPaidAmount] = useState(openedInvoice?.paidAmount || 0);
   const [hsnSearch, setHsnSearch] = useState<string | null>(null);
+  const [rateChoice, setRateChoice] = useState<{ idx: number; code: string; options: RateOptions } | null>(null);
   const [hsnItemIdx, setHsnItemIdx] = useState<number | null>(null);
-  const [aiSuggestions, setAiSuggestions] = useState<{ idx: number; suggestions: { code: string; description: string; gstRate: GSTRate }[] } | null>(null);
+  const [aiSuggestions, setAiSuggestions] = useState<{ idx: number; suggestions: { code: string; description: string; gstRate: GSTRate; varies?: boolean }[] } | null>(null);
   const [isTotalMode, setIsTotalMode] = useState(openedInvoice?.isTotalMode ?? true);
   const [totalAmount, setTotalAmount] = useState(
     openedInvoice?.isTotalMode ? openedInvoice.enteredTotal ?? openedInvoice.grandTotal : 0
@@ -299,9 +301,17 @@ export function InvoiceForm({ data, business: businessProp, editingInvoice, onSa
     setHsnSearch(query);
   }
 
-  function selectHsn(code: string, gstRate: GSTRate) {
-    if (hsnItemIdx !== null) {
-      updateItem(hsnItemIdx, { hsn: code, gstRate });
+  function selectHsn(code: string, gstRate: GSTRate, idx: number | null = hsnItemIdx) {
+    if (idx !== null) {
+      const book = getRateBook();
+      const options = book ? rateOptions(book, code) : null;
+      if (options && options.main.length > 1) {
+        // The rate depends on the item: ask, with the law's condition for each rate.
+        updateItem(idx, { hsn: code });
+        setRateChoice({ idx, code, options });
+      } else {
+        updateItem(idx, { hsn: code, gstRate: (options?.main[0]?.rate ?? gstRate) as GSTRate });
+      }
     }
     setHsnSearch(null);
     setHsnItemIdx(null);
@@ -908,12 +918,12 @@ export function InvoiceForm({ data, business: businessProp, editingInvoice, onSa
                             {hsnResults.map((h) => (
                               <button
                                 key={h.code}
-                                onClick={() => selectHsn(h.code, h.gstRate)}
+                                onClick={() => selectHsn(h.code, h.gstRate, idx)}
                                 className="flex w-full items-center justify-between px-3 py-2 text-left text-xs hover:bg-graphite"
                               >
                                 <span className="text-starlight">{h.code}</span>
                                 <span className="text-silver">{h.description}</span>
-                                <span className="text-mercury-blue">{h.gstRate}%</span>
+                                <span className="text-mercury-blue">{h.varies ? "pick rate" : `${h.gstRate}%`}</span>
                               </button>
                             ))}
                           </div>
@@ -970,6 +980,28 @@ export function InvoiceForm({ data, business: businessProp, editingInvoice, onSa
                     </div>
                   </div>
 
+                  {rateChoice && rateChoice.idx === idx && (
+                    <div className="mt-2 rounded-lg border border-mercury-blue/30 bg-abyss p-3 text-xs">
+                      <p className="mb-2 text-starlight">GST on {rateChoice.code} depends on the item. Pick the one that fits:</p>
+                      {[...rateChoice.options.main, ...rateChoice.options.special].map((o, k) => (
+                        <button
+                          key={k}
+                          onClick={() => {
+                            updateItem(idx, { gstRate: o.rate as GSTRate });
+                            setRateChoice(null);
+                          }}
+                          className="mb-1 flex w-full gap-3 rounded-btn border border-lead/30 px-2 py-1.5 text-left hover:border-mercury-blue"
+                        >
+                          <span className="w-16 shrink-0 font-semibold text-mercury-blue">{o.outside ? "No GST" : `${o.rate}%`}</span>
+                          <span className="text-silver">
+                            {k >= rateChoice.options.main.length ? "Special case: " : ""}
+                            {o.notes.join(" · ")}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
                   {aiSuggestions && aiSuggestions.idx === idx && (
                     <div className="mt-2 rounded-lg bg-abyss p-2">
                       <p className="mb-1 flex items-center gap-1 text-xs text-mercury-blue">
@@ -983,12 +1015,12 @@ export function InvoiceForm({ data, business: businessProp, editingInvoice, onSa
                             <button
                               key={s.code}
                               onClick={() => {
-                                selectHsn(s.code, s.gstRate);
+                                selectHsn(s.code, s.gstRate, idx);
                                 setAiSuggestions(null);
                               }}
                               className="rounded-btn border border-mercury-blue/30 px-2 py-1 text-xs text-silver hover:border-mercury-blue"
                             >
-                              {s.code} - {s.description} ({s.gstRate}%)
+                              {s.code} - {s.description} ({s.varies ? "rate depends on the item" : `${s.gstRate}%`})
                             </button>
                           ))
                         )}

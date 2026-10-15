@@ -1,7 +1,7 @@
-export type GSTRate = 0 | 0.25 | 3 | 5 | 12 | 18 | 28 | 40;
+export type GSTRate = 0 | 0.25 | 1 | 1.5 | 3 | 5 | 12 | 18 | 28 | 40;
 
 /** GST 2.0 slabs offered on new invoices. 12% and 28% are legacy-only. */
-export const GST_2_0_RATES: GSTRate[] = [0, 0.25, 3, 5, 18, 40];
+export const GST_2_0_RATES: GSTRate[] = [0, 0.25, 1, 1.5, 3, 5, 18, 40];
 
 export type InvoiceStatus = "draft" | "paid" | "unpaid" | "cancelled";
 

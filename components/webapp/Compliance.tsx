@@ -5,6 +5,7 @@ import { formatCurrency } from "@/lib/gst";
 import type { AppData } from "@/lib/types";
 import { checkBooks, gstr3b, purchaseMatch } from "@/lib/compliance";
 import { saveData } from "@/lib/storage";
+import { getRateBook } from "@/lib/gst-rates";
 
 type Props = { data: AppData; onSaved: () => void };
 
@@ -56,6 +57,11 @@ export function Compliance({ data, onSaved }: Props) {
         Finds mistakes in your bills before you file, and shows how much GST you owe this month.
         Share it with your CA, then file on the GST portal.
       </p>
+      {getRateBook() ? (
+        <p className="mb-4 text-xs text-ash">
+          GST rates in effect from {getRateBook()!.effectiveFrom} (version {getRateBook()!.version}); Argus updates them by itself.
+        </p>
+      ) : null}
 
       <div className="mb-6 flex flex-wrap items-center gap-4">
         <label className="flex items-center gap-2 text-sm text-ink">

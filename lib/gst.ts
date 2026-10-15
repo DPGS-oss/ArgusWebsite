@@ -3,6 +3,7 @@ import { GST_2_0_RATES, INDIAN_STATES } from "./types";
 import { isRegisteredGstin, normalizeGstin, stateCodeFromGstin } from "./gstin";
 import caExports from "../functions/_shared/ca-exports.js";
 import { fromPaise, linePaise, roundOffPaise, round2 as moneyRound2, toPaise } from "./money";
+import { getRateBook, searchCatalog, singleRate } from "./gst-rates";
 
 const { buildGstr1Json, notesAsInvoices: sharedNotesAsInvoices } = caExports as {
   buildGstr1Json: (input: { gstin: string; from: string; to: string; fp: string; invoices: unknown[] }) => unknown;
@@ -27,6 +28,8 @@ export function defaultGstRateForNew(rate: number): GSTRate {
 
 export function gstRateLabel(rate: number): string {
   if (rate === 0.25) return "0.25% (rough diamonds)";
+  if (rate === 1) return "1% (affordable housing)";
+  if (rate === 1.5) return "1.5% (certain diamonds and stones)";
   if (rate === 3) return "3% (gold / precious metals)";
   return `${rate}%`;
 }
@@ -231,7 +234,7 @@ export type BuildInvoiceInput = {
 export const HSN_DATABASE: HSNCode[] = [
   { code: "0101", description: "Live animals (bovine)", gstRate: 0, category: "Agriculture" },
   { code: "0102", description: "Live animals (dairy cattle)", gstRate: 0, category: "Agriculture" },
-  { code: "0301", description: "Fish, fresh or chilled", gstRate: 5, category: "Food" },
+  { code: "0301", description: "Fish, fresh or chilled", gstRate: 0, category: "Food" },
   { code: "0401", description: "Milk and cream", gstRate: 0, category: "Food" },
   { code: "1001", description: "Wheat", gstRate: 0, category: "Food" },
   { code: "1005", description: "Maize (corn)", gstRate: 0, category: "Food" },
@@ -240,23 +243,23 @@ export const HSN_DATABASE: HSNCode[] = [
   { code: "1701", description: "Sugar", gstRate: 5, category: "Food" },
   { code: "1801", description: "Cocoa beans", gstRate: 5, category: "Food" },
   { code: "2101", description: "Coffee, tea, masala", gstRate: 5, category: "Food" },
-  { code: "2201", description: "Water, mineral water", gstRate: 18, category: "Beverages" },
-  { code: "2203", description: "Beer", gstRate: 28, category: "Beverages" },
-  { code: "2401", description: "Tobacco products", gstRate: 28, category: "Tobacco" },
+  { code: "2201", description: "Water, mineral water", gstRate: 5, category: "Beverages" },
+  { code: "2203", description: "Beer", gstRate: 0, category: "Beverages" },
+  { code: "2401", description: "Tobacco products", gstRate: 40, category: "Tobacco" },
   { code: "2710", description: "Petroleum products", gstRate: 0, category: "Petroleum" },
-  { code: "3004", description: "Pharmaceuticals", gstRate: 12, category: "Healthcare" },
-  { code: "3005", description: "Medical dressings", gstRate: 12, category: "Healthcare" },
+  { code: "3004", description: "Pharmaceuticals", gstRate: 5, category: "Healthcare" },
+  { code: "3005", description: "Medical dressings", gstRate: 5, category: "Healthcare" },
   { code: "3201", description: "Dyes and tanning extracts", gstRate: 18, category: "Chemicals" },
   { code: "3303", description: "Perfumes", gstRate: 18, category: "Cosmetics" },
   { code: "3304", description: "Cosmetics", gstRate: 18, category: "Cosmetics" },
   { code: "3401", description: "Soap and detergents", gstRate: 18, category: "Household" },
   { code: "3917", description: "Plastic pipes and tubes", gstRate: 18, category: "Plastics" },
   { code: "3923", description: "Plastic containers", gstRate: 18, category: "Plastics" },
-  { code: "4011", description: "Rubber tyres", gstRate: 28, category: "Rubber" },
+  { code: "4011", description: "Rubber tyres", gstRate: 18, category: "Rubber" },
   { code: "4202", description: "Leather bags, suitcases", gstRate: 18, category: "Leather" },
-  { code: "4303", description: "Leather garments", gstRate: 12, category: "Leather" },
-  { code: "4801", description: "Paper and paperboard", gstRate: 12, category: "Paper" },
-  { code: "4818", description: "Paper napkins, tissues", gstRate: 12, category: "Paper" },
+  { code: "4303", description: "Leather garments", gstRate: 18, category: "Leather" },
+  { code: "4801", description: "Paper and paperboard", gstRate: 5, category: "Paper" },
+  { code: "4818", description: "Paper napkins, tissues", gstRate: 18, category: "Paper" },
   { code: "4901", description: "Printed books", gstRate: 0, category: "Printing" },
   { code: "6101", description: "Men's garments, cotton", gstRate: 5, category: "Textiles" },
   { code: "6102", description: "Women's garments, cotton", gstRate: 5, category: "Textiles" },
@@ -294,23 +297,23 @@ export const HSN_DATABASE: HSNCode[] = [
   { code: "8536", description: "Electrical switches", gstRate: 18, category: "Electrical" },
   { code: "8537", description: "Electrical panels", gstRate: 18, category: "Electrical" },
   { code: "8544", description: "Cables and wires", gstRate: 18, category: "Electrical" },
-  { code: "8703", description: "Motor cars", gstRate: 28, category: "Automobile" },
-  { code: "8708", description: "Auto parts", gstRate: 28, category: "Automobile" },
-  { code: "8711", description: "Motorcycles", gstRate: 28, category: "Automobile" },
-  { code: "8712", description: "Bicycles", gstRate: 12, category: "Automobile" },
+  { code: "8703", description: "Motor cars", gstRate: 40, category: "Automobile" },
+  { code: "8708", description: "Auto parts", gstRate: 18, category: "Automobile" },
+  { code: "8711", description: "Motorcycles", gstRate: 40, category: "Automobile" },
+  { code: "8712", description: "Bicycles", gstRate: 5, category: "Automobile" },
   { code: "9001", description: "Optical lenses", gstRate: 18, category: "Optical" },
-  { code: "9018", description: "Medical instruments", gstRate: 12, category: "Healthcare" },
+  { code: "9018", description: "Medical instruments", gstRate: 5, category: "Healthcare" },
   { code: "9401", description: "Furniture", gstRate: 18, category: "Furniture" },
   { code: "9405", description: "Lighting fixtures", gstRate: 18, category: "Lighting" },
-  { code: "9619", description: "Sanitary pads", gstRate: 12, category: "Healthcare" },
+  { code: "9619", description: "Sanitary pads", gstRate: 18, category: "Healthcare" },
   { code: "9983", description: "IT/ITeS services", gstRate: 18, category: "Services" },
   { code: "9984", description: "Telecommunications", gstRate: 18, category: "Services" },
   { code: "9985", description: "Financial services", gstRate: 18, category: "Services" },
   { code: "9972", description: "Real estate services", gstRate: 18, category: "Services" },
   { code: "9987", description: "Transport services", gstRate: 18, category: "Services" },
   { code: "9992", description: "Accommodation services", gstRate: 18, category: "Services" },
-  { code: "9993", description: "Restaurant services", gstRate: 5, category: "Services" },
-  { code: "9994", description: "Sale of food", gstRate: 5, category: "Services" },
+  { code: "9993", description: "Restaurant services", gstRate: 18, category: "Services" },
+  { code: "9994", description: "Sale of food", gstRate: 18, category: "Services" },
   { code: "0106", description: "Other live animals", gstRate: 0, category: "Agriculture" },
   { code: "0402", description: "Milk and cream, concentrated", gstRate: 5, category: "Food" },
   { code: "0409", description: "Natural honey", gstRate: 0, category: "Food" },
@@ -330,25 +333,25 @@ export const HSN_DATABASE: HSNCode[] = [
   { code: "1512", description: "Sunflower/safflower oil", gstRate: 5, category: "Food" },
   { code: "1515", description: "Other vegetable oils", gstRate: 5, category: "Food" },
   { code: "1702", description: "Confectionery sugar", gstRate: 18, category: "Food" },
-  { code: "1704", description: "Sugar confectionery, candies", gstRate: 18, category: "Food" },
-  { code: "1806", description: "Chocolate and cocoa products", gstRate: 18, category: "Food" },
-  { code: "1901", description: "Malted food, biscuits", gstRate: 18, category: "Food" },
-  { code: "1905", description: "Bread, pastry, cakes", gstRate: 18, category: "Food" },
-  { code: "2005", description: "Preserved vegetables", gstRate: 12, category: "Food" },
-  { code: "2008", description: "Preserved fruits, jams", gstRate: 12, category: "Food" },
+  { code: "1704", description: "Sugar confectionery, candies", gstRate: 5, category: "Food" },
+  { code: "1806", description: "Chocolate and cocoa products", gstRate: 5, category: "Food" },
+  { code: "1901", description: "Malted food, biscuits", gstRate: 5, category: "Food" },
+  { code: "1905", description: "Bread, pastry, cakes", gstRate: 5, category: "Food" },
+  { code: "2005", description: "Preserved vegetables", gstRate: 5, category: "Food" },
+  { code: "2008", description: "Preserved fruits, jams", gstRate: 5, category: "Food" },
   { code: "2102", description: "Yeast and baking powder", gstRate: 5, category: "Food" },
-  { code: "2103", description: "Sauces, condiments", gstRate: 12, category: "Food" },
+  { code: "2103", description: "Sauces, condiments", gstRate: 5, category: "Food" },
   { code: "2105", description: "Ice cream", gstRate: 18, category: "Food" },
-  { code: "2202", description: "Soft drinks, aerated water", gstRate: 28, category: "Beverages" },
-  { code: "2204", description: "Wine", gstRate: 28, category: "Beverages" },
-  { code: "2208", description: "Spirits, liquor", gstRate: 28, category: "Beverages" },
+  { code: "2202", description: "Soft drinks, aerated water", gstRate: 40, category: "Beverages" },
+  { code: "2204", description: "Wine", gstRate: 0, category: "Beverages" },
+  { code: "2208", description: "Spirits, liquor", gstRate: 0, category: "Beverages" },
   { code: "2517", description: "Pebbles, gravel, crushed stone", gstRate: 5, category: "Construction" },
-  { code: "2523", description: "Cement, clinkers", gstRate: 28, category: "Construction" },
+  { code: "2523", description: "Cement, clinkers", gstRate: 18, category: "Construction" },
   { code: "2711", description: "Natural/LPG gas", gstRate: 5, category: "Petroleum" },
   { code: "2715", description: "Bituminous mixtures", gstRate: 18, category: "Petroleum" },
   { code: "3002", description: "Vaccines, human blood", gstRate: 0, category: "Healthcare" },
-  { code: "3003", description: "Medicaments (bulk)", gstRate: 12, category: "Healthcare" },
-  { code: "3006", description: "Surgical instruments, contraceptives", gstRate: 12, category: "Healthcare" },
+  { code: "3003", description: "Medicaments (bulk)", gstRate: 5, category: "Healthcare" },
+  { code: "3006", description: "Surgical instruments, contraceptives", gstRate: 5, category: "Healthcare" },
   { code: "3204", description: "Synthetic organic dyes", gstRate: 18, category: "Chemicals" },
   { code: "3402", description: "Cleaning preparations", gstRate: 18, category: "Household" },
   { code: "3403", description: "Lubricating preparations", gstRate: 18, category: "Household" },
@@ -360,37 +363,37 @@ export const HSN_DATABASE: HSNCode[] = [
   { code: "4010", description: "Conveyor/transmission belts", gstRate: 18, category: "Rubber" },
   { code: "4015", description: "Rubber gloves, apparel", gstRate: 18, category: "Rubber" },
   { code: "4201", description: "Leather saddlery, harness", gstRate: 18, category: "Leather" },
-  { code: "4203", description: "Leather apparel, gloves", gstRate: 12, category: "Leather" },
-  { code: "4302", description: "Raw furskins", gstRate: 12, category: "Leather" },
-  { code: "4820", description: "Notebooks, registers, paper", gstRate: 12, category: "Paper" },
-  { code: "4823", description: "Other paper articles", gstRate: 12, category: "Paper" },
-  { code: "4909", description: "Printed greeting cards", gstRate: 0, category: "Printing" },
-  { code: "4911", description: "Other printed material", gstRate: 12, category: "Printing" },
+  { code: "4203", description: "Leather apparel, gloves", gstRate: 18, category: "Leather" },
+  { code: "4302", description: "Raw furskins", gstRate: 18, category: "Leather" },
+  { code: "4820", description: "Notebooks, registers, paper", gstRate: 18, category: "Paper" },
+  { code: "4823", description: "Other paper articles", gstRate: 18, category: "Paper" },
+  { code: "4909", description: "Printed greeting cards", gstRate: 18, category: "Printing" },
+  { code: "4911", description: "Other printed material", gstRate: 18, category: "Printing" },
   { code: "5208", description: "Cotton woven fabrics", gstRate: 5, category: "Textiles" },
   { code: "5211", description: "Cotton woven fabrics (other)", gstRate: 5, category: "Textiles" },
-  { code: "5402", description: "Synthetic yarn", gstRate: 18, category: "Textiles" },
-  { code: "5407", description: "Synthetic woven fabrics", gstRate: 18, category: "Textiles" },
+  { code: "5402", description: "Synthetic yarn", gstRate: 5, category: "Textiles" },
+  { code: "5407", description: "Synthetic woven fabrics", gstRate: 5, category: "Textiles" },
   { code: "6110", description: "Sweaters, pullovers", gstRate: 5, category: "Textiles" },
   { code: "6114", description: "Other knitted garments", gstRate: 5, category: "Textiles" },
   { code: "6117", description: "Other knitted accessories", gstRate: 5, category: "Textiles" },
-  { code: "6203", description: "Men's suits, trousers", gstRate: 12, category: "Textiles" },
-  { code: "6210", description: "Garments of felt/non-woven", gstRate: 12, category: "Textiles" },
-  { code: "6212", description: "Brassieres, girdles", gstRate: 12, category: "Textiles" },
+  { code: "6203", description: "Men's suits, trousers", gstRate: 18, category: "Textiles" },
+  { code: "6210", description: "Garments of felt/non-woven", gstRate: 18, category: "Textiles" },
+  { code: "6212", description: "Brassieres, girdles", gstRate: 18, category: "Textiles" },
   { code: "6301", description: "Blankets, travelling rugs", gstRate: 5, category: "Textiles" },
   { code: "6302", description: "Bed linen, table linen", gstRate: 5, category: "Textiles" },
   { code: "6304", description: "Curtains, drapes", gstRate: 5, category: "Textiles" },
   { code: "6403", description: "Footwear (leather)", gstRate: 18, category: "Footwear" },
   { code: "6404", description: "Footwear (rubber/plastic)", gstRate: 18, category: "Footwear" },
   { code: "6405", description: "Other footwear", gstRate: 18, category: "Footwear" },
-  { code: "6505", description: "Hats, headgear", gstRate: 12, category: "Textiles" },
-  { code: "6601", description: "Umbrellas, sunshades", gstRate: 18, category: "Household" },
-  { code: "6911", description: "Ceramic tableware", gstRate: 12, category: "Construction" },
-  { code: "6912", description: "Ceramic kitchenware", gstRate: 12, category: "Construction" },
+  { code: "6505", description: "Hats, headgear", gstRate: 18, category: "Textiles" },
+  { code: "6601", description: "Umbrellas, sunshades", gstRate: 5, category: "Household" },
+  { code: "6911", description: "Ceramic tableware", gstRate: 5, category: "Construction" },
+  { code: "6912", description: "Ceramic kitchenware", gstRate: 5, category: "Construction" },
   { code: "7013", description: "Glass tableware, kitchenware", gstRate: 18, category: "Glass" },
   { code: "7020", description: "Other glass articles", gstRate: 18, category: "Glass" },
   { code: "7112", description: "Gold waste and scrap", gstRate: 3, category: "Jewellery" },
-  { code: "7116", description: "Imitation jewellery", gstRate: 18, category: "Jewellery" },
-  { code: "7117", description: "Costume jewellery", gstRate: 18, category: "Jewellery" },
+  { code: "7116", description: "Imitation jewellery", gstRate: 3, category: "Jewellery" },
+  { code: "7117", description: "Costume jewellery", gstRate: 3, category: "Jewellery" },
   { code: "7216", description: "Iron/steel angles, shapes", gstRate: 18, category: "Metals" },
   { code: "7228", description: "Other steel bars/rods", gstRate: 18, category: "Metals" },
   { code: "7301", description: "Sheet piling, rails", gstRate: 18, category: "Metals" },
@@ -401,22 +404,22 @@ export const HSN_DATABASE: HSNCode[] = [
   { code: "7501", description: "Nickel alloys", gstRate: 18, category: "Metals" },
   { code: "7601", description: "Aluminium alloys", gstRate: 18, category: "Metals" },
   { code: "7604", description: "Aluminium bars/rods", gstRate: 18, category: "Metals" },
-  { code: "8201", description: "Hand tools, agricultural", gstRate: 12, category: "Tools" },
+  { code: "8201", description: "Hand tools, agricultural", gstRate: 0, category: "Tools" },
   { code: "8204", description: "Spanners, wrenches", gstRate: 18, category: "Tools" },
   { code: "8205", description: "Hand tools (general)", gstRate: 18, category: "Tools" },
   { code: "8301", description: "Padlocks, keys, locks", gstRate: 18, category: "Hardware" },
   { code: "8302", description: "Door fittings, hinges", gstRate: 18, category: "Hardware" },
   { code: "8413", description: "Pumps, liquid elevators", gstRate: 18, category: "Appliances" },
   { code: "8414", description: "Air/vacuum pumps", gstRate: 18, category: "Appliances" },
-  { code: "8415", description: "Air conditioning machines", gstRate: 28, category: "Appliances" },
+  { code: "8415", description: "Air conditioning machines", gstRate: 18, category: "Appliances" },
   { code: "8419", description: "Machinery for temperature", gstRate: 18, category: "Appliances" },
   { code: "8424", description: "Fire extinguishers, sprayers", gstRate: 18, category: "Appliances" },
   { code: "8431", description: "Machinery parts", gstRate: 18, category: "Tools" },
-  { code: "8432", description: "Agricultural machinery", gstRate: 12, category: "Agriculture" },
-  { code: "8433", description: "Harvesting machinery", gstRate: 12, category: "Agriculture" },
+  { code: "8432", description: "Agricultural machinery", gstRate: 5, category: "Agriculture" },
+  { code: "8433", description: "Harvesting machinery", gstRate: 18, category: "Agriculture" },
   { code: "8441", description: "Paper cutting machinery", gstRate: 18, category: "Tools" },
   { code: "8450", description: "Washing machines", gstRate: 18, category: "Appliances" },
-  { code: "8452", description: "Sewing machines", gstRate: 18, category: "Appliances" },
+  { code: "8452", description: "Sewing machines", gstRate: 5, category: "Appliances" },
   { code: "8470", description: "Calculating machines", gstRate: 18, category: "Electronics" },
   { code: "8476", description: "Vending machines", gstRate: 18, category: "Appliances" },
   { code: "8481", description: "Valves, taps, fittings", gstRate: 18, category: "Hardware" },
@@ -437,10 +440,10 @@ export const HSN_DATABASE: HSNCode[] = [
   { code: "8541", description: "Semiconductor devices", gstRate: 18, category: "Electronics" },
   { code: "8542", description: "Electronic integrated circuits", gstRate: 18, category: "Electronics" },
   { code: "8543", description: "Other electrical machines", gstRate: 18, category: "Electrical" },
-  { code: "8702", description: "Motor vehicles for transport", gstRate: 28, category: "Automobile" },
-  { code: "8704", description: "Motor vehicles for goods", gstRate: 28, category: "Automobile" },
-  { code: "8705", description: "Special purpose vehicles", gstRate: 28, category: "Automobile" },
-  { code: "8710", description: "Tanks, armoured vehicles", gstRate: 28, category: "Automobile" },
+  { code: "8702", description: "Motor vehicles for transport", gstRate: 18, category: "Automobile" },
+  { code: "8704", description: "Motor vehicles for goods", gstRate: 18, category: "Automobile" },
+  { code: "8705", description: "Special purpose vehicles", gstRate: 18, category: "Automobile" },
+  { code: "8710", description: "Tanks, armoured vehicles", gstRate: 5, category: "Automobile" },
   { code: "8714", description: "Bicycle/scooter parts", gstRate: 18, category: "Automobile" },
   { code: "8716", description: "Trailers, semi-trailers", gstRate: 18, category: "Automobile" },
   { code: "9004", description: "Sunglasses, spectacles", gstRate: 18, category: "Optical" },
@@ -456,16 +459,16 @@ export const HSN_DATABASE: HSNCode[] = [
   { code: "9403", description: "Other furniture", gstRate: 18, category: "Furniture" },
   { code: "9404", description: "Mattresses, bedding", gstRate: 18, category: "Furniture" },
   { code: "9406", description: "Prefabricated buildings", gstRate: 18, category: "Construction" },
-  { code: "9503", description: "Toys, tricycles", gstRate: 12, category: "Toys" },
+  { code: "9503", description: "Toys, tricycles", gstRate: 18, category: "Toys" },
   { code: "9504", description: "Video games, consoles", gstRate: 18, category: "Toys" },
   { code: "9506", description: "Sports goods, equipment", gstRate: 18, category: "Sports" },
-  { code: "9507", description: "Fishing equipment", gstRate: 12, category: "Sports" },
-  { code: "9603", description: "Brooms, brushes", gstRate: 12, category: "Household" },
-  { code: "9608", description: "Pens, pencils, markers", gstRate: 12, category: "Stationery" },
-  { code: "9610", description: "Slates, blackboards", gstRate: 12, category: "Stationery" },
-  { code: "9612", description: "Ink ribbons, typewriter", gstRate: 12, category: "Stationery" },
+  { code: "9507", description: "Fishing equipment", gstRate: 5, category: "Sports" },
+  { code: "9603", description: "Brooms, brushes", gstRate: 18, category: "Household" },
+  { code: "9608", description: "Pens, pencils, markers", gstRate: 18, category: "Stationery" },
+  { code: "9610", description: "Slates, blackboards", gstRate: 18, category: "Stationery" },
+  { code: "9612", description: "Ink ribbons, typewriter", gstRate: 18, category: "Stationery" },
   { code: "9613", description: "Cigarette lighters", gstRate: 18, category: "Household" },
-  { code: "9614", description: "Smoking pipes", gstRate: 28, category: "Tobacco" },
+  { code: "9614", description: "Smoking pipes", gstRate: 40, category: "Tobacco" },
   { code: "9617", description: "Vacuum flasks, thermos", gstRate: 18, category: "Household" },
   { code: "9981", description: "R&D services", gstRate: 18, category: "Services" },
   { code: "9982", description: "Legal services", gstRate: 18, category: "Services" },
@@ -479,8 +482,17 @@ export const HSN_DATABASE: HSNCode[] = [
   { code: "9999", description: "Other services (uncategorized)", gstRate: 18, category: "Services" },
 ];
 
-export function searchHSN(query: string): HSNCode[] {
+/** HSN codes matching a search. Rates come from the GST rate book when loaded
+ * (rate 0 with `varies` means the owner must pick: see rateOptions). */
+export function searchHSN(query: string): (HSNCode & { varies?: boolean })[] {
   const q = query.toLowerCase().trim();
+  const book = getRateBook();
+  if (book && q) {
+    return searchCatalog(book, q, 30).map((e) => {
+      const rate = singleRate(book, e.c);
+      return { code: e.c, description: e.d, gstRate: (rate ?? 18) as GSTRate, category: "", varies: rate === null };
+    });
+  }
   if (!q) return HSN_DATABASE.slice(0, 20);
   return HSN_DATABASE.filter(
     (h) =>
@@ -494,7 +506,7 @@ export function getHSNByCode(code: string): HSNCode | undefined {
   return HSN_DATABASE.find((h) => h.code === code);
 }
 
-export function suggestHSN(description: string): HSNCode[] {
+export function suggestHSN(description: string): (HSNCode & { varies?: boolean })[] {
   const words = description.toLowerCase().split(/\s+/).filter((w) => w.length > 2);
   if (!words.length) return [];
 
@@ -511,7 +523,11 @@ export function suggestHSN(description: string): HSNCode[] {
     .sort((a, b) => b.score - a.score)
     .slice(0, 5);
 
-  return scored.map((s) => s.hsn);
+  const book = getRateBook();
+  return scored.map((s) => {
+    const rate = book ? singleRate(book, s.hsn.code) : s.hsn.gstRate;
+    return { ...s.hsn, gstRate: (rate ?? s.hsn.gstRate) as GSTRate, varies: book ? rate === null : false };
+  });
 }
 
 /**

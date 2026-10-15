@@ -55,10 +55,11 @@ function line(partial: Partial<InvoiceItem> & { gstRate: number; isInterState: b
 }
 
 describe("GST 2.0 rate table", () => {
-  it("defaults new invoices to 0 / 0.25 / 3 / 5 / 18 / 40", () => {
-    expect(GST_2_0_RATES).toEqual([0, 0.25, 3, 5, 18, 40]);
+  it("defaults new invoices to 0 / 0.25 / 1 / 1.5 / 3 / 5 / 18 / 40", () => {
+    // 1% (affordable housing) and 1.5% (Schedule VI stones) are legal rates too.
+    expect(GST_2_0_RATES).toEqual([0, 0.25, 1, 1.5, 3, 5, 18, 40]);
     const picker = gstRatePickerOptions();
-    expect(picker).toEqual([0, 0.25, 3, 5, 18, 40]);
+    expect(picker).toEqual([0, 0.25, 1, 1.5, 3, 5, 18, 40]);
     expect(picker).not.toContain(12);
     expect(picker).not.toContain(28);
   });
