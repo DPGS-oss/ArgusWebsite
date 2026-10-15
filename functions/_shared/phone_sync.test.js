@@ -179,3 +179,20 @@ test('purchases sync both ways with supplier, bill number and tax heads', () => 
   const old = mergePhoneSync(first.appData, { invoices: [] });
   assert.equal(old.appData.purchases.length, 1);
 });
+
+test('edit log: append-only, merged both ways, each entry sent once', () => {
+  const { mergePhoneSync } = require('./phone_sync');
+  const phoneEntry = { id: 'a1', at: '2026-10-15T10:00:00Z', byUid: 'u1', byName: 'Owner', device: 'android', action: 'created', entity: 'bill', entityId: 'i1', ref: 'INV/26-27/0001', detail: 'Bill for Mehta' };
+  const webEntry = { id: 'w1', at: '2026-10-15T09:00:00Z', byUid: 'u1', byName: 'Owner', device: 'web', action: 'edited', entity: 'customer', entityId: 'c1', ref: 'Mehta', detail: 'Phone: — → 98' };
+  const first = mergePhoneSync({ auditLog: [webEntry] }, { auditLog: [phoneEntry], auditSince: '' }, '2026-10-15T11:00:00Z');
+  assert.deepEqual(first.appData.auditLog.map((e) => e.id), ['w1', 'a1']);
+  assert.deepEqual(first.toPhone.auditLog.map((e) => e.id), ['w1']);
+  assert.equal(first.toPhone.auditSince, '2026-10-15T11:00:00Z');
+  // Next sync: nothing new either way; the phone re-sending does not duplicate.
+  const second = mergePhoneSync(first.appData, { auditLog: [phoneEntry], auditSince: first.toPhone.auditSince }, '2026-10-15T12:00:00Z');
+  assert.equal(second.appData.auditLog.length, 2);
+  assert.deepEqual(second.toPhone.auditLog, []);
+  // An entry cannot be rewritten by sending it again with other text.
+  const third = mergePhoneSync(second.appData, { auditLog: [{ ...phoneEntry, detail: 'changed' }], auditSince: '' }, '2026-10-15T13:00:00Z');
+  assert.equal(third.appData.auditLog.find((e) => e.id === 'a1').detail, 'Bill for Mehta');
+});

@@ -151,6 +151,8 @@ export function mergeData(local: AppData, cloud: AppData): AppData {
     payments: mergeById(local.payments ?? [], cloud.payments ?? []),
     templates: mergeById(local.templates ?? [], cloud.templates ?? []),
     khataEntries: mergeById(local.khataEntries ?? [], cloud.khataEntries ?? []),
+    // The edit log only grows: keep every entry from both sides, oldest first.
+    auditLog: mergeById(local.auditLog ?? [], cloud.auditLog ?? []).sort((a, b) => a.at.localeCompare(b.at)),
   };
   // GSTR-2B uploads by month: the later upload of a month wins.
   const gstr2b = { ...(local.gstr2b || {}) };

@@ -6,6 +6,7 @@ import { generateId, loadData, saveData } from "./storage";
 import { isRegisteredGstin } from "./gstin";
 import { round2, toPaise } from "./money";
 import { withBalance } from "./notes";
+import { appendAudit, auditEntry } from "./audit";
 
 /** "gst" holds GST collected on sales (owed to the government) less GST paid on purchases. */
 export type LedgerAccount = "party" | "cash" | "bank" | "sales" | "purchase" | "expense" | "gst";
@@ -108,6 +109,10 @@ export function applyPaymentToInvoice(data: AppData, payment: Payment): AppData 
   });
   const inv = invoices.find((i) => i.id === payment.invoiceId);
   let next = { ...data, invoices, payments: [...(data.payments || []), payment] };
+  next = appendAudit({ ...next }, auditEntry({
+    action: "recorded", entity: "payment", entityId: payment.id, ref: inv?.invoiceNumber || "",
+    detail: `₹${payment.amount.toFixed(2)} received by ${payment.method}${payment.reference ? ` (ref ${payment.reference})` : ""}`,
+  }));
   if (inv) next = postPaymentLedger(next, payment, inv.partyName, inv.partyId);
   return next;
 }

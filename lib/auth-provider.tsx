@@ -21,6 +21,7 @@ import {
   getRedirectResult,
 } from "firebase/auth";
 import { getFirebaseAuth, initFirebase } from "./firebase";
+import { setAuditActor } from "./audit";
 import { isSubscriptionActive, type SubscriptionInfo } from "./subscription";
 import {
   SUB_CACHE_KEY,
@@ -186,6 +187,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       unsubscribe = onAuthStateChanged(auth, async (nextUser) => {
         setFirebaseUser(nextUser);
+        // Who the edit log records for changes made in this browser.
+        setAuditActor(nextUser ? { uid: nextUser.uid, name: nextUser.displayName || nextUser.email || "Owner" } : null);
         if (nextUser) {
           const idToken = await nextUser.getIdToken();
           setToken(idToken);

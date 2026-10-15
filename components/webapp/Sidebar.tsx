@@ -55,6 +55,7 @@ const menuItems: { view: View; label: string; icon: typeof LayoutDashboard }[] =
   { view: "templates", label: "Templates", icon: LayoutTemplate },
   { view: "reports", label: "GSTR Reports", icon: BarChart3 },
   { view: "business", label: "Business", icon: LayoutDashboard },
+  { view: "edit-log", label: "Edit log", icon: ClipboardCheck },
   { view: "settings", label: "Settings", icon: SettingsIcon },
   { view: "files", label: "Files", icon: FolderOpen },
 ];

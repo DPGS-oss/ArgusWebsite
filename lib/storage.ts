@@ -3,6 +3,10 @@
 import type { AppData, AppSettings, BusinessProfile, Invoice, Party, StockItem, CreditNote, DebitNote, PayrollEntry, DeliveryChallan, Expense, Quote, Purchase, Payment, Template, KhataEntry, DeletableKey } from "./types";
 import { cancelledEntry } from "./invoice-history";
 import { financialYear, todayIST } from "./dates";
+import { appendAudit, auditEntry, describeFields } from "./audit";
+import { describeChanges } from "./invoice-history";
+const inr = (n: number) => `₹${(Number(n) || 0).toFixed(2)}`;
+
 
 declare global {
   interface Window {
@@ -550,6 +554,10 @@ export function getSettings(): AppSettings {
 
 export function saveSettings(settings: AppSettings): void {
   const data = loadData();
+  const changes = describeFields(data.settings, settings, {
+    invoicePrefix: "Bill prefix", roundOff: "Round to the rupee", defaultGstRate: "Default GST %", turnoverAbove5Cr: "Turnover above ₹5 crore",
+  });
+  if (changes) appendAudit(data, auditEntry({ action: "edited", entity: "settings", entityId: "settings", ref: "Settings", detail: changes }));
   data.settings = settings;
   saveData(data);
 }
@@ -609,6 +617,12 @@ export function importAllData(jsonStr: string): boolean {
 export function saveBusiness(business: BusinessProfile): void {
   const data = loadData();
   const idx = data.businesses.findIndex((b) => b.id === business.id);
+  const changes = describeFields(data.businesses[idx], business, {
+    name: "Name", gstin: "GSTIN", address: "Address", state: "State", composition: "Composition scheme", pan: "PAN",
+  });
+  if (idx < 0 || changes) {
+    appendAudit(data, auditEntry({ action: idx < 0 ? "created" : "edited", entity: "business", entityId: business.id, ref: business.name, detail: changes || "Business added" }));
+  }
   if (idx >= 0) {
     data.businesses[idx] = business;
   } else {
@@ -621,6 +635,10 @@ export function saveBusiness(business: BusinessProfile): void {
 export function saveParty(party: Party): void {
   const data = loadData();
   const idx = data.parties.findIndex((p) => p.id === party.id);
+  const changes = describeFields(data.parties[idx], party, { name: "Name", gstin: "GSTIN", phone: "Phone", address: "Address", state: "State" });
+  if (idx < 0 || changes) {
+    appendAudit(data, auditEntry({ action: idx < 0 ? "created" : "edited", entity: "customer", entityId: party.id, ref: party.name, detail: changes || `${party.type === "supplier" ? "Supplier" : "Customer"} added` }));
+  }
   if (idx >= 0) {
     data.parties[idx] = party;
   } else {
@@ -632,6 +650,15 @@ export function saveParty(party: Party): void {
 export function saveInvoice(invoice: Invoice): void {
   const data = loadData();
   const idx = data.invoices.findIndex((i) => i.id === invoice.id);
+  if (idx < 0) {
+    appendAudit(data, auditEntry({
+      action: "created", entity: "bill", entityId: invoice.id, ref: invoice.invoiceNumber,
+      detail: `${invoice.status === "draft" ? "Draft" : "Bill"} for ${invoice.partyName || "walk-in"}, ${inr(invoice.grandTotal)}`,
+    }));
+  } else {
+    const changes = describeChanges(data.invoices[idx], invoice);
+    if (changes.length) appendAudit(data, auditEntry({ action: "edited", entity: "bill", entityId: invoice.id, ref: invoice.invoiceNumber, detail: changes.join("; ") }));
+  }
   if (idx >= 0) {
     data.invoices[idx] = invoice;
   } else {
@@ -662,6 +689,7 @@ export function deleteInvoice(id: string): void {
   }
   data.invoices = data.invoices.filter((i) => i.id !== id);
   markDeleted(data, "invoices", id);
+  if (inv) appendAudit(data, auditEntry({ action: "deleted", entity: "bill", entityId: id, ref: inv.invoiceNumber, detail: `Draft deleted (${inr(inv.grandTotal)})` }));
   saveData(data);
 }
 
@@ -676,6 +704,7 @@ export function cancelInvoice(id: string): void {
   );
   // The goods on a cancelled bill go back into stock.
   const bill = before.find((i) => i.id === id && i.status !== "cancelled" && i.status !== "draft");
+  if (bill) appendAudit(data, auditEntry({ action: "cancelled", entity: "bill", entityId: id, ref: bill.invoiceNumber, detail: `Bill cancelled (${inr(bill.grandTotal)}); stock returned` }));
   for (const item of bill?.items || []) {
     const stock = item.stockItemId ? data.stock.find((s) => s.id === item.stockItemId) : undefined;
     if (stock) stock.currentStock += item.quantity;
@@ -686,6 +715,10 @@ export function cancelInvoice(id: string): void {
 export function saveStockItem(item: StockItem): void {
   const data = loadData();
   const idx = data.stock.findIndex((s) => s.id === item.id);
+  const changes = describeFields(data.stock[idx], item, { name: "Name", hsn: "HSN", rate: "Price", gstRate: "GST %", currentStock: "Stock", minStock: "Minimum stock" });
+  if (idx < 0 || changes) {
+    appendAudit(data, auditEntry({ action: idx < 0 ? "created" : "edited", entity: "stock", entityId: item.id, ref: item.name, detail: changes || `Item added with stock ${item.currentStock}` }));
+  }
   if (idx >= 0) {
     data.stock[idx] = item;
   } else {
@@ -722,6 +755,8 @@ export function deductStockForInvoice(invoice: Invoice): void {
 
 export function deleteStockItem(id: string): void {
   const data = loadData();
+  const item = data.stock.find((s) => s.id === id);
+  if (item) appendAudit(data, auditEntry({ action: "deleted", entity: "stock", entityId: id, ref: item.name, detail: `Item deleted (stock was ${item.currentStock})` }));
   data.stock = data.stock.filter((s) => s.id !== id);
   markDeleted(data, "stock", id);
   saveData(data);
@@ -729,6 +764,8 @@ export function deleteStockItem(id: string): void {
 
 export function deleteParty(id: string): void {
   const data = loadData();
+  const party = data.parties.find((p) => p.id === id);
+  if (party) appendAudit(data, auditEntry({ action: "deleted", entity: "customer", entityId: id, ref: party.name, detail: `${party.type === "supplier" ? "Supplier" : "Customer"} deleted` }));
   data.parties = data.parties.filter((p) => p.id !== id);
   markDeleted(data, "parties", id);
   saveData(data);
@@ -744,6 +781,10 @@ export function setActiveBusiness(id: string): void {
 export function saveCreditNote(cn: CreditNote): void {
   const data = loadData();
   const idx = data.creditNotes.findIndex((c) => c.id === cn.id);
+  if (idx < 0) {
+    const bill = data.invoices.find((i) => i.id === cn.invoiceId);
+    appendAudit(data, auditEntry({ action: "created", entity: "credit_note", entityId: cn.id, ref: cn.creditNoteNumber, detail: `${inr(cn.totalAmount)} against ${bill?.invoiceNumber || "no bill"}${cn.reason ? ` — ${cn.reason}` : ""}` }));
+  }
   if (idx >= 0) data.creditNotes[idx] = cn;
   else data.creditNotes.push(cn);
   saveData(data);
@@ -752,6 +793,8 @@ export function saveCreditNote(cn: CreditNote): void {
 /** Issued notes are kept (Rule 56); cancelling marks them and the books post a reversal. */
 export function cancelCreditNote(id: string): void {
   const data = loadData();
+  const note = (data.creditNotes || []).find((n) => n.id === id && n.status !== "cancelled");
+  if (note) appendAudit(data, auditEntry({ action: "cancelled", entity: "credit_note", entityId: id, ref: note.creditNoteNumber, detail: `Credit note cancelled (${inr(note.totalAmount)})` }));
   data.creditNotes = (data.creditNotes || []).map((n) =>
     n.id === id && n.status !== "cancelled" ? { ...n, status: "cancelled", updatedAt: new Date().toISOString() } : n,
   );
@@ -762,6 +805,10 @@ export function saveDebitNote(note: DebitNote): void {
   const data = loadData();
   data.debitNotes = data.debitNotes || [];
   const idx = data.debitNotes.findIndex((c) => c.id === note.id);
+  if (idx < 0) {
+    const bill = data.invoices.find((i) => i.id === note.invoiceId);
+    appendAudit(data, auditEntry({ action: "created", entity: "debit_note", entityId: note.id, ref: note.debitNoteNumber, detail: `${inr(note.totalAmount)} against ${bill?.invoiceNumber || "no bill"}${note.reason ? ` — ${note.reason}` : ""}` }));
+  }
   if (idx >= 0) data.debitNotes[idx] = note;
   else data.debitNotes.push(note);
   saveData(data);
@@ -770,6 +817,8 @@ export function saveDebitNote(note: DebitNote): void {
 /** Issued notes are kept (Rule 56); cancelling marks them and the books post a reversal. */
 export function cancelDebitNote(id: string): void {
   const data = loadData();
+  const note = (data.debitNotes || []).find((n) => n.id === id && n.status !== "cancelled");
+  if (note) appendAudit(data, auditEntry({ action: "cancelled", entity: "debit_note", entityId: id, ref: note.debitNoteNumber, detail: `Debit note cancelled (${inr(note.totalAmount)})` }));
   data.debitNotes = (data.debitNotes || []).map((n) =>
     n.id === id && n.status !== "cancelled" ? { ...n, status: "cancelled", updatedAt: new Date().toISOString() } : n,
   );
@@ -812,6 +861,10 @@ export function deleteDeliveryChallan(id: string): void {
 export function saveExpense(exp: Expense): void {
   const data = loadData();
   const idx = data.expenses.findIndex((e) => e.id === exp.id);
+  const changes = describeFields(data.expenses[idx], exp, { amount: "Amount", category: "Category", date: "Date", vendor: "Paid to" });
+  if (idx < 0 || changes) {
+    appendAudit(data, auditEntry({ action: idx < 0 ? "created" : "edited", entity: "expense", entityId: exp.id, ref: exp.category || "Expense", detail: changes || `${inr(exp.amount)}${exp.description ? ` — ${exp.description}` : ""}` }));
+  }
   if (idx >= 0) data.expenses[idx] = exp;
   else data.expenses.push(exp);
   saveData(data);
@@ -819,6 +872,8 @@ export function saveExpense(exp: Expense): void {
 
 export function deleteExpense(id: string): void {
   const data = loadData();
+  const exp = data.expenses.find((e) => e.id === id);
+  if (exp) appendAudit(data, auditEntry({ action: "deleted", entity: "expense", entityId: id, ref: exp.category || "Expense", detail: `Expense deleted (${inr(exp.amount)})` }));
   data.expenses = data.expenses.filter((e) => e.id !== id);
   markDeleted(data, "expenses", id);
   saveData(data);
@@ -844,6 +899,10 @@ export function deleteQuote(id: string): void {
 export function savePurchase(purchase: Purchase): void {
   const data = loadData();
   const idx = data.purchases.findIndex((p) => p.id === purchase.id);
+  const changes = describeFields(data.purchases[idx], purchase, { supplierName: "Supplier", supplierInvoiceNumber: "Supplier bill", totalAmount: "Amount", totalGstAmount: "GST", itcEligible: "GST claimable" });
+  if (idx < 0 || changes) {
+    appendAudit(data, auditEntry({ action: idx < 0 ? "created" : "edited", entity: "purchase", entityId: purchase.id, ref: purchase.supplierInvoiceNumber || purchase.purchaseNumber, detail: changes || `${purchase.supplierName}, ${inr(purchase.totalAmount)} (GST ${inr(purchase.totalGstAmount)})` }));
+  }
   if (idx >= 0) data.purchases[idx] = purchase;
   else data.purchases.push(purchase);
   saveData(data);
@@ -851,6 +910,8 @@ export function savePurchase(purchase: Purchase): void {
 
 export function deletePurchase(id: string): void {
   const data = loadData();
+  const purchase = data.purchases.find((p) => p.id === id);
+  if (purchase) appendAudit(data, auditEntry({ action: "deleted", entity: "purchase", entityId: id, ref: purchase.supplierInvoiceNumber || purchase.purchaseNumber, detail: `Purchase deleted (${purchase.supplierName}, ${inr(purchase.totalAmount)})` }));
   data.purchases = data.purchases.filter((p) => p.id !== id);
   markDeleted(data, "purchases", id);
   data.khataEntries = (data.khataEntries || []).filter((e) => e.sourceId !== id);
@@ -868,6 +929,11 @@ export function savePayment(payment: Payment): void {
 
 export function deletePayment(id: string): void {
   const data = loadData();
+  const pay = data.payments.find((p) => p.id === id);
+  if (pay) {
+    const bill = data.invoices.find((i) => i.id === pay.invoiceId);
+    appendAudit(data, auditEntry({ action: "deleted", entity: "payment", entityId: id, ref: bill?.invoiceNumber || "", detail: `Payment of ${inr(pay.amount)} deleted` }));
+  }
   data.payments = data.payments.filter((p) => p.id !== id);
   markDeleted(data, "payments", id);
   saveData(data);

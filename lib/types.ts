@@ -182,6 +182,8 @@ export interface AppData {
   payments: Payment[];
   templates: Template[];
   khataEntries: KhataEntry[];
+  /** Edit log: every change, who made it and when. Append-only (lib/audit.ts). */
+  auditLog?: import("./audit").AuditEntry[];
   /** GSTR-2B files uploaded, by return period "MMYYYY": credit per head and the match summary. */
   gstr2b?: Record<string, { itc: { igst: number; cgst: number; sgst: number; cess: number }; summary?: Record<string, number>; uploadedAt: string }>;
   /** Tombstones: id -> deleted-at, per list, so sync does not resurrect deletions. */
@@ -422,6 +424,7 @@ export interface GSTRSection {
 export type View =
   | "dashboard"
   | "gst-returns"
+  | "edit-log"
   | "invoices"
   | "invoice-form"
   | "invoice-preview"

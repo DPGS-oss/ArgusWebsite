@@ -454,6 +454,35 @@ const KINDS = {
   purchases: { webKey: 'purchases', phoneFp: phonePurchaseFp, webFp: webPurchaseFp, ...purchaseKind },
 };
 
+// ------------------------------------------------------------- edit log
+// Append-only. The phone sends entries it has not sent before; the server
+// stamps `syncedAt` on every entry the first time it reaches the cloud and
+// returns those stamped after the phone's last sync (`auditSince`).
+
+const AUDIT_FIELDS = ['id', 'at', 'byUid', 'byName', 'device', 'action', 'entity', 'entityId', 'ref', 'detail'];
+
+function mergeAudit(data, sent, since, now) {
+  const log = Array.isArray(data.auditLog) ? data.auditLog.filter((e) => e && str(e.id)) : [];
+  const known = new Set(log.map((e) => str(e.id)));
+  for (const e of log) if (!e.syncedAt) e.syncedAt = now;
+  const sentIds = new Set();
+  for (const raw of Array.isArray(sent) ? sent.slice(0, 5000) : []) {
+    if (!raw || !str(raw.id)) continue;
+    const id = str(raw.id);
+    sentIds.add(id);
+    if (known.has(id)) continue;
+    const e = {};
+    for (const k of AUDIT_FIELDS) e[k] = str(raw[k]).slice(0, k === 'detail' ? 2000 : 200);
+    e.device = e.device === 'web' ? 'web' : 'android';
+    e.syncedAt = now;
+    log.push(e);
+    known.add(id);
+  }
+  log.sort((a, b) => str(a.at).localeCompare(str(b.at)));
+  data.auditLog = log;
+  return log.filter((e) => !sentIds.has(str(e.id)) && (!since || str(e.syncedAt) > since));
+}
+
 /**
  * Merge what the phone sent into `appData` (mutated copy returned) and work
  * out which records the phone must upsert.
@@ -524,6 +553,8 @@ function mergePhoneSync(appData, phone, now = new Date().toISOString()) {
   }
   data.invoiceCounter = Math.max(num(data.invoiceCounter), data.invoices.length);
   data.deleted = deleted;
+  out.auditLog = mergeAudit(data, phone.auditLog, str(phone.auditSince), now);
+  out.auditSince = now;
   return { appData: stripUndefined(data), toPhone: out };
 }
 

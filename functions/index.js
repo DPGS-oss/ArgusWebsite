@@ -1695,6 +1695,14 @@ exports.apiDataLoad = onRequest({ region: 'us-central1', maxInstances: 10, secre
 });
 
 // ==================== /api/data/save ====================
+/** Server copy of the edit log wins for every entry it has; new entries are added. */
+function keepAuditLog(stored, incoming) {
+  const byId = new Map();
+  for (const e of Array.isArray(incoming) ? incoming : []) if (e && e.id) byId.set(String(e.id), e);
+  for (const e of stored) if (e && e.id) byId.set(String(e.id), e);
+  return [...byId.values()].sort((a, b) => String(a.at || '').localeCompare(String(b.at || '')));
+}
+
 exports.apiDataSave = onRequest({ region: 'us-central1', maxInstances: 10, secrets: FIREBASE_SECRETS }, async (req, res) => {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -1749,8 +1757,12 @@ exports.apiDataSave = onRequest({ region: 'us-central1', maxInstances: 10, secre
       if (body.base_updated_at !== undefined && current && body.base_updated_at !== current) {
         return current;
       }
+      // The edit log only grows: entries already in the cloud are kept as they
+      // are, whatever the browser sends.
+      const stored = snap.exists && snap.data().appData && Array.isArray(snap.data().appData.auditLog) ? snap.data().appData.auditLog : [];
+      const appData = { ...body.appData, auditLog: keepAuditLog(stored, body.appData.auditLog) };
       tx.set(ref, {
-        appData: body.appData,
+        appData,
         updated_at: now,
         version: body.version || 1,
         device: body.device || 'unknown',
@@ -1801,6 +1813,8 @@ exports.apiDataPhoneSync = onRequest({ region: 'us-central1', maxInstances: 10, 
     creditNotes: Array.isArray(body.creditNotes) ? body.creditNotes : [],
     debitNotes: Array.isArray(body.debitNotes) ? body.debitNotes : [],
     purchases: Array.isArray(body.purchases) ? body.purchases : [],
+    auditLog: Array.isArray(body.auditLog) ? body.auditLog : [],
+    auditSince: typeof body.auditSince === 'string' ? body.auditSince : '',
     deleted: body.deleted && typeof body.deleted === 'object' ? body.deleted : {},
   };
   if (Buffer.byteLength(JSON.stringify(phone), 'utf8') > 4_000_000) {
