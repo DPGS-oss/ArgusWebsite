@@ -452,7 +452,9 @@ function phoneBill(s: Shop, iso: string, staff: boolean) {
     const it = pick(s.items);
     const inv = ph.inventory.find((x) => x.id === `s${s.n}-${it.key}`)!;
     const qty = s.kind === 10 ? pick([1, 2, 3]) : pick([1, 1, 2, 3, 5]);
-    if (inv.stock_on_hand < qty) continue;
+    // what this bill already takes of the item counts too
+    const taken = lines.filter((x) => x.inv === inv).reduce((t, x) => t + x.qty, 0);
+    if (inv.stock_on_hand - taken < qty) continue;
     const rate = Number(inv.gst_rate);
     const price = r2(preTax(it) * (1 + rate / 100));
     const l = linePaise({ quantity: qty, price, gstRate: rate, inclusive: true, interState: inter });
@@ -955,8 +957,10 @@ it("a year of business: shops on the website and the phone, staff, three CAs", a
     if (s.app === "web") {
       const paidOk = data.invoices.filter((i) => s.expect.webPaid[i.id]).every((i) => i.balanceDue >= -0.01 && (i.balanceDue > 0.01 || i.status === "paid"));
       check(`${s.name}: bills paid in full by later payments show as paid`, paidOk, data.invoices.filter((i) => s.expect.webPaid[i.id] && i.balanceDue <= 0.01 && i.status !== "paid").slice(0, 3).map((i) => `${i.invoiceNumber} ${i.status}`).join(", "));
-      const dupNums = data.invoices.map((i) => i.invoiceNumber).filter((n, k, a) => a.indexOf(n) !== k);
-      check(`${s.name}: no two bills share a number across the year (owner, staff, branch)`, dupNums.length === 0, dupNums.slice(0, 5).join(", "));
+      // numbers are unique within a GSTIN (a branch has its own series)
+      const nums = data.invoices.map((i) => `${i.businessId}|${i.invoiceNumber}`);
+      const dupNums = nums.filter((n, k, a) => a.indexOf(n) !== k);
+      check(`${s.name}: no two bills of one GSTIN share a number across the year (owner, staff, branch)`, dupNums.length === 0, dupNums.slice(0, 5).join(", "));
     }
     // receipts sent on WhatsApp
     if (s.expect.receipts.length) {
