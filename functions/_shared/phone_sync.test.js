@@ -57,7 +57,8 @@ test('first sync: phone data lands on the web and web-only bills go to the phone
 
   assert.deepEqual(appData.invoices.map((i) => i.id), ['w1', 'inv-phone-1']);
   assert.equal(appData.invoices[1].businessId, 'b1');
-  assert.deepEqual(appData.expenses, [{ id: 'e1' }], 'web-only data is untouched');
+  // Expenses now sync with the phone too: the web's stays, with its sync stamp.
+  assert.deepEqual(appData.expenses.map(({ _sync, ...e }) => e), [{ id: 'e1' }], 'web-only data is kept');
   assert.deepEqual(toPhone.invoices.map((i) => i.id), ['w1']);
   assert.equal(toPhone.invoices[0].items[0].unit_price, 118);
   assert.deepEqual(toPhone.customers, [], 'suppliers stay on the web');
@@ -276,4 +277,60 @@ test('business details: the phone fills an empty website; the website business g
   const r = mergePhoneSync(web, { business: { name: 'Other' } });
   assert.equal(r.appData.businesses.length, 1);
   assert.equal(r.toPhone.business.name, 'Web Name');
+});
+
+test('a 0% phone bill to another state is inter-state (place of supply vs seller state)', () => {
+  const { phoneToWebInvoice } = require('./phone_sync');
+  const base = { id: 'z', invoice_number: 'INV/26-27/0009', customer_name: 'X', invoice_date: '2026-10-05', status: 'paid', seller_gstin: '27AAPFU0939F1ZV',
+    total_amount: 340, total_gst_amount: 0, total_cgst: 0, total_sgst: 0, total_igst: 0,
+    items: [{ name: 'Rice', hsn_code: '1006', quantity: 1, unit_price: 340, gst_rate: 0, taxable_value: 340, gst_amount: 0, cgst: 0, sgst: 0, igst: 0, total: 340 }] };
+  assert.equal(phoneToWebInvoice({ ...base, place_of_supply: '07' }).isInterState, true);
+  assert.equal(phoneToWebInvoice({ ...base, place_of_supply: '27' }).isInterState, false);
+});
+
+test('expenses and hand-typed khata go both ways; ledger lines made from bills stay on their side', () => {
+  const web = {
+    businesses: [{ id: 'b', name: 'Shop', gstin: '27AAPFU0939F1ZV' }], activeBusinessId: 'b',
+    expenses: [{ id: 'e-web', category: 'Electricity', description: 'MSEB', amount: 2400, date: '2025-05-05', paymentMode: 'UPI', vendor: 'Board', gstAmount: 0, isGstClaimable: false, createdAt: '2025-05-05T10:00:00Z', updatedAt: '2025-05-05T10:00:00Z' }],
+    khataEntries: [
+      { id: 'k-web', customerId: 'c1', customerName: 'Ravi', amount: 500, description: 'Udhar', createdAt: '2025-05-06T10:00:00Z', isCredit: false, accountType: 'party' },
+      { id: 'k-led', customerId: 'c1', customerName: 'Ravi', amount: 1180, description: 'INV-1', createdAt: '2025-05-06T10:00:00Z', isCredit: false, accountType: 'party', sourceType: 'invoice', sourceId: 'i1' },
+    ],
+  };
+  const phone = {
+    expenses: [{ id: 'e-ph', category: 'Rent', description: 'Shop rent', amount: 29500, date: '2025-05-01T00:00:00.000', payment_mode: 'bank', vendor: 'Landlord', gst_amount: 4500, is_gst_claimable: true, vendor_gstin: '27aapfu0939f1zv', created_at: '2025-05-01T09:00:00', updated_at: '2025-05-01T09:00:00' }],
+    khataEntries: [
+      { id: 'k-ph', customer_id: 'c2', customer_name: 'Sita', amount: 300, description: 'Udhar', created_at: '2025-05-07T10:00:00', is_credit: false },
+      { id: 'k-ph-led', customer_id: 'c2', customer_name: 'Sita', amount: 300, description: 'ledger', created_at: '2025-05-07T10:00:00', is_credit: false, source_type: 'invoice', source_id: 'p1' },
+    ],
+  };
+  const { appData, toPhone } = mergePhoneSync(web, phone, '2025-05-08T00:00:00Z');
+  const rent = appData.expenses.find((e) => e.id === 'e-ph');
+  assert.equal(rent.date, '2025-05-01');
+  assert.equal(rent.vendorGstin, '27AAPFU0939F1ZV');
+  assert.equal(rent.isGstClaimable, true);
+  assert.deepEqual(toPhone.expenses.map((e) => e.id), ['e-web']);
+  assert.ok(appData.khataEntries.some((k) => k.id === 'k-ph'));
+  assert.ok(!appData.khataEntries.some((k) => k.id === 'k-ph-led'), 'phone ledger lines are not taken');
+  assert.deepEqual(toPhone.khataEntries.map((k) => k.id), ['k-web'], 'web ledger lines are not sent');
+  // second sync, nothing changed: nothing goes back
+  const again = mergePhoneSync(appData, { ...phone, expenses: [...phone.expenses, toPhone.expenses[0]], khataEntries: [...phone.khataEntries, toPhone.khataEntries[0]] }, '2025-05-09T00:00:00Z');
+  assert.equal(again.toPhone.expenses.length, 0);
+  assert.equal(again.toPhone.khataEntries.length, 0);
+});
+
+test('a branch with its own GSTIN: each return takes only its bills and their notes', () => {
+  const { booksForBusiness, expensesAsPurchases } = require('./ca-exports');
+  const data = {
+    businesses: [{ id: 'pune', gstin: '27AAPFU0939F1ZV' }, { id: 'blr', gstin: '29AAPFU0939F1ZR' }], activeBusinessId: 'pune',
+    invoices: [{ id: 'a', businessId: 'pune' }, { id: 'b', businessId: 'blr' }, { id: 'c' }],
+    creditNotes: [{ id: 'cn1', invoiceId: 'b' }, { id: 'cn2', invoiceId: 'a' }], debitNotes: [],
+  };
+  const blr = booksForBusiness(data, '29aapfu0939f1zr');
+  assert.equal(blr.business.id, 'blr');
+  assert.deepEqual(blr.data.invoices.map((i) => i.id), ['b']);
+  assert.deepEqual(blr.data.creditNotes.map((n) => n.id), ['cn1']);
+  assert.equal(blr.data.activeBusinessId, 'blr');
+  assert.deepEqual(booksForBusiness(data, '').data.invoices.map((i) => i.id), ['a', 'c']);
+  assert.equal(expensesAsPurchases([{ id: 'r', isGstClaimable: true, gstAmount: 4500, amount: 29500, vendorGstin: '27AAPFU0939F1ZV', date: '2025-05-01' }, { id: 'x', isGstClaimable: true, gstAmount: 10, amount: 100 }]).length, 1);
 });

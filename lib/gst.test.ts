@@ -1009,3 +1009,24 @@ describe("bill HTML is safe from typed text", () => {
     expect(html).toContain("A &amp; B &lt;Stores&gt;");
   });
 });
+
+describe("on-screen GSTR-1 and 3B split 0% lines out", () => {
+  it("puts the taxed part in B2CS / 3.1(a) and the 0% part in Table 8 / 3.1(c)", async () => {
+    const { generateGSTRReport } = await import("./gst");
+    const inv = {
+      id: "i", invoiceNumber: "INV/26-27/0001", type: "tax_invoice", status: "paid", date: "2026-10-05", partyGstin: "", placeOfSupply: "27", isInterState: false,
+      totalTaxable: 440, totalCgst: 9, totalSgst: 9, totalIgst: 0, totalTax: 18, grandTotal: 458,
+      items: [
+        { description: "Rice", hsn: "1006", quantity: 1, gstRate: 0, taxableAmount: 340, cgst: 0, sgst: 0, igst: 0, total: 340 },
+        { description: "Soap", hsn: "3401", quantity: 1, gstRate: 18, taxableAmount: 100, cgst: 9, sgst: 9, igst: 0, total: 118 },
+      ],
+    } as unknown as import("./types").Invoice;
+    const g1 = generateGSTRReport([inv], "gstr1", "2026-10-01", "2026-10-31");
+    expect(g1.sections.find((x) => x.section === "7")?.taxableValue).toBe(100);
+    expect(g1.sections.find((x) => x.section === "8")?.taxableValue).toBe(340);
+    const g3 = generateGSTRReport([inv], "gstr3b", "2026-10-01", "2026-10-31");
+    expect(g3.sections.find((x) => x.section === "3.1(a)")?.taxableValue).toBe(100);
+    expect(g3.sections.find((x) => x.section === "3.1(c)")?.taxableValue).toBe(340);
+    expect(g3.totalTaxableValue).toBe(100);
+  });
+});

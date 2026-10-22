@@ -1,6 +1,6 @@
 import type { AppData, Invoice, Purchase } from "./types";
 import { isRegisteredGstin, isValidGstin } from "./gstin";
-import { generateGstnJson, notesAsInvoices, purchaseTax } from "./gst";
+import { expensesAsPurchases, generateGstnJson, notesAsInvoices, purchaseTax } from "./gst";
 import { unbalancedPostings } from "./books";
 import { istDate } from "./dates";
 import { roundPaise, toPaise } from "./money";
@@ -45,6 +45,7 @@ export function checkBooks(data: AppData, today: Date = new Date(), book: RateBo
   const issues: Issue[] = [];
   const seller = data.businesses.find((b) => b.id === data.activeBusinessId)?.gstin || "";
   const above5 = !!data.settings.turnoverAbove5Cr;
+  const manyGstins = (data.businesses || []).length > 1;
 
   if (seller && !isValidGstin(seller)) {
     issues.push({
@@ -75,7 +76,8 @@ export function checkBooks(data: AppData, today: Date = new Date(), book: RateBo
         });
       }
       // Numbers only need to be unique within a financial year (Apr–Mar).
-      const key = `${financialYear(inv.date) ?? "?"}|${number.toUpperCase()}`;
+      // ...and within a GSTIN: two branches may both have INV/26-27/W0001.
+      const key = `${manyGstins ? `${inv.businessId || ""}#` : ""}${financialYear(inv.date) ?? "?"}|${number.toUpperCase()}`;
       seen.set(key, (seen.get(key) || 0) + 1);
     }
 
@@ -273,6 +275,20 @@ export function checkBooks(data: AppData, today: Date = new Date(), book: RateBo
     }
   }
 
+  // GST on an expense can be claimed only with the vendor's GSTIN (it must show in GSTR-2B).
+  for (const e of data.expenses || []) {
+    if (!e.isGstClaimable || !((e.gstAmount || 0) > 0)) continue;
+    const g = (e.vendorGstin || "").trim();
+    if (!g || !isValidGstin(g)) {
+      issues.push({
+        severity: "warn",
+        title: "Add the vendor's GST number to claim GST on an expense",
+        detail: `${e.category || "Expense"} on ${e.date}${e.vendor ? ` (${e.vendor})` : ""}: ₹${(e.gstAmount || 0).toFixed(2)} GST is marked claimable${g ? `, but ${g} has a typo` : ""}. Add the vendor's GSTIN so it counts in GSTR-3B.`,
+        law: "ITC, Section 16(2)",
+      });
+    }
+  }
+
   // Section 34(2): a credit note after 30 Nov following the original invoice's FY cannot cut output tax.
   for (const cn of data.creditNotes || []) {
     const original = cn.invoiceId ? byId.get(cn.invoiceId) : undefined;
@@ -326,10 +342,13 @@ function numberGaps(invoices: Invoice[]): Issue[] {
     if (inv.status === "draft") continue;
     const m = /^(.*?)(\d+)$/.exec((inv.invoiceNumber || "").trim());
     if (!m || !m[1]) continue;
-    bySeries.set(m[1], [...(bySeries.get(m[1]) || []), Number(m[2])]);
+    // A series belongs to one GSTIN (branches number on their own).
+    const series = `${inv.businessId ? `${inv.businessId}#` : ""}${m[1]}`;
+    bySeries.set(series, [...(bySeries.get(series) || []), Number(m[2])]);
   }
   const out: Issue[] = [];
-  for (const [series, list] of bySeries) {
+  for (const [key, list] of bySeries) {
+    const series = key.slice(key.indexOf("#") + 1);
     const nums = [...new Set(list)].sort((a, b) => a - b);
     let missing = 0;
     for (let i = 1; i < nums.length; i++) missing += nums[i] - nums[i - 1] - 1;
@@ -346,10 +365,26 @@ function numberGaps(invoices: Invoice[]): Issue[] {
 }
 
 /** GSTR-3B figures for one tax period, from the same builder as the JSON export. */
-export function gstr3b(data: AppData, from: string, to: string) {
+/**
+ * The active business's bills and notes. An owner with branches in two states
+ * has a GSTIN for each, and files each one's returns separately. Bills from
+ * before a business was set carry none and belong to the active one.
+ */
+export function activeBusinessBooks(data: AppData): AppData {
+  if ((data.businesses || []).length < 2) return data;
+  const active = data.activeBusinessId || data.businesses[0]?.id;
+  const owner = (x: { businessId?: string }) => x.businessId || active;
+  const invoices = data.invoices.filter((i) => owner(i) === active);
+  const billBusiness = new Map(data.invoices.map((i) => [i.id, owner(i)]));
+  const noteMine = (n: { invoiceId?: string; businessId?: string }) => (n.businessId || (n.invoiceId && billBusiness.get(n.invoiceId)) || active) === active;
+  return { ...data, invoices, creditNotes: (data.creditNotes || []).filter(noteMine), debitNotes: (data.debitNotes || []).filter(noteMine) };
+}
+
+export function gstr3b(all: AppData, from: string, to: string) {
+  const data = activeBusinessBooks(all);
   const seller = data.businesses.find((b) => b.id === data.activeBusinessId)?.gstin || "";
   const docs = [...data.invoices, ...notesAsInvoices(data)];
-  const json = generateGstnJson(docs, "gstr3b", from, to, data.purchases || [], seller) as {
+  const json = generateGstnJson(docs, "gstr3b", from, to, [...(data.purchases || []), ...expensesAsPurchases(data.expenses)], seller) as {
     sup_details: {
       osup_det: { txval: number; iamt: number; camt: number; samt: number };
       osup_nil_exmp: { txval: number };

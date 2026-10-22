@@ -315,6 +315,8 @@ export interface Expense {
   vendor: string;
   gstAmount: number;
   isGstClaimable: boolean;
+  /** The vendor's GSTIN: needed to claim the GST (it must show in GSTR-2B). */
+  vendorGstin?: string;
   createdAt: string;
   updatedAt: string;
 }

@@ -1666,7 +1666,7 @@ exports.apiAccountDelete = onRequest({ region: 'us-central1', maxInstances: 10, 
 });
 
 // ==================== /api/data/load ====================
-exports.apiDataLoad = onRequest({ region: 'us-central1', maxInstances: 10, secrets: FIREBASE_SECRETS }, async (req, res) => {
+exports.apiDataLoad = onRequest({ region: 'us-central1', maxInstances: 10, memory: '1GiB', timeoutSeconds: 120, secrets: FIREBASE_SECRETS }, async (req, res) => {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
   const token = extractToken(req);
@@ -1717,6 +1717,10 @@ exports.apiDataLoad = onRequest({ region: 'us-central1', maxInstances: 10, secre
 
 // ==================== /api/data/save ====================
 /** Server copy of the edit log wins for every entry it has; new entries are added. */
+// A year of a busy shop's books is about 4MB of JSON; the apps gzip it on the
+// way in (Cloud Run takes at most 32MB per request, packed).
+const MAX_BOOKS_JSON_BYTES = 24_000_000;
+
 function keepAuditLog(stored, incoming) {
   const byId = new Map();
   for (const e of Array.isArray(incoming) ? incoming : []) if (e && e.id) byId.set(String(e.id), e);
@@ -1724,7 +1728,7 @@ function keepAuditLog(stored, incoming) {
   return [...byId.values()].sort((a, b) => String(a.at || '').localeCompare(String(b.at || '')));
 }
 
-exports.apiDataSave = onRequest({ region: 'us-central1', maxInstances: 10, secrets: FIREBASE_SECRETS }, async (req, res) => {
+exports.apiDataSave = onRequest({ region: 'us-central1', maxInstances: 10, memory: '1GiB', timeoutSeconds: 120, secrets: FIREBASE_SECRETS }, async (req, res) => {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const token = extractToken(req);
@@ -1753,9 +1757,10 @@ exports.apiDataSave = onRequest({ region: 'us-central1', maxInstances: 10, secre
     return res.status(400).json({ error: 'Missing appData field' });
   }
 
+  // The apps send the books gzipped (about ten times smaller); this is the size unpacked.
   const payloadSize = Buffer.byteLength(JSON.stringify(body.appData), 'utf8');
-  if (payloadSize > 4_000_000) {
-    return res.status(413).json({ error: 'Payload too large (max 4MB)' });
+  if (payloadSize > MAX_BOOKS_JSON_BYTES) {
+    return res.status(413).json({ error: 'Your books are too large to save in one go (max 24MB). Contact support.' });
   }
 
   const rl = await checkRateLimit(uid, 'data_save');
@@ -1813,7 +1818,7 @@ exports.apiDataSave = onRequest({ region: 'us-central1', maxInstances: 10, secre
 // ==================== /api/data/phone-sync ====================
 // The Android app sends its invoices/customers/stock in its own format; the
 // server merges them into the web AppData and returns what the phone lacks.
-exports.apiDataPhoneSync = onRequest({ region: 'us-central1', maxInstances: 10, secrets: FIREBASE_SECRETS }, async (req, res) => {
+exports.apiDataPhoneSync = onRequest({ region: 'us-central1', maxInstances: 10, memory: '1GiB', timeoutSeconds: 120, secrets: FIREBASE_SECRETS }, async (req, res) => {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const token = extractToken(req);
@@ -1858,6 +1863,9 @@ exports.apiDataPhoneSync = onRequest({ region: 'us-central1', maxInstances: 10, 
     creditNotes: Array.isArray(body.creditNotes) ? body.creditNotes : [],
     debitNotes: Array.isArray(body.debitNotes) ? body.debitNotes : [],
     purchases: Array.isArray(body.purchases) ? body.purchases : [],
+    // Rent, salaries and other expenses; khata typed by hand (app 1.4.11+).
+    expenses: Array.isArray(body.expenses) ? body.expenses : [],
+    khataEntries: Array.isArray(body.khataEntries) ? body.khataEntries : [],
     auditLog: Array.isArray(body.auditLog) ? body.auditLog : [],
     auditSince: typeof body.auditSince === 'string' ? body.auditSince : '',
     deleted: body.deleted && typeof body.deleted === 'object' ? body.deleted : {},
@@ -1868,10 +1876,12 @@ exports.apiDataPhoneSync = onRequest({ region: 'us-central1', maxInstances: 10, 
   const billingOnly = books.role === 'member' && books.access === 'billing';
   if (billingOnly) {
     phone.purchases = [];
-    phone.deleted = { ...phone.deleted, purchases: [] };
+    phone.expenses = [];
+    phone.khataEntries = [];
+    phone.deleted = { ...phone.deleted, purchases: [], expenses: [], khataEntries: [] };
   }
-  if (Buffer.byteLength(JSON.stringify(phone), 'utf8') > 4_000_000) {
-    return res.status(413).json({ error: 'Payload too large (max 4MB)' });
+  if (Buffer.byteLength(JSON.stringify(phone), 'utf8') > MAX_BOOKS_JSON_BYTES) {
+    return res.status(413).json({ error: 'Your books are too large to sync in one go (max 24MB). Contact support.' });
   }
 
   const rl = await checkRateLimit(uid, 'data_save');

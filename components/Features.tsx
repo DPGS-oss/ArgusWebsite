@@ -58,7 +58,7 @@ const features: Feature[] = [
   {
     icon: Users,
     title: "CA collaboration",
-    description: "Invite your accountant to a free, encrypted read-only portal. They see books; you keep control.",
+    description: "Invite your accountant to a free, read-only portal. They always see your latest books; you can stop sharing any time.",
   },
   {
     icon: Workflow,

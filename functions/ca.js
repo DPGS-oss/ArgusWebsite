@@ -16,6 +16,7 @@ const {
   companyNameFromAppData,
   parseMonthParam,
   monthBounds,
+  booksForBusiness,
 } = require('./_shared/ca-exports');
 const { buildEinvoiceJson, buildEinvoiceBatch } = require('./_shared/einvoice');
 const { readBooks } = require('./_shared/books_store');
@@ -135,6 +136,8 @@ async function handleCreateInvite(req, res, decoded) {
       }
     }
   }
+  // Old encrypted snapshots are not used any more (CAs read live books).
+  await db.collection('ca_shares').doc(uid).delete().catch(() => {});
   const raw = crypto.randomBytes(32).toString('base64url');
   const backup = crypto.randomBytes(6).toString('hex').toUpperCase();
   const tokenHash = sha256(raw);
@@ -152,47 +155,27 @@ async function handleCreateInvite(req, res, decoded) {
     redeemed_by: null,
     revoked: false,
     created_at: now,
-    e2ee: true,
   });
   return res.status(200).json({
     token: raw,
     backup_code: backup,
-    // Token + AES key stay in the URL fragment only (never query string / server logs).
-    redeem_url: 'https://argusinvoicing.com/ca/redeem/',
+    // The token rides in the #fragment, which browsers never send to a server,
+    // so the link works as it is (older app versions show this link directly).
+    redeem_url: `https://argusinvoicing.com/ca/redeem/#token=${encodeURIComponent(raw)}`,
     expires_at: expires,
     scopes: SCOPES,
     shown_once: true,
     existing: false,
-    e2ee: true,
   });
 }
 
-/** Owner uploads AES-GCM ciphertext of books; decryption key never stored here. */
+/**
+ * CAs now read the shop's live synced books, so encrypted snapshots are no
+ * longer kept: an older page that still uploads one just clears the old copy.
+ */
 async function handleUploadShare(req, res, decoded) {
-  const uid = decoded.uid;
-  const user = (await getUser(uid)) || {};
-  if (isAccountant(user)) {
-    return res.status(403).json({ error: 'Only the business owner can upload a CA share' });
-  }
-  const body = req.body || {};
-  const ciphertext = String(body.ciphertext || '');
-  const iv = String(body.iv || '');
-  if (!ciphertext || !iv) {
-    return res.status(400).json({ error: 'ciphertext and iv required' });
-  }
-  if (ciphertext.length > 8_000_000) {
-    return res.status(413).json({ error: 'Share payload too large' });
-  }
-  const now = new Date().toISOString();
-  const db = getDb();
-  await db.collection('ca_shares').doc(uid).set({
-    owner_id: uid,
-    ciphertext,
-    iv,
-    algo: 'AES-GCM',
-    updated_at: now,
-  });
-  return res.status(200).json({ ok: true, updated_at: now, e2ee: true });
+  await getDb().collection('ca_shares').doc(decoded.uid).delete().catch(() => {});
+  return res.status(200).json({ ok: true, live: true });
 }
 
 async function handleRedeem(req, res, decoded) {
@@ -313,10 +296,18 @@ async function handleClients(req, res, decoded) {
     if (link.status === 'revoked') continue;
     const ownerId = link.owner_id;
     const owner = (await getUser(ownerId)) || {};
+    // The shop's name and GSTIN as set in its books (kept in the main books
+    // document, so no need to read the bills); the account name only as a fallback.
+    let biz = {};
+    try {
+      const main = await db.collection('users').doc(ownerId).collection('app_data').doc('main').get();
+      const ad = (main.exists && main.data().appData) || {};
+      biz = businessForInvoice(ad, null) || {};
+    } catch (_) { /* fall back to the profile */ }
     clients.push({
       owner_id: ownerId,
-      business_name: owner.business_name || owner.name || ownerId,
-      gstin: owner.gstin || '',
+      business_name: biz.name || owner.business_name || owner.name || ownerId,
+      gstin: biz.gstin || owner.gstin || '',
       linked_at: link.created_at,
     });
   }
@@ -339,31 +330,44 @@ function sendAttachment(res, { body, contentType, filename }) {
   return res.status(200).send(body);
 }
 
+/**
+ * The CA sees the shop's current synced books (the same books the GSTR-1,
+ * Tally and e-invoice downloads use), for the dates asked and the scopes the
+ * owner shared. Read-only; the owner can stop sharing at any time.
+ */
 async function handleBooks(req, res, decoded, ownerId) {
   const uid = decoded.uid;
   const db = getDb();
   const link = await findLink(db, uid, ownerId);
   if (!link) return res.status(403).json({ error: 'Not linked to this business' });
-
-  const shareSnap = await db.collection('ca_shares').doc(ownerId).get();
-  if (shareSnap.exists && shareSnap.data().ciphertext && shareSnap.data().iv) {
-    const share = shareSnap.data();
-    return res.status(200).json({
-      owner_id: ownerId,
-      e2ee: true,
-      ciphertext: share.ciphertext,
-      iv: share.iv,
-      algo: share.algo || 'AES-GCM',
-      updated_at: share.updated_at || null,
-      scopes: link.scopes && link.scopes.length ? link.scopes : SCOPES,
-    });
-  }
-
-  // No ciphertext on file — do not fall back to plaintext app_data.
-  return res.status(409).json({
-    error:
-      'This business has not shared encrypted books yet. Ask the owner to create a new CA invite from Settings.',
-    e2ee_required: true,
+  const scopes = new Set(link.scopes && link.scopes.length ? link.scopes : SCOPES);
+  const { appData, updated_at } = await loadOwnerAppData(ownerId);
+  const day = (v) => String(v || '').slice(0, 10);
+  const from = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query && req.query.from)) ? String(req.query.from) : '0000-01-01';
+  const to = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query && req.query.to)) ? String(req.query.to) : '9999-12-31';
+  const within = (d) => d >= from && d <= to;
+  const pick = (scope, rows, dateOf) => (scopes.has(scope) ? (Array.isArray(rows) ? rows : []).filter((r) => r && within(dateOf(r))) : []);
+  const biz = businessForInvoice(appData, null);
+  return res.status(200).json({
+    owner_id: ownerId,
+    live: true,
+    updated_at: updated_at || null,
+    scopes: [...scopes],
+    business_profile: {
+      name: biz.name || '', gstin: biz.gstin || '', pan: biz.pan || '', address: biz.address || '', state: biz.state || '',
+      email: biz.email || '', phone: biz.phone || '', composition: biz.composition === true,
+    },
+    // Branches in other states have their own GSTIN; bills carry businessId.
+    businesses: (appData.businesses || []).filter(Boolean).map((b) => ({ id: b.id, name: b.name || '', gstin: b.gstin || '', composition: b.composition === true })),
+    active_business_id: biz.id || null,
+    invoices: pick('read:invoices', appData.invoices, (i) => day(i.date || i.createdAt)),
+    creditNotes: pick('read:invoices', appData.creditNotes, (n) => day(n.date || n.createdAt)),
+    debitNotes: pick('read:invoices', appData.debitNotes, (n) => day(n.date || n.createdAt)),
+    purchases: pick('read:purchases', appData.purchases, (p) => day(p.supplierInvoiceDate || p.createdAt)),
+    expenses: pick('read:expenses', appData.expenses, (e) => day(e.date || e.createdAt)),
+    khata: pick('read:khata', appData.khataEntries, (k) => day(k.date || k.createdAt)),
+    inventory: scopes.has('read:inventory') ? appData.stock || [] : [],
+    parties: (appData.parties || []).map((p) => ({ id: p.id, name: p.name, gstin: p.gstin || '', state: p.state || '' })),
   });
 }
 
@@ -371,7 +375,14 @@ async function handleGstr1Download(req, res, decoded, ownerId) {
   const uid = decoded.uid;
   const link = await findLink(getDb(), uid, ownerId);
   if (!link) return res.status(403).json({ error: 'Not linked to this business' });
-  const { appData } = await loadOwnerAppData(ownerId);
+  // A return is per GSTIN: ?gstin= picks the branch, else the main business.
+  const { data: appData } = booksForBusiness((await loadOwnerAppData(ownerId)).appData, req.query && req.query.gstin);
+  if (businessForInvoice(appData, null).composition === true) {
+    return res.status(409).json({
+      error: 'This business is on the composition scheme: it files CMP-08 (quarterly) and GSTR-4 (yearly), not GSTR-1.',
+      composition: true,
+    });
+  }
   const month = parseMonthParam(req.query && req.query.month);
   const json = buildGstr1Json({
     gstin: sellerGstinFromAppData(appData),
@@ -405,7 +416,7 @@ async function handleEinvoiceDownload(req, res, decoded, ownerId) {
   const uid = decoded.uid;
   const access = await requireLinkedOrOwner(uid, ownerId);
   if (!access) return res.status(403).json({ error: 'Not linked to this business' });
-  const { appData } = await loadOwnerAppData(ownerId);
+  const { data: appData } = booksForBusiness((await loadOwnerAppData(ownerId)).appData, req.query && req.query.gstin);
   const invoiceNo = String((req.query && (req.query.invoice || req.query.inum)) || '').trim();
   if (invoiceNo) {
     const inv = (appData.invoices || []).find(
@@ -441,7 +452,7 @@ async function handleTallyDownload(req, res, decoded, ownerId) {
   const uid = decoded.uid;
   const link = await findLink(getDb(), uid, ownerId);
   if (!link) return res.status(403).json({ error: 'Not linked to this business' });
-  const { appData } = await loadOwnerAppData(ownerId);
+  const { data: appData } = booksForBusiness((await loadOwnerAppData(ownerId)).appData, req.query && req.query.gstin);
   const month = parseMonthParam(req.query && req.query.month);
   const xml = buildTallyXml({
     companyName: companyNameFromAppData(appData),

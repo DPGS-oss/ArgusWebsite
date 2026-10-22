@@ -13,3 +13,6 @@ functions/scripts/promo-codes-*.csv
 **/secrets.json
 **/*service_account*.json
 tsconfig.tsbuildinfo
+
+# month simulation results (local emulator runs)
+scripts/sim/last-run*.json

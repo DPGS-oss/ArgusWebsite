@@ -316,13 +316,28 @@ function buildGstr1Json(input) {
     }
   }
 
-  for (const inv of invoices) {
+  for (let inv of invoices) {
     const registered = isRegisteredGstin(inv.partyGstin);
     const credit = isCreditNote(inv);
     const note = credit || isDebitNote(inv);
     const sign = credit ? -1 : 1;
 
     addHsn(registered ? hsnB2b : hsnB2c, inv, sign);
+
+    // Table 8: 0% (nil-rated) lines on a tax invoice are reported as nil-rated
+    // supplies, not at 0% in the B2B / B2CL / B2CS tables.
+    if (inv.type !== 'bill_of_supply') {
+      const zero = (inv.items || []).filter((it) => !(Number(it.gstRate) > 0) && !((it.cgst || 0) + (it.sgst || 0) + (it.igst || 0) + (it.cess || 0)));
+      if (zero.length) {
+        const sply_ty = `${isInter(inv) ? 'INTR' : 'INTRA'}${registered ? 'B2B' : 'B2C'}`;
+        const cur = nilMap.get(sply_ty) || { sply_ty, expt_amt: 0, nil_amt: 0, ngsup_amt: 0 };
+        cur.nil_amt = round2(cur.nil_amt + sign * zero.reduce((t, it) => t + (Number(it.taxableAmount) || 0), 0));
+        nilMap.set(sply_ty, cur);
+        const taxedItems = (inv.items || []).filter((it) => !zero.includes(it));
+        if (!taxedItems.length) continue;
+        inv = { ...inv, items: taxedItems };
+      }
+    }
 
     if (inv.type === 'bill_of_supply' && !note) {
       const sply_ty = `${isInter(inv) ? 'INTR' : 'INTRA'}${registered ? 'B2B' : 'B2C'}`;
@@ -424,7 +439,8 @@ function buildGstr1Json(input) {
     cdnr: [...cdnrMap.entries()].map(([ctin, nt]) => ({ ctin, nt })),
     cdnur,
     hsn: { hsn_b2b: numbered(hsnB2b), hsn_b2c: numbered(hsnB2c) },
-    ...(nilMap.size ? { nil_sup: { inv: [...nilMap.values()] } } : {}),
+    // GSTN section name is "nil" (Table 8: nil-rated, exempt, non-GST).
+    ...(nilMap.size ? { nil: { inv: [...nilMap.values()] } } : {}),
     doc_issue: { doc_det },
   };
 }
@@ -561,7 +577,7 @@ function buildTallyXml(input) {
   const { from, to } = monthBounds(input.month);
   const invoices = (input.invoices || []).filter((inv) => isOpen(inv) && inMonth(inv, from, to));
   const parties = new Set();
-  for (const inv of invoices) {
+  for (let inv of invoices) {
     parties.add(inv.partyName || (normalizeGstin(inv.partyGstin) === 'URP' ? 'Walk-in' : 'Customer'));
   }
   const ledgers = [
@@ -597,6 +613,58 @@ ${vouchers.join('\n')}
 `;
 }
 
+/**
+ * Expenses whose GST can be claimed (rent from a registered landlord...),
+ * as purchase bills, once the vendor's GSTIN is entered. Same as lib/gst.ts.
+ */
+function expensesAsPurchases(expenses) {
+  return (Array.isArray(expenses) ? expenses : [])
+    .filter((e) => e && e.isGstClaimable && Number(e.gstAmount) > 0 && String(e.vendorGstin || '').trim())
+    .map((e) => ({
+      id: `expense-${e.id}`,
+      purchaseNumber: e.category || 'Expense',
+      supplierName: e.vendor || e.category || 'Expense',
+      supplierGstin: String(e.vendorGstin).trim().toUpperCase(),
+      supplierInvoiceNumber: e.description || '',
+      supplierInvoiceDate: String(e.date || '').slice(0, 10),
+      reverseCharge: false,
+      itcEligible: true,
+      createdAt: `${String(e.date || '').slice(0, 10)}T00:00:00.000Z`,
+      totalAmount: Number(e.amount) || 0,
+      totalGstAmount: Number(e.gstAmount) || 0,
+      items: [],
+      paidAmount: Number(e.amount) || 0,
+    }));
+}
+
+/**
+ * One GSTIN's view of the books. An owner with branches in two states has a
+ * business (GSTIN) for each, and every return is filed per GSTIN: its bills,
+ * and the notes on them. Bills without a business belong to the main one.
+ * `gstin` picks the business; empty means the main (active) one.
+ */
+function booksForBusiness(appData, gstin) {
+  const data = appData || {};
+  const list = Array.isArray(data.businesses) ? data.businesses.filter(Boolean) : [];
+  const main = list.find((b) => b.id === data.activeBusinessId) || list[0] || {};
+  const want = String(gstin || '').trim().toUpperCase();
+  const business = (want && list.find((b) => String(b.gstin || '').toUpperCase() === want)) || main;
+  if (list.length < 2) return { business, data };
+  const owner = (x) => (x && x.businessId) || main.id;
+  const billBusiness = new Map((data.invoices || []).map((i) => [i.id, owner(i)]));
+  const noteBusiness = (n) => (n && n.businessId) || billBusiness.get(n && n.invoiceId) || main.id;
+  return {
+    business,
+    data: {
+      ...data,
+      activeBusinessId: business.id,
+      invoices: (data.invoices || []).filter((i) => owner(i) === business.id),
+      creditNotes: (data.creditNotes || []).filter((n) => noteBusiness(n) === business.id),
+      debitNotes: (data.debitNotes || []).filter((n) => noteBusiness(n) === business.id),
+    },
+  };
+}
+
 function sellerGstinFromAppData(appData) {
   const data = appData || {};
   const businesses = data.businesses || [];
@@ -620,6 +688,8 @@ module.exports = {
   notesAsInvoices,
   buildTallyXml,
   sellerGstinFromAppData,
+  expensesAsPurchases,
+  booksForBusiness,
   companyNameFromAppData,
   currentMonthYm,
   parseMonthParam,

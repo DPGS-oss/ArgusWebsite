@@ -56,3 +56,21 @@ describe("WhatsApp invoice text", () => {
     expect(text).not.toMatch(/upi:\/\/pay/);
   });
 });
+
+describe("receipts ask only for what is owed", () => {
+  it("no pay link on a paid or cancelled bill; the balance on a part-paid one", async () => {
+    const { amountToCollect } = await import("./upi");
+    expect(amountToCollect({ status: "paid", grandTotal: 1180, balanceDue: 0, paidAmount: 1180 })).toBe(0);
+    expect(amountToCollect({ status: "cancelled", grandTotal: 1180, balanceDue: 1180 })).toBe(0);
+    expect(amountToCollect({ status: "unpaid", grandTotal: 1180, balanceDue: 590, paidAmount: 590 })).toBe(590);
+    expect(amountToCollect({ status: "unpaid", grandTotal: 1180, balanceDue: 0, paidAmount: 0 })).toBe(1180);
+    expect(buildUpiPayUri({ vpa: "shop@upi", amount: 0, invoiceNumber: "INV-1" })).toBeNull();
+  });
+  it("WhatsApp links carry India's country code for 10-digit numbers", async () => {
+    const { buildWhatsAppShareUrl } = await import("./upi");
+    expect(buildWhatsAppShareUrl("98200 12345", "hi")).toBe("https://wa.me/919820012345?text=hi");
+    expect(buildWhatsAppShareUrl("09820012345", "hi")).toBe("https://wa.me/919820012345?text=hi");
+    expect(buildWhatsAppShareUrl("+91 98200 12345", "hi")).toBe("https://wa.me/919820012345?text=hi");
+    expect(buildWhatsAppShareUrl("+44 7700 900123", "hi")).toBe("https://wa.me/447700900123?text=hi");
+  });
+});

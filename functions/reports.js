@@ -14,7 +14,7 @@ const { hasActiveBusinessSubscription } = require('./_shared/subscription-utils'
 const { resolveAppData } = require('./_shared/app_data');
 const { buildGstr9, gstr9Rows, exemptReport } = require('./_shared/gstr9');
 const { parse2b, match2b, itcTotals } = require('./_shared/gstr2b');
-const { sellerGstinFromAppData } = require('./_shared/ca-exports');
+const { sellerGstinFromAppData, expensesAsPurchases, booksForBusiness } = require('./_shared/ca-exports');
 const { booksAccess } = require('./_shared/team');
 const booksStore = require('./_shared/books_store');
 
@@ -68,8 +68,17 @@ exports.apiReports = onRequest({ region: 'us-central1', maxInstances: 10, memory
   try {
     if (req.method === 'GET' && path.endsWith('/reports/gstr9')) {
       const fy = /^\d{4}-\d{2}$/.test(String(req.query.fy || '')) ? String(req.query.fy) : currentFy();
-      const { data } = await loadBooks(booksUid);
-      const report = buildGstr9(data, fy, itcByMonth(data));
+      const { data: all } = await loadBooks(booksUid);
+      // GSTR-9 is per GSTIN (?gstin= for a branch); claimable expense GST counts as input credit.
+      const { business, data } = booksForBusiness(all, req.query.gstin);
+      if (business && business.composition === true) {
+        return res.status(409).json({
+          error: 'This business is on the composition scheme: its yearly return is GSTR-4 (and CMP-08 every quarter), not GSTR-9.',
+          composition: true,
+        });
+      }
+      const withExpenses = { ...data, purchases: [...(data.purchases || []), ...expensesAsPurchases(data.expenses)] };
+      const report = buildGstr9(withExpenses, fy, itcByMonth(data));
       return res.status(200).json({ gstin: sellerGstinFromAppData(data), report, rows: gstr9Rows(report) });
     }
 
@@ -83,10 +92,13 @@ exports.apiReports = onRequest({ region: 'us-central1', maxInstances: 10, memory
       }
       const { ref, data } = await loadBooks(booksUid);
       const own = String(sellerGstinFromAppData(data) || '').toUpperCase();
-      if (parsed.gstin && own && parsed.gstin !== own) {
+      // An owner with branches may upload the 2B of any of their GSTINs.
+      const mine = new Set([own, ...(data.businesses || []).map((b) => String((b && b.gstin) || '').toUpperCase())].filter(Boolean));
+      if (parsed.gstin && mine.size && !mine.has(parsed.gstin)) {
         return res.status(400).json({ error: `This GSTR-2B is for ${parsed.gstin}, but your business GSTIN is ${own}.` });
       }
-      const result = match2b(parsed, data.purchases || []);
+      // Rent and other expenses with GST show in 2B too (the landlord files them).
+      const result = match2b(parsed, [...(data.purchases || []), ...expensesAsPurchases(data.expenses)]);
       if (body.save !== false && parsed.period) {
         // Keep the month's 2B credit for GSTR-9 Table 8A. Written like phone sync:
         // the whole book in one transaction, so nothing else is lost or overwritten.

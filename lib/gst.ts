@@ -1,4 +1,4 @@
-import type { AppData, BusinessProfile, CreditNote, DebitNote, GSTRate, HSNCode, Invoice, InvoiceItem, InvoiceStatus, InvoiceType, GSTRReport, GSTRSection, GSTRReportType, GstDocumentType, Purchase } from "./types";
+import type { Expense, AppData, BusinessProfile, CreditNote, DebitNote, GSTRate, HSNCode, Invoice, InvoiceItem, InvoiceStatus, InvoiceType, GSTRReport, GSTRSection, GSTRReportType, GstDocumentType, Purchase } from "./types";
 import { GST_2_0_RATES, INDIAN_STATES } from "./types";
 import { isRegisteredGstin, normalizeGstin, stateCodeFromGstin } from "./gstin";
 import caExports from "../functions/_shared/ca-exports.js";
@@ -860,6 +860,31 @@ function invoiceTax(inv: Invoice): TaxSplit {
 }
 
 /** Purchase tax split; infers IGST vs CGST+SGST from supplier/recipient state when not stored. */
+/**
+ * Expenses whose GST can be claimed (rent from a registered landlord, a
+ * repair bill with GST...) count for input credit like a purchase bill, once
+ * the vendor's GSTIN is entered. The amount is what was paid, GST included.
+ */
+export function expensesAsPurchases(expenses: Expense[] | undefined): Purchase[] {
+  return (expenses || [])
+    .filter((e) => e && e.isGstClaimable && (e.gstAmount || 0) > 0 && !!(e.vendorGstin || "").trim())
+    .map((e) => ({
+      id: `expense-${e.id}`,
+      purchaseNumber: e.category || "Expense",
+      supplierName: e.vendor || e.category || "Expense",
+      supplierGstin: (e.vendorGstin || "").trim().toUpperCase(),
+      supplierInvoiceNumber: e.description || "",
+      supplierInvoiceDate: e.date,
+      reverseCharge: false,
+      itcEligible: true,
+      createdAt: `${e.date}T00:00:00.000Z`,
+      totalAmount: e.amount || 0,
+      totalGstAmount: e.gstAmount || 0,
+      items: [],
+      paidAmount: e.amount || 0,
+    }));
+}
+
 export function purchaseTax(p: Purchase, recipientGstin = ""): TaxSplit {
   const inv = purchaseToInvoice(p);
   const split = invoiceTax(inv);
@@ -932,11 +957,28 @@ export function generateGstnJson(
   const isup_rev = zeroTax(); // 3.1(d) inward liable to reverse charge
   const unreg = new Map<string, { pos: string; txval: number; iamt: number }>(); // 3.2
   for (const inv of open) {
-    const t = invoiceTax(inv);
+    // Line by line: taxed lines are 3.1(a); 0% lines and bills of supply are
+    // 3.1(c) nil-rated/exempt, at their value before GST (never the round-off).
     const sign = isCreditNoteDoc(inv) ? -1 : 1;
-    const taxed = t.iamt + t.camt + t.samt + t.csamt !== 0;
+    const lines = inv.items || [];
+    const lineTaxed = (l: InvoiceItem) => inv.type !== "bill_of_supply" && ((l.gstRate || 0) > 0 || (l.cgst || 0) + (l.sgst || 0) + (l.igst || 0) + (l.cess || 0) !== 0);
+    const taxedLines = lines.filter(lineTaxed);
+    const nilLines = lines.filter((l) => !lineTaxed(l));
+    // Bills without line amounts (older data) fall back to the bill's totals.
+    const hasLineAmounts = lines.some((l) => (l.taxableAmount || 0) !== 0 || (l.total || 0) !== 0);
+    const t: TaxSplit = lines.length && hasLineAmounts
+      ? {
+          txval: round2(taxedLines.reduce((a, l) => a + (l.taxableAmount || 0), 0)),
+          iamt: round2(taxedLines.reduce((a, l) => a + (l.igst || 0), 0)),
+          camt: round2(taxedLines.reduce((a, l) => a + (l.cgst || 0), 0)),
+          samt: round2(taxedLines.reduce((a, l) => a + (l.sgst || 0), 0)),
+          csamt: round2(taxedLines.reduce((a, l) => a + (l.cess || 0), 0)),
+        }
+      : invoiceTax(inv);
+    const taxed = t.iamt + t.camt + t.samt + t.csamt !== 0 || t.txval !== 0;
     if (taxed) addTax(osup_det, t, sign);
-    else osup_nil.txval = round2(osup_nil.txval + sign * (inv.grandTotal || 0));
+    const nilValue = lines.length && hasLineAmounts ? nilLines.reduce((a, l) => a + (l.taxableAmount || l.total || 0), 0) : taxed ? 0 : inv.totalTaxable || 0;
+    if (nilValue) osup_nil.txval = round2(osup_nil.txval + sign * nilValue);
     if (taxed && inv.isInterState && !isRegisteredGstin(inv.partyGstin || "")) {
       const pos = stateCodeFromPlaceOfSupply(inv.placeOfSupply) || String(inv.placeOfSupply || "");
       const row = unreg.get(pos) || { pos, txval: 0, iamt: 0 };
@@ -1089,28 +1131,51 @@ export function generateGSTRReport(
   const push = (code: string, label: string, rows: Invoice[]) => {
     if (rows.length) sections.push(buildSection(code, label, rows));
   };
+  // A bill can hold taxed lines and 0% lines: the taxed part goes in the tax
+  // tables, the 0% part (and any bill of supply) is nil-rated / exempt, as in
+  // the GSTN files. Parts carry their own totals from their lines.
+  const part = (inv: Invoice, items: InvoiceItem[]): Invoice => {
+    const sum = (f: (l: InvoiceItem) => number) => round2(items.reduce((t, l) => t + (f(l) || 0), 0));
+    const cgst = sum((l) => l.cgst), sgst = sum((l) => l.sgst), igst = sum((l) => l.igst), cess = sum((l) => l.cess || 0);
+    return { ...inv, items, totalTaxable: sum((l) => l.taxableAmount), totalCgst: cgst, totalSgst: sgst, totalIgst: igst, totalCess: cess,
+      totalTax: round2(cgst + sgst + igst + cess), grandTotal: sum((l) => l.total), roundOff: 0 };
+  };
+  const split = (inv: Invoice): { taxedPart?: Invoice; nilPart?: Invoice } => {
+    if (inv.type === "bill_of_supply") return { nilPart: inv };
+    const items = inv.items || [];
+    const hasAmounts = items.some((l) => (l.taxableAmount || 0) !== 0 || (l.total || 0) !== 0);
+    if (!hasAmounts) return taxed(inv) ? { taxedPart: inv } : { nilPart: inv };
+    const isTaxed = (l: InvoiceItem) => (l.gstRate || 0) > 0 || (l.cgst || 0) + (l.sgst || 0) + (l.igst || 0) + (l.cess || 0) !== 0;
+    const t = items.filter(isTaxed), z = items.filter((l) => !isTaxed(l));
+    if (!z.length) return { taxedPart: inv };
+    if (!t.length) return { nilPart: inv };
+    return { taxedPart: part(inv, t), nilPart: part(inv, z) };
+  };
+  const taxedParts = (rows: Invoice[]) => rows.map((i) => split(i).taxedPart).filter((x): x is Invoice => !!x);
+  const nilParts = (rows: Invoice[]) => rows.map((i) => split(i).nilPart).filter((x): x is Invoice => !!x);
 
   let source: Invoice[] = filtered;
   if (type === "gstr1") {
     const sales = filtered.filter((i) => !isNote(i));
     const notes = filtered.filter(isNote);
-    push("4A", "B2B invoices (Table 4)", sales.filter(registered));
-    push("5", "B2C large, inter-state above threshold (Table 5 / B2CL)", sales.filter((i) => !registered(i) && isB2cl(i)));
-    push("7", "B2C others (Table 7 / B2CS)", sales.filter((i) => !registered(i) && !isB2cl(i)));
-    push("9B", "Credit / debit notes, registered (CDNR)", notes.filter(registered));
-    push("9B-U", "Credit / debit notes, unregistered (CDNUR / net in B2CS)", notes.filter((i) => !registered(i)));
+    push("4A", "B2B invoices (Table 4)", taxedParts(sales.filter(registered)));
+    push("5", "B2C large, inter-state above threshold (Table 5 / B2CL)", taxedParts(sales.filter((i) => !registered(i) && isB2cl(i))));
+    push("7", "B2C others (Table 7 / B2CS)", taxedParts(sales.filter((i) => !registered(i) && !isB2cl(i))));
+    push("8", "Nil rated and exempt supplies (Table 8)", nilParts(filtered));
+    push("9B", "Credit / debit notes, registered (CDNR)", taxedParts(notes.filter(registered)));
+    push("9B-U", "Credit / debit notes, unregistered (CDNUR / net in B2CS)", taxedParts(notes.filter((i) => !registered(i))));
   } else if (type === "gstr3b") {
-    push("3.1(a)", "Outward taxable supplies (net of credit notes)", filtered.filter(taxed));
-    push("3.1(c)", "Nil rated / exempt supplies", filtered.filter((i) => !taxed(i)));
+    push("3.1(a)", "Outward taxable supplies (net of credit notes)", taxedParts(filtered));
+    push("3.1(c)", "Nil rated / exempt supplies", nilParts(filtered));
     push("3.1(d)", "Inward supplies liable to reverse charge", purchaseInvoices.filter((_, k) => !!inPeriodPurchases[k].reverseCharge));
-    push("3.2", "Inter-state supplies to unregistered persons", filtered.filter((i) => taxed(i) && i.isInterState && !registered(i)));
+    push("3.2", "Inter-state supplies to unregistered persons", taxedParts(filtered.filter((i) => i.isInterState && !registered(i))));
     push("4(A)(3)", "ITC on inward supplies liable to reverse charge", purchaseInvoices.filter((_, k) => inPeriodPurchases[k].reverseCharge && inPeriodPurchases[k].itcEligible !== false));
     push("4(A)(5)", "All other ITC (supplier GSTIN on record)", purchaseInvoices.filter((_, k) => {
       const p = inPeriodPurchases[k];
       return !p.reverseCharge && p.itcEligible !== false && !!p.supplierGstin;
     }));
     push("4(D)", "Ineligible ITC (Section 17(5) / marked not eligible)", purchaseInvoices.filter((_, k) => inPeriodPurchases[k].itcEligible === false));
-    source = filtered.filter(taxed);
+    source = taxedParts(filtered);
   } else if (type === "gstr2b") {
     push("ITC", "Purchase register to match against GSTR-2B", purchaseInvoices);
     source = purchaseInvoices;

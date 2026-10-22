@@ -70,7 +70,12 @@ const cleanBom = (bom) => (Array.isArray(bom) ? bom : [])
 const PHONE_TO_WEB_STATUS = { paid: 'paid', cancelled: 'cancelled', draft: 'draft' };
 
 function phoneToWebInvoice(p, prev = {}, now = new Date().toISOString()) {
-  const inter = num(p.total_igst) > 0;
+  // IGST on the bill means inter-state. A bill with no tax (0% goods) still
+  // can be inter-state: compare the place of supply with the seller's state.
+  const sellerState = /^\d{2}/.test(str(p.seller_gstin)) ? str(p.seller_gstin).slice(0, 2) : '';
+  const posState = (str(p.place_of_supply).match(/^\d{2}/) || [''])[0];
+  const taxed = num(p.total_cgst) + num(p.total_sgst) + num(p.total_igst) > 0;
+  const inter = num(p.total_igst) > 0 || (!taxed && sellerState !== '' && posState !== '' && posState !== sellerState);
   // Same split rule as the phone: CGST is half the tax rounded, SGST the rest.
   const splitTax = (tax) => (inter
     ? { cgst: 0, sgst: 0, igst: money.round2(tax) }
@@ -455,6 +460,94 @@ const purchaseKind = {
   },
 };
 
+// ------------------------------------------------------------- expenses
+// Rent, electricity, salaries made on the phone reach the website, the CA and
+// profit and loss; those made on the website reach the phone.
+
+const phoneExpenseFp = (p) => hash([str(p.category), str(p.description), r2(p.amount), day(p.date), str(p.payment_mode).toLowerCase(), str(p.vendor), r2(p.gst_amount), p.is_gst_claimable === true, str(p.vendor_gstin).toUpperCase()]);
+const webExpenseFp = (w) => hash([str(w.category), str(w.description), r2(w.amount), day(w.date), str(w.paymentMode).toLowerCase(), str(w.vendor), r2(w.gstAmount), w.isGstClaimable === true, str(w.vendorGstin).toUpperCase()]);
+
+const expenseKind = {
+  toWeb(p, prev = {}, now = new Date().toISOString()) {
+    return {
+      ...prev,
+      id: str(p.id),
+      category: str(p.category),
+      description: str(p.description),
+      amount: money.round2(p.amount),
+      date: day(p.date) || day(p.created_at) || day(now),
+      paymentMode: str(p.payment_mode) || prev.paymentMode || 'Cash',
+      vendor: str(p.vendor),
+      gstAmount: money.round2(p.gst_amount),
+      isGstClaimable: p.is_gst_claimable === true,
+      vendorGstin: str(p.vendor_gstin).toUpperCase() || undefined,
+      createdAt: str(p.created_at) || prev.createdAt || now,
+      updatedAt: str(p.updated_at) || now,
+    };
+  },
+  toPhone(w, now = new Date().toISOString()) {
+    return {
+      id: str(w.id),
+      category: str(w.category),
+      description: str(w.description),
+      amount: money.round2(w.amount),
+      date: day(w.date),
+      payment_mode: str(w.paymentMode).toLowerCase() || 'cash',
+      vendor: str(w.vendor),
+      gst_amount: money.round2(w.gstAmount),
+      is_gst_claimable: w.isGstClaimable === true,
+      vendor_gstin: str(w.vendorGstin),
+      created_at: str(w.createdAt) || now,
+      updated_at: str(w.updatedAt) || now,
+      is_offline: false,
+    };
+  },
+};
+
+// ------------------------------------------------------------- khata
+// Only entries typed by hand (udhar given, money received). Ledger lines made
+// from bills, purchases and payments are not synced: each side makes its own
+// from those records, which sync already.
+
+const phoneKhataFp = (p) => hash([str(p.customer_id), str(p.customer_name), r2(p.amount), str(p.description), str(p.created_at), p.is_credit === true, str(p.payment_method)]);
+const webKhataFp = (w) => hash([str(w.customerId), str(w.customerName), r2(w.amount), str(w.description), str(w.createdAt), w.isCredit === true, str(w.paymentMethod)]);
+
+const khataKind = {
+  accept: (p) => !str(p.source_type),
+  include: (w) => !str(w.sourceType),
+  toWeb(p, prev = {}, now = new Date().toISOString()) {
+    return {
+      ...prev,
+      id: str(p.id),
+      customerId: str(p.customer_id),
+      customerName: str(p.customer_name),
+      amount: money.round2(p.amount),
+      description: str(p.description),
+      createdAt: str(p.created_at) || prev.createdAt || now,
+      isCredit: p.is_credit === true,
+      accountType: str(p.account_type) || 'party',
+      partyKind: str(p.party_kind) || 'customer',
+      paymentMethod: str(p.payment_method) || undefined,
+    };
+  },
+  toPhone(w) {
+    return {
+      id: str(w.id),
+      customer_id: str(w.customerId),
+      customer_name: str(w.customerName),
+      amount: money.round2(w.amount),
+      description: str(w.description),
+      created_at: str(w.createdAt),
+      is_credit: w.isCredit === true,
+      account_type: str(w.accountType) || 'party',
+      party_kind: str(w.partyKind) || 'customer',
+      payment_method: str(w.paymentMethod),
+      source_type: '',
+      source_id: '',
+    };
+  },
+};
+
 const creditNoteKind = noteKind('creditNoteNumber', 'credit_note_number');
 const debitNoteKind = noteKind('debitNoteNumber', 'debit_note_number');
 
@@ -470,6 +563,8 @@ const KINDS = {
   creditNotes: { webKey: 'creditNotes', phoneFp: phoneNoteFp, webFp: webNoteFp, ...creditNoteKind },
   debitNotes: { webKey: 'debitNotes', phoneFp: phoneNoteFp, webFp: webNoteFp, ...debitNoteKind },
   purchases: { webKey: 'purchases', phoneFp: phonePurchaseFp, webFp: webPurchaseFp, ...purchaseKind },
+  expenses: { webKey: 'expenses', phoneFp: phoneExpenseFp, webFp: webExpenseFp, ...expenseKind },
+  khataEntries: { webKey: 'khataEntries', phoneFp: phoneKhataFp, webFp: webKhataFp, ...khataKind },
 };
 
 // ------------------------------------------------------------- edit log
@@ -610,7 +705,7 @@ function mergePhoneSync(appData, phone, now = new Date().toISOString()) {
     const sent = new Map();
     const goneOnPhone = [];
     for (const p of Array.isArray(phone[kind]) ? phone[kind] : []) {
-      if (!p || !str(p.id)) continue;
+      if (!p || !str(p.id) || (k.accept && !k.accept(p))) continue;
       if (tomb[str(p.id)]) goneOnPhone.push(str(p.id));
       else sent.set(str(p.id), p);
     }

@@ -416,7 +416,7 @@ describe("GSTR-1 compliance details", () => {
     const json = buildGstr1Json({ gstin: MH_GSTIN, month: "2026-04", invoices: [bos] });
     expect(json.b2cs || []).toEqual([]);
     expect(json.b2b || []).toEqual([]);
-    expect(json.nil_sup?.inv[0]).toMatchObject({ sply_ty: "INTRAB2C", expt_amt: 1000 });
+    expect(json.nil?.inv[0]).toMatchObject({ sply_ty: "INTRAB2C", expt_amt: 1000 });
   });
 
   it("lists each numbering series separately in Table 13, in serial order", () => {
@@ -457,5 +457,25 @@ describe("Notes-screen credit / debit notes in GSTR-1", () => {
     const nt = json.cdnr.find((c) => c.ctin === KA_GSTIN)?.nt[0];
     expect(nt).toMatchObject({ ntty: "D", nt_num: "DN-2026-001", pos: KA });
     expect(nt?.itms[0].itm_det).toMatchObject({ rt: 18, txval: 100, iamt: 18, camt: 0 });
+  });
+});
+
+describe("nil-rated lines on a tax invoice", () => {
+  it("go to Table 8 as nil-rated; only taxed lines stay in B2CS", async () => {
+    const mod = await import("../functions/_shared/ca-exports.js");
+    const { buildGstr1Json } = mod as unknown as { buildGstr1Json: (x: unknown) => Record<string, any> };
+    const inv = {
+      id: "i", invoiceNumber: "INV/26-27/0001", type: "tax_invoice", status: "paid", date: "2026-10-05", partyGstin: "", placeOfSupply: "27", isInterState: false, grandTotal: 458,
+      items: [
+        { description: "Rice 5kg", hsn: "1006", quantity: 1, uqc: "BAG", gstRate: 0, taxableAmount: 340, cgst: 0, sgst: 0, igst: 0, total: 340 },
+        { description: "Soap", hsn: "3401", quantity: 1, uqc: "NOS", gstRate: 18, taxableAmount: 100, cgst: 9, sgst: 9, igst: 0, total: 118 },
+      ],
+    };
+    const json = buildGstr1Json({ gstin: "27AAPFU0939F1ZV", month: "2026-10", invoices: [inv] });
+    expect(json.nil.inv).toEqual([{ sply_ty: "INTRAB2C", expt_amt: 0, nil_amt: 340, ngsup_amt: 0 }]);
+    expect(json.b2cs.map((r: any) => r.rt)).toEqual([18]);
+    expect(json.b2cs[0].txval).toBe(100);
+    // Table 12 still lists every line, the rice included.
+    expect(json.hsn.hsn_b2c.map((h: any) => h.hsn_sc).sort()).toEqual(["1006", "3401"]);
   });
 });

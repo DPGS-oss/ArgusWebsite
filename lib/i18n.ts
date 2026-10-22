@@ -29,7 +29,7 @@ const HI: Record<string, string> = {
   caExpenses: "खर्च",
   caKhata: "पार्टी",
   caGst: "GST पैक",
-  caPlaintext: "CA आपकी बही सादे पाठ में देखता है जब तक E2EE नहीं आता।",
+  caPlaintext: "केवल देखने के लिए: क्लाइंट की नवीनतम सिंक की गई बही।",
   downloadGstn: "GSTN JSON डाउनलोड",
 };
 
@@ -62,7 +62,7 @@ const EN: Record<string, string> = {
   caExpenses: "Expenses",
   caKhata: "Party",
   caGst: "GST pack",
-  caPlaintext: "CA sees your books in plaintext until E2EE ships.",
+  caPlaintext: "Read-only: each client's latest synced books.",
   downloadGstn: "Download GSTN JSON",
 };
 
