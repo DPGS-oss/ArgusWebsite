@@ -316,13 +316,28 @@ function buildGstr1Json(input) {
     }
   }
 
-  for (const inv of invoices) {
+  for (let inv of invoices) {
     const registered = isRegisteredGstin(inv.partyGstin);
     const credit = isCreditNote(inv);
     const note = credit || isDebitNote(inv);
     const sign = credit ? -1 : 1;
 
     addHsn(registered ? hsnB2b : hsnB2c, inv, sign);
+
+    // Table 8: 0% (nil-rated) lines on a tax invoice are reported as nil-rated
+    // supplies, not at 0% in the B2B / B2CL / B2CS tables.
+    if (inv.type !== 'bill_of_supply') {
+      const zero = (inv.items || []).filter((it) => !(Number(it.gstRate) > 0) && !((it.cgst || 0) + (it.sgst || 0) + (it.igst || 0) + (it.cess || 0)));
+      if (zero.length) {
+        const sply_ty = `${isInter(inv) ? 'INTR' : 'INTRA'}${registered ? 'B2B' : 'B2C'}`;
+        const cur = nilMap.get(sply_ty) || { sply_ty, expt_amt: 0, nil_amt: 0, ngsup_amt: 0 };
+        cur.nil_amt = round2(cur.nil_amt + sign * zero.reduce((t, it) => t + (Number(it.taxableAmount) || 0), 0));
+        nilMap.set(sply_ty, cur);
+        const taxedItems = (inv.items || []).filter((it) => !zero.includes(it));
+        if (!taxedItems.length) continue;
+        inv = { ...inv, items: taxedItems };
+      }
+    }
 
     if (inv.type === 'bill_of_supply' && !note) {
       const sply_ty = `${isInter(inv) ? 'INTR' : 'INTRA'}${registered ? 'B2B' : 'B2C'}`;
@@ -424,7 +439,8 @@ function buildGstr1Json(input) {
     cdnr: [...cdnrMap.entries()].map(([ctin, nt]) => ({ ctin, nt })),
     cdnur,
     hsn: { hsn_b2b: numbered(hsnB2b), hsn_b2c: numbered(hsnB2c) },
-    ...(nilMap.size ? { nil_sup: { inv: [...nilMap.values()] } } : {}),
+    // GSTN section name is "nil" (Table 8: nil-rated, exempt, non-GST).
+    ...(nilMap.size ? { nil: { inv: [...nilMap.values()] } } : {}),
     doc_issue: { doc_det },
   };
 }
@@ -561,7 +577,7 @@ function buildTallyXml(input) {
   const { from, to } = monthBounds(input.month);
   const invoices = (input.invoices || []).filter((inv) => isOpen(inv) && inMonth(inv, from, to));
   const parties = new Set();
-  for (const inv of invoices) {
+  for (let inv of invoices) {
     parties.add(inv.partyName || (normalizeGstin(inv.partyGstin) === 'URP' ? 'Walk-in' : 'Customer'));
   }
   const ledgers = [

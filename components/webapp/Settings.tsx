@@ -6,7 +6,6 @@ import type { AppData, AppSettings, GSTRate } from "@/lib/types";
 import { saveSettings, exportAllData, importAllData, pickFolder, isUsingFileSystem, getFolderName, isFileSystemSupported, disconnectFolder, loadData, generateInvoiceNumber } from "@/lib/storage";
 import { useAuth, hasValidSubscription } from "@/lib/auth-provider";
 import { syncFromCloud, syncToCloud, getLastSyncTime } from "@/lib/cloud-sync";
-import { encryptBooksPayload, generateCaShareKey } from "@/lib/ca-crypto";
 import { gstRatePickerOptions, gstRateLabel } from "@/lib/gst";
 import { CaAccessList } from "./CaAccessList";
 
@@ -31,27 +30,6 @@ function loadStoredCaInvite() {
   } catch {
     return null;
   }
-}
-
-function buildSharePayload() {
-  const app = loadData();
-  const activeBiz =
-    app.businesses.find((b) => b.id === app.activeBusinessId) || app.businesses[0] || null;
-  return {
-    invoices: app.invoices || [],
-    purchases: app.purchases || [],
-    expenses: app.expenses || [],
-    khata: app.khataEntries || [],
-    inventory: app.stock || [],
-    parties: app.parties || [],
-    business_profile: activeBiz
-      ? {
-          name: activeBiz.name,
-          gstin: activeBiz.gstin,
-          address: activeBiz.address,
-        }
-      : {},
-  };
 }
 
 export function Settings({ data, onSaved }: SettingsProps) {
@@ -147,20 +125,6 @@ export function Settings({ data, onSaved }: SettingsProps) {
     onSaved();
   }
 
-  async function uploadEncryptedShare(shareKey: string) {
-    if (!token) throw new Error("Sign in first");
-    const { ciphertext, iv } = await encryptBooksPayload(buildSharePayload(), shareKey);
-    const up = await fetch("/api/ca/share", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ ciphertext, iv }),
-    });
-    if (!up.ok) {
-      const err = await up.json().catch(() => ({}));
-      throw new Error(err.error || "Could not upload encrypted books for CA");
-    }
-  }
-
   async function handleInviteCa(replace = false) {
     if (!token) {
       alert("Sign in first");
@@ -187,19 +151,14 @@ export function Settings({ data, onSaved }: SettingsProps) {
         return;
       }
 
-      const shareKey = await generateCaShareKey();
-      await uploadEncryptedShare(shareKey);
-
       const base = String(data.redeem_url || "https://argusinvoicing.com/ca/redeem/").replace(/\?.*$/, "").replace(/#.*$/, "");
       const rawToken = String(data.token || "");
-      const redeemUrl = rawToken
-        ? `${base}#token=${encodeURIComponent(rawToken)}&key=${encodeURIComponent(shareKey)}`
-        : `${base}#key=${encodeURIComponent(shareKey)}`;
+      // The token stays in the link's #fragment, never sent to a server log.
+      const redeemUrl = rawToken ? `${base}#token=${encodeURIComponent(rawToken)}` : base;
       const next = {
         redeem_url: redeemUrl,
         backup_code: String(data.backup_code || ""),
         expires_at: String(data.expires_at || ""),
-        share_key: shareKey,
       };
       sessionStorage.setItem(CA_INVITE_KEY, JSON.stringify(next));
       // Clear any old durable copy from earlier builds.
@@ -216,45 +175,18 @@ export function Settings({ data, onSaved }: SettingsProps) {
     }
   }
 
-  async function handleRefreshCaBooks() {
-    if (!token) {
-      alert("Sign in first");
-      return;
-    }
-    setCaBusy(true);
-    try {
-      const stored = loadStoredCaInvite();
-      const shareKey =
-        (stored as { share_key?: string } | null)?.share_key || (await generateCaShareKey());
-      await uploadEncryptedShare(shareKey);
-      if (stored) {
-        const next = { ...stored, share_key: shareKey };
-        sessionStorage.setItem(CA_INVITE_KEY, JSON.stringify(next));
-        setCaInvite(next);
-      }
-      alert("Encrypted books refreshed for your CA portal.");
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "Refresh failed");
-    } finally {
-      setCaBusy(false);
-    }
-  }
-
   return (
     <div className="space-y-6">
       <div className="rounded-card border border-bone bg-white p-6">
         <h2 className="mb-2 text-lg font-semibold text-ink">Invite CA</h2>
         <p className="mb-4 text-sm text-slate">
           Generate a 7-day link. Your CA signs in, redeems once, and gets a free read-only view of
-          your books until you stop sharing below. The link is shown for this browser session only,
-          so copy it now and send it privately.
+          your books until you stop sharing below. They always see your latest synced books, on any
+          device. The link is shown for this browser session only, so copy it now and send it privately.
         </p>
         <div className="flex flex-wrap gap-2">
           <button className="btn-primary" disabled={caBusy} onClick={() => handleInviteCa(!!caInvite)}>
             {caBusy ? "Working…" : caInvite ? "Create new 7-day link" : "Invite CA"}
-          </button>
-          <button className="btn-outline" disabled={caBusy} onClick={handleRefreshCaBooks}>
-            Refresh CA books
           </button>
         </div>
         {caInvite ? (

@@ -114,7 +114,8 @@ export default function PrivacyPage() {
         With cloud sync on (Business plan), your books are stored in Google Cloud Firestore,
         encrypted in transit and at rest by Google, and read by our servers to sync your phone and
         the web app. When you invite a CA, they get read-only access to those books through our CA
-        portal until you stop sharing (Settings &gt; Share with your CA). Only you, the users you
+        portal until you stop sharing (Settings &gt; Share with your CA); they see your current
+        synced books, over an encrypted (HTTPS) connection. Only you, the users you
         add to your books, and the CAs you invite can see your books; our staff access them only to
         fix a problem you report or when the law requires.
       </p>
@@ -189,7 +190,7 @@ export default function PrivacyPage() {
       <h2 className="mt-8 text-xl font-semibold text-ink">8. Security</h2>
       <p>
         We use HTTPS, authentication, server-side entitlement checks for cloud sync, rate limits,
-        and encrypted CA shares. No method is perfect — keep strong passwords and your own backups.
+        and one-time, expiring CA invites with read-only access you can revoke. No method is perfect — keep strong passwords and your own backups.
         If a personal data breach affects you, we will inform you and the Data Protection Board of
         India as the DPDP Act and Rules require, with what happened, the likely impact, and the steps
         you can take.

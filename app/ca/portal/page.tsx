@@ -6,6 +6,7 @@ import { AuthModal } from "@/components/AuthModal";
 import { BrandLogo } from "@/components/BrandLogo";
 import { generateGSTRReport, generateGstnJson, formatCurrency, notesAsInvoices } from "@/lib/gst";
 import { t } from "@/lib/i18n";
+import { isRegisteredGstin } from "@/lib/gstin";
 import type { CreditNote, DebitNote, GSTRReport, GSTRReportType, Invoice, Purchase } from "@/lib/types";
 import {
   decryptBooksPayload,
@@ -437,7 +438,7 @@ export default function CaPortalPage() {
           {!books ? (
             <p className="text-slate">Select a client to load books.</p>
           ) : tab === "overview" ? (
-            <OverviewPanel books={books} client={clients.find((c) => c.owner_id === ownerId)} from={from} to={to} />
+            <OverviewPanel books={books} filtered={filtered} client={clients.find((c) => c.owner_id === ownerId)} from={from} to={to} />
           ) : tab === "gst" ? (
             <div>
               <p className="mb-3 text-sm text-slate">
@@ -523,19 +524,60 @@ export default function CaPortalPage() {
   );
 }
 
+type Filtered = { invoices: Array<Record<string, unknown>>; purchases: Array<Record<string, unknown>>; expenses: Array<Record<string, unknown>>; khata: Array<Record<string, unknown>> };
+
+const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : Number(v) || 0);
+const paise = (v: unknown) => Math.round(n(v) * 100);
+
+/** The period figures, worked out from the books the CA sees (dates as chosen above). */
+function periodReport(books: Books, f: Filtered, from: string, to: string): CaReport {
+  const issued = f.invoices.filter((i) => i.status !== "draft" && i.status !== "cancelled");
+  const inRange = (r: Record<string, unknown>) => {
+    const d = String(r.date || r.createdAt || "").slice(0, 10);
+    return d >= from && d <= to;
+  };
+  const credit = (books.creditNotes || []).filter((c) => c.status !== "cancelled" && inRange(c));
+  const debit = (books.debitNotes || []).filter((c) => c.status !== "cancelled" && inRange(c));
+  const sum = (rows: Array<Record<string, unknown>>, k: string) => rows.reduce((t, r) => t + paise(r[k]), 0);
+  const salesTax = sum(issued, "totalTax") - sum(credit, "totalGstAmount") + sum(debit, "totalGstAmount");
+  const sales = sum(issued, "totalTaxable") - (sum(credit, "totalAmount") - sum(credit, "totalGstAmount")) + (sum(debit, "totalAmount") - sum(debit, "totalGstAmount"));
+  // Input credit only on eligible bills from a valid supplier GSTIN (as the owner's GST check counts it).
+  const claimable = f.purchases.filter((p) => p.itcEligible !== false && isRegisteredGstin(String(p.supplierGstin || "")));
+  const purchaseTax = sum(claimable, "totalGstAmount");
+  const inventory = (books as { inventory?: Array<Record<string, unknown>> }).inventory || [];
+  return {
+    sales_total: sales / 100,
+    sales_tax: salesTax / 100,
+    purchases_total: (sum(f.purchases, "totalAmount") - sum(f.purchases, "totalGstAmount")) / 100,
+    purchase_tax: purchaseTax / 100,
+    expenses_total: sum(f.expenses, "amount") / 100,
+    gst_payable_estimate: Math.max(0, salesTax - purchaseTax) / 100,
+    outstanding_invoices: issued.reduce((t, i) => t + Math.max(0, paise(i.balanceDue ?? (i.status === "paid" ? 0 : i.grandTotal))), 0) / 100,
+    khata_net: f.khata.reduce((t, k) => t + (k.isCredit ? -1 : 1) * paise(k.amount), 0) / 100,
+    invoice_count: issued.length,
+    purchase_count: f.purchases.length,
+    expense_count: f.expenses.length,
+    party_count: ((books as { parties?: unknown[] }).parties || []).length,
+    low_stock_items: inventory.filter((s) => n(s.minStock) > 0 && n(s.currentStock) <= n(s.minStock)).length,
+    inventory_skus: inventory.length,
+  };
+}
+
 function OverviewPanel({
   books,
+  filtered,
   client,
   from,
   to,
 }: {
   books: Books;
+  filtered: Filtered;
   client?: Client;
   from: string;
   to: string;
 }) {
   const profile = books.business_profile || {};
-  const report = books.report || {};
+  const report = books.report || periodReport(books, filtered, from, to);
   return (
     <div className="space-y-4">
       <div className="rounded-card border border-bone bg-mist p-4">

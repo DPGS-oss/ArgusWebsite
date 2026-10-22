@@ -70,7 +70,12 @@ const cleanBom = (bom) => (Array.isArray(bom) ? bom : [])
 const PHONE_TO_WEB_STATUS = { paid: 'paid', cancelled: 'cancelled', draft: 'draft' };
 
 function phoneToWebInvoice(p, prev = {}, now = new Date().toISOString()) {
-  const inter = num(p.total_igst) > 0;
+  // IGST on the bill means inter-state. A bill with no tax (0% goods) still
+  // can be inter-state: compare the place of supply with the seller's state.
+  const sellerState = /^\d{2}/.test(str(p.seller_gstin)) ? str(p.seller_gstin).slice(0, 2) : '';
+  const posState = (str(p.place_of_supply).match(/^\d{2}/) || [''])[0];
+  const taxed = num(p.total_cgst) + num(p.total_sgst) + num(p.total_igst) > 0;
+  const inter = num(p.total_igst) > 0 || (!taxed && sellerState !== '' && posState !== '' && posState !== sellerState);
   // Same split rule as the phone: CGST is half the tax rounded, SGST the rest.
   const splitTax = (tax) => (inter
     ? { cgst: 0, sgst: 0, igst: money.round2(tax) }

@@ -277,3 +277,12 @@ test('business details: the phone fills an empty website; the website business g
   assert.equal(r.appData.businesses.length, 1);
   assert.equal(r.toPhone.business.name, 'Web Name');
 });
+
+test('a 0% phone bill to another state is inter-state (place of supply vs seller state)', () => {
+  const { phoneToWebInvoice } = require('./phone_sync');
+  const base = { id: 'z', invoice_number: 'INV/26-27/0009', customer_name: 'X', invoice_date: '2026-10-05', status: 'paid', seller_gstin: '27AAPFU0939F1ZV',
+    total_amount: 340, total_gst_amount: 0, total_cgst: 0, total_sgst: 0, total_igst: 0,
+    items: [{ name: 'Rice', hsn_code: '1006', quantity: 1, unit_price: 340, gst_rate: 0, taxable_value: 340, gst_amount: 0, cgst: 0, sgst: 0, igst: 0, total: 340 }] };
+  assert.equal(phoneToWebInvoice({ ...base, place_of_supply: '07' }).isInterState, true);
+  assert.equal(phoneToWebInvoice({ ...base, place_of_supply: '27' }).isInterState, false);
+});
