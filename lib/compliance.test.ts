@@ -189,3 +189,53 @@ describe("checkBooks: maths, numbering and balance", () => {
     expect(checkBooks(d).map((i) => i.title)).toContain("Books don't balance for 1 entry");
   });
 });
+
+describe("GST on expenses", () => {
+  it("rent with the landlord's GSTIN counts as input credit in GSTR-3B; without it, the GST check asks for it", async () => {
+    const { gstr3b, checkBooks } = await import("./compliance");
+    const base = {
+      businesses: [{ id: "b", name: "Shop", gstin: "27AAPFU0939F1ZV", stateCode: "27" }], activeBusinessId: "b",
+      invoices: [], purchases: [], creditNotes: [], debitNotes: [], parties: [], stock: [], settings: {},
+    } as any;
+    const rent = { id: "r", category: "Rent", description: "May rent", amount: 29500, date: "2025-05-01", paymentMode: "Bank", vendor: "Landlord", gstAmount: 4500, isGstClaimable: true, createdAt: "", updatedAt: "" };
+    const withGstin = gstr3b({ ...base, expenses: [{ ...rent, vendorGstin: "27AAPFU0939F1ZV" }] }, "2025-05-01", "2025-05-31");
+    expect(withGstin.eligible).toBe(4500);
+    const without = { ...base, expenses: [rent] };
+    expect(gstr3b(without, "2025-05-01", "2025-05-31").eligible).toBe(0);
+    expect(checkBooks(without, new Date("2025-06-05T10:00:00Z"), null).some((i) => /vendor's GST number/.test(i.title))).toBe(true);
+  });
+});
+
+describe("two GSTINs, one owner", () => {
+  it("GSTR-3B counts only the active GSTIN's bills", async () => {
+    const { gstr3b } = await import("./compliance");
+    const bill = (id: string, businessId: string, tax: number) => ({
+      id, invoiceNumber: id, type: "tax_invoice", status: "paid", businessId, date: "2025-11-05", partyGstin: "", placeOfSupply: "27", isInterState: false,
+      totalTaxable: 1000, totalCgst: tax / 2, totalSgst: tax / 2, totalIgst: 0, totalTax: tax, grandTotal: 1000 + tax,
+      items: [{ description: "x", hsn: "8302", quantity: 1, gstRate: 18, taxableAmount: 1000, cgst: tax / 2, sgst: tax / 2, igst: 0, total: 1000 + tax }],
+    });
+    const data = {
+      businesses: [{ id: "pune", gstin: "27AAPFU0939F1ZV" }, { id: "blr", gstin: "29AAPFU0939F1ZR" }], activeBusinessId: "pune",
+      invoices: [bill("a", "pune", 180), bill("b", "blr", 180), bill("c", "", 180)], purchases: [], creditNotes: [], debitNotes: [], expenses: [],
+    } as any;
+    expect(gstr3b(data, "2025-11-01", "2025-11-30").cgst).toBe(180);
+    // a bill with no business (made before one was set) counts with the active one
+    expect(gstr3b({ ...data, activeBusinessId: "blr" }, "2025-11-01", "2025-11-30").cgst).toBe(180);
+    expect(gstr3b({ ...data, activeBusinessId: "blr", invoices: data.invoices.slice(0, 2) }, "2025-11-01", "2025-11-30").cgst).toBe(90);
+  });
+});
+
+describe("bill numbers with two GSTINs", () => {
+  it("each GSTIN may have INV/26-27/W0001; it is a duplicate only within one GSTIN", async () => {
+    const { checkBooks } = await import("./compliance");
+    const bill = (id: string, businessId: string, invoiceNumber: string) => ({
+      id, invoiceNumber, businessId, type: "tax_invoice", status: "paid", date: "2026-04-02", partyGstin: "", placeOfSupply: "27", isInterState: false,
+      totalTaxable: 100, totalCgst: 9, totalSgst: 9, totalIgst: 0, totalTax: 18, grandTotal: 118,
+      items: [{ description: "Hinge", hsn: "8302", quantity: 1, gstRate: 18, taxableAmount: 100, cgst: 9, sgst: 9, igst: 0, total: 118 }],
+    });
+    const base = { businesses: [{ id: "pune", gstin: "27AAPFU0939F1ZV" }, { id: "blr", gstin: "29AAPFU0939F1ZR" }], activeBusinessId: "pune", purchases: [], creditNotes: [], debitNotes: [], expenses: [], settings: {} } as any;
+    const dup = (inv: any[]) => checkBooks({ ...base, invoices: inv }, new Date("2026-04-10T10:00:00Z"), null).some((i) => i.title === "Two bills have the same number");
+    expect(dup([bill("a", "pune", "INV/26-27/W0001"), bill("b", "blr", "INV/26-27/W0001")])).toBe(false);
+    expect(dup([bill("a", "pune", "INV/26-27/W0001"), bill("b", "pune", "INV/26-27/W0001")])).toBe(true);
+  });
+});

@@ -3,10 +3,10 @@
 import { MessageCircle, IndianRupee } from "lucide-react";
 import type { BusinessProfile, Invoice } from "@/lib/types";
 import { formatCurrency, formatDate } from "@/lib/gst";
-import { buildUpiPayUri, buildWhatsAppInvoiceText, buildWhatsAppShareUrl } from "@/lib/upi";
+import { amountToCollect, buildUpiPayUri, buildWhatsAppInvoiceText, buildWhatsAppShareUrl } from "@/lib/upi";
 
 export function invoiceCollectAmount(invoice: Invoice): number {
-  return invoice.balanceDue > 0 ? invoice.balanceDue : invoice.grandTotal;
+  return amountToCollect(invoice);
 }
 
 type InvoiceShareActionsProps = {
@@ -38,6 +38,10 @@ export function InvoiceShareActions({
   }
 
   function handleCollectUpi() {
+    if (invoiceCollectAmount(invoice) <= 0) {
+      alert(invoice.status === "cancelled" ? "This bill is cancelled." : "This bill is fully paid. Nothing to collect.");
+      return;
+    }
     if (!upiUri) {
       promptAddUpi();
       return;
@@ -65,6 +69,7 @@ export function InvoiceShareActions({
       invoice.totalSgst > 0 ? `*SGST:* ${formatCurrency(invoice.totalSgst)}` : "",
       invoice.totalIgst > 0 ? `*IGST:* ${formatCurrency(invoice.totalIgst)}` : "",
       invoice.balanceDue > 0 ? `*Balance Due:* ${formatCurrency(invoice.balanceDue)}` : "",
+      invoiceCollectAmount(invoice) <= 0 && invoice.status === "paid" ? "*Paid in full. Thank you!*" : "",
     ]
       .filter((line) => line !== "")
       .join("\n");

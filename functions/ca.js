@@ -16,6 +16,7 @@ const {
   companyNameFromAppData,
   parseMonthParam,
   monthBounds,
+  booksForBusiness,
 } = require('./_shared/ca-exports');
 const { buildEinvoiceJson, buildEinvoiceBatch } = require('./_shared/einvoice');
 const { readBooks } = require('./_shared/books_store');
@@ -356,6 +357,9 @@ async function handleBooks(req, res, decoded, ownerId) {
       name: biz.name || '', gstin: biz.gstin || '', pan: biz.pan || '', address: biz.address || '', state: biz.state || '',
       email: biz.email || '', phone: biz.phone || '', composition: biz.composition === true,
     },
+    // Branches in other states have their own GSTIN; bills carry businessId.
+    businesses: (appData.businesses || []).filter(Boolean).map((b) => ({ id: b.id, name: b.name || '', gstin: b.gstin || '', composition: b.composition === true })),
+    active_business_id: biz.id || null,
     invoices: pick('read:invoices', appData.invoices, (i) => day(i.date || i.createdAt)),
     creditNotes: pick('read:invoices', appData.creditNotes, (n) => day(n.date || n.createdAt)),
     debitNotes: pick('read:invoices', appData.debitNotes, (n) => day(n.date || n.createdAt)),
@@ -371,7 +375,8 @@ async function handleGstr1Download(req, res, decoded, ownerId) {
   const uid = decoded.uid;
   const link = await findLink(getDb(), uid, ownerId);
   if (!link) return res.status(403).json({ error: 'Not linked to this business' });
-  const { appData } = await loadOwnerAppData(ownerId);
+  // A return is per GSTIN: ?gstin= picks the branch, else the main business.
+  const { data: appData } = booksForBusiness((await loadOwnerAppData(ownerId)).appData, req.query && req.query.gstin);
   if (businessForInvoice(appData, null).composition === true) {
     return res.status(409).json({
       error: 'This business is on the composition scheme: it files CMP-08 (quarterly) and GSTR-4 (yearly), not GSTR-1.',
@@ -411,7 +416,7 @@ async function handleEinvoiceDownload(req, res, decoded, ownerId) {
   const uid = decoded.uid;
   const access = await requireLinkedOrOwner(uid, ownerId);
   if (!access) return res.status(403).json({ error: 'Not linked to this business' });
-  const { appData } = await loadOwnerAppData(ownerId);
+  const { data: appData } = booksForBusiness((await loadOwnerAppData(ownerId)).appData, req.query && req.query.gstin);
   const invoiceNo = String((req.query && (req.query.invoice || req.query.inum)) || '').trim();
   if (invoiceNo) {
     const inv = (appData.invoices || []).find(
@@ -447,7 +452,7 @@ async function handleTallyDownload(req, res, decoded, ownerId) {
   const uid = decoded.uid;
   const link = await findLink(getDb(), uid, ownerId);
   if (!link) return res.status(403).json({ error: 'Not linked to this business' });
-  const { appData } = await loadOwnerAppData(ownerId);
+  const { data: appData } = booksForBusiness((await loadOwnerAppData(ownerId)).appData, req.query && req.query.gstin);
   const month = parseMonthParam(req.query && req.query.month);
   const xml = buildTallyXml({
     companyName: companyNameFromAppData(appData),

@@ -24,6 +24,7 @@ export function Expenses({ data, onSaved }: Props) {
   const [vendor, setVendor] = useState("");
   const [gstAmount, setGstAmount] = useState(0);
   const [isGstClaimable, setIsGstClaimable] = useState(false);
+  const [vendorGstin, setVendorGstin] = useState("");
 
   const expenses = data.expenses ?? [];
 
@@ -40,6 +41,7 @@ export function Expenses({ data, onSaved }: Props) {
       vendor: vendor.trim(),
       gstAmount,
       isGstClaimable,
+      vendorGstin: isGstClaimable ? vendorGstin.trim().toUpperCase() || undefined : undefined,
       createdAt: now,
       updatedAt: now,
     };
@@ -51,6 +53,7 @@ export function Expenses({ data, onSaved }: Props) {
     setVendor("");
     setGstAmount(0);
     setIsGstClaimable(false);
+    setVendorGstin("");
   }
 
   function handleDelete(id: string) {
@@ -98,7 +101,7 @@ export function Expenses({ data, onSaved }: Props) {
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-sm text-slate">Amount (₹)</label>
+              <label className="mb-1 block text-sm text-slate">Amount paid (₹, GST included)</label>
               <input type="number" value={amount} onChange={(e) => setAmount(parseFloat(e.target.value) || 0)} className="input-field" />
             </div>
             <div>
@@ -129,6 +132,12 @@ export function Expenses({ data, onSaved }: Props) {
               <input type="checkbox" checked={isGstClaimable} onChange={(e) => setIsGstClaimable(e.target.checked)} className="h-4 w-4" />
               GST is claimable (ITC)
             </label>
+            {isGstClaimable && (
+              <div className="mt-2 max-w-sm">
+                <label className="mb-1 block text-sm text-slate">Vendor&apos;s GSTIN (needed to claim)</label>
+                <input type="text" value={vendorGstin} onChange={(e) => setVendorGstin(e.target.value.toUpperCase())} maxLength={15} className="input-field" placeholder="27ABCDE1234F1Z5" />
+              </div>
+            )}
           </div>
           <div className="mt-4 flex gap-2">
             <button onClick={handleSave} className="btn-primary">Save</button>

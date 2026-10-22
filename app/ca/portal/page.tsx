@@ -4,10 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth-provider";
 import { AuthModal } from "@/components/AuthModal";
 import { BrandLogo } from "@/components/BrandLogo";
-import { generateGSTRReport, generateGstnJson, formatCurrency, notesAsInvoices } from "@/lib/gst";
+import { expensesAsPurchases, generateGSTRReport, generateGstnJson, formatCurrency, notesAsInvoices } from "@/lib/gst";
 import { t } from "@/lib/i18n";
 import { isRegisteredGstin } from "@/lib/gstin";
-import type { CreditNote, DebitNote, GSTRReport, GSTRReportType, Invoice, Purchase } from "@/lib/types";
+import type { CreditNote, DebitNote, Expense, GSTRReport, GSTRReportType, Invoice, Purchase } from "@/lib/types";
 import {
   decryptBooksPayload,
   loadCaShareKey,
@@ -45,6 +45,9 @@ type CaReport = {
 };
 type Books = {
   business_profile?: BusinessProfile;
+  /** Every business (GSTIN) in the client's books; bills carry businessId. */
+  businesses?: Array<{ id: string; name: string; gstin: string; composition?: boolean }>;
+  active_business_id?: string;
   report?: CaReport;
   invoices?: Array<Record<string, unknown>>;
   purchases?: Array<Record<string, unknown>>;
@@ -230,6 +233,8 @@ export default function CaPortalPage() {
   const [to, setTo] = useState(() => isoDate(new Date()));
   const [gstType, setGstType] = useState<GSTRReportType>("gstr1");
   const [showCalendar, setShowCalendar] = useState(true);
+  // A client with branches in several states has one GSTIN each: returns are per GSTIN.
+  const [businessId, setBusinessId] = useState("");
 
   useEffect(() => {
     if (!token) return;
@@ -276,13 +281,19 @@ export default function CaPortalPage() {
       .catch((e) => setError(e.message));
   }, [token, ownerId, from, to]);
 
+  const businesses = books?.businesses || [];
+  const activeBusinessId = books?.active_business_id || businesses[0]?.id || "";
+  const selectedBusinessId = businesses.some((b) => b.id === businessId) ? businessId : activeBusinessId;
+  const selectedBusiness = businesses.find((b) => b.id === selectedBusinessId);
   const filtered = useMemo(() => {
-    const invoices = (books?.invoices || []).filter((row) => inRange(row, from, to));
+    const ofBusiness = (row: Record<string, unknown>) =>
+      businesses.length < 2 || (row.businessId ? row.businessId === selectedBusinessId : selectedBusinessId === activeBusinessId);
+    const invoices = (books?.invoices || []).filter((row) => inRange(row, from, to) && ofBusiness(row));
     const purchases = (books?.purchases || []).filter((row) => inRange(row, from, to));
     const expenses = (books?.expenses || []).filter((row) => inRange(row, from, to));
     const khata = (books?.khata || []).filter((row) => inRange(row, from, to));
     return { invoices, purchases, expenses, khata };
-  }, [books, from, to]);
+  }, [books, from, to, businesses, selectedBusinessId, activeBusinessId]);
 
   const gstReport = useMemo(() => {
     if (!books) return null;
@@ -292,7 +303,7 @@ export default function CaPortalPage() {
       creditNotes: (books.creditNotes || []) as unknown as CreditNote[],
       debitNotes: (books.debitNotes || []) as unknown as DebitNote[],
     });
-    const purchases = filtered.purchases.map(coercePurchase);
+    const purchases = [...filtered.purchases.map(coercePurchase), ...expensesAsPurchases(filtered.expenses as unknown as Expense[])];
     return generateGSTRReport([...invoices, ...notes], gstType, from, to, purchases);
   }, [books, filtered, from, to, gstType]);
 
@@ -424,6 +435,26 @@ export default function CaPortalPage() {
             </p>
           </div>
 
+          {businesses.length > 1 ? (
+            <label className="mb-4 block text-sm text-ink">
+              GSTIN
+              <select
+                value={selectedBusinessId}
+                onChange={(e) => setBusinessId(e.target.value)}
+                className="mt-1 block w-full max-w-md rounded-card border border-bone bg-white px-3 py-2"
+              >
+                {businesses.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name} · {b.gstin || "no GSTIN"}
+                  </option>
+                ))}
+              </select>
+              <span className="mt-1 block text-xs text-slate">
+                This client has {businesses.length} GSTINs. Bills and returns are shown for the one chosen; purchases and expenses are for the whole account.
+              </span>
+            </label>
+          ) : null}
+
           <div className="mb-4 flex flex-wrap gap-2">
             {(["overview", "invoices", "purchases", "expenses", "khata", "gst"] as const).map((t) => (
               <button
@@ -479,14 +510,14 @@ export default function CaPortalPage() {
                           creditNotes: (books.creditNotes || []) as unknown as CreditNote[],
                           debitNotes: (books.debitNotes || []) as unknown as DebitNote[],
                         });
-                        const purchases = filtered.purchases.map(coercePurchase);
+                        const purchases = [...filtered.purchases.map(coercePurchase), ...expensesAsPurchases(filtered.expenses as unknown as Expense[])];
                         const gstn = generateGstnJson(
                           [...invoices, ...notes],
                           gstType,
                           from,
                           to,
                           purchases,
-                          clients.find((c) => c.owner_id === ownerId)?.gstin || ""
+                          selectedBusiness?.gstin || clients.find((c) => c.owner_id === ownerId)?.gstin || ""
                         );
                         downloadText(
                           `${gstReport.type.toUpperCase()}_GSTN_${from}_${to}.json`,
@@ -542,7 +573,9 @@ function periodReport(books: Books, f: Filtered, from: string, to: string): CaRe
   const salesTax = sum(issued, "totalTax") - sum(credit, "totalGstAmount") + sum(debit, "totalGstAmount");
   const sales = sum(issued, "totalTaxable") - (sum(credit, "totalAmount") - sum(credit, "totalGstAmount")) + (sum(debit, "totalAmount") - sum(debit, "totalGstAmount"));
   // Input credit only on eligible bills from a valid supplier GSTIN (as the owner's GST check counts it).
-  const claimable = f.purchases.filter((p) => p.itcEligible !== false && isRegisteredGstin(String(p.supplierGstin || "")));
+  // Claimable expenses (rent from a registered landlord...) count like purchase bills.
+  const fromExpenses = expensesAsPurchases(f.expenses as unknown as Expense[]) as unknown as Array<Record<string, unknown>>;
+  const claimable = [...f.purchases, ...fromExpenses].filter((p) => p.itcEligible !== false && isRegisteredGstin(String(p.supplierGstin || "")));
   const purchaseTax = sum(claimable, "totalGstAmount");
   const inventory = (books as { inventory?: Array<Record<string, unknown>> }).inventory || [];
   return {

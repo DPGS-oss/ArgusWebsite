@@ -1,4 +1,4 @@
-import type { AppData, BusinessProfile, CreditNote, DebitNote, GSTRate, HSNCode, Invoice, InvoiceItem, InvoiceStatus, InvoiceType, GSTRReport, GSTRSection, GSTRReportType, GstDocumentType, Purchase } from "./types";
+import type { Expense, AppData, BusinessProfile, CreditNote, DebitNote, GSTRate, HSNCode, Invoice, InvoiceItem, InvoiceStatus, InvoiceType, GSTRReport, GSTRSection, GSTRReportType, GstDocumentType, Purchase } from "./types";
 import { GST_2_0_RATES, INDIAN_STATES } from "./types";
 import { isRegisteredGstin, normalizeGstin, stateCodeFromGstin } from "./gstin";
 import caExports from "../functions/_shared/ca-exports.js";
@@ -860,6 +860,31 @@ function invoiceTax(inv: Invoice): TaxSplit {
 }
 
 /** Purchase tax split; infers IGST vs CGST+SGST from supplier/recipient state when not stored. */
+/**
+ * Expenses whose GST can be claimed (rent from a registered landlord, a
+ * repair bill with GST...) count for input credit like a purchase bill, once
+ * the vendor's GSTIN is entered. The amount is what was paid, GST included.
+ */
+export function expensesAsPurchases(expenses: Expense[] | undefined): Purchase[] {
+  return (expenses || [])
+    .filter((e) => e && e.isGstClaimable && (e.gstAmount || 0) > 0 && !!(e.vendorGstin || "").trim())
+    .map((e) => ({
+      id: `expense-${e.id}`,
+      purchaseNumber: e.category || "Expense",
+      supplierName: e.vendor || e.category || "Expense",
+      supplierGstin: (e.vendorGstin || "").trim().toUpperCase(),
+      supplierInvoiceNumber: e.description || "",
+      supplierInvoiceDate: e.date,
+      reverseCharge: false,
+      itcEligible: true,
+      createdAt: `${e.date}T00:00:00.000Z`,
+      totalAmount: e.amount || 0,
+      totalGstAmount: e.gstAmount || 0,
+      items: [],
+      paidAmount: e.amount || 0,
+    }));
+}
+
 export function purchaseTax(p: Purchase, recipientGstin = ""): TaxSplit {
   const inv = purchaseToInvoice(p);
   const split = invoiceTax(inv);

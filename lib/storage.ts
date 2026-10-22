@@ -606,7 +606,11 @@ export function generateInvoiceNumber(
   let max = 0;
   const tag = `W${billSeries}`;
   const pattern = new RegExp(`^([A-Z0-9-]{1,4})\\/(\\d{2}-\\d{2})\\/${tag}(\\d+)$`);
-  for (const inv of invoices) {
+  // Each GSTIN (a branch in another state) keeps its own unbroken series.
+  const books = typeof window === "undefined" ? null : loadData();
+  const active = books && (books.businesses || []).length > 1 ? books.activeBusinessId : null;
+  for (const inv of invoices as ReadonlyArray<{ invoiceNumber: string; businessId?: string }>) {
+    if (active && inv.businessId && inv.businessId !== active) continue;
     const m = pattern.exec(inv.invoiceNumber || "");
     if (!m || m[2] !== fy || !p.startsWith(m[1])) continue;
     max = Math.max(max, Number(m[3]));

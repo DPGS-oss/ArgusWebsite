@@ -613,6 +613,58 @@ ${vouchers.join('\n')}
 `;
 }
 
+/**
+ * Expenses whose GST can be claimed (rent from a registered landlord...),
+ * as purchase bills, once the vendor's GSTIN is entered. Same as lib/gst.ts.
+ */
+function expensesAsPurchases(expenses) {
+  return (Array.isArray(expenses) ? expenses : [])
+    .filter((e) => e && e.isGstClaimable && Number(e.gstAmount) > 0 && String(e.vendorGstin || '').trim())
+    .map((e) => ({
+      id: `expense-${e.id}`,
+      purchaseNumber: e.category || 'Expense',
+      supplierName: e.vendor || e.category || 'Expense',
+      supplierGstin: String(e.vendorGstin).trim().toUpperCase(),
+      supplierInvoiceNumber: e.description || '',
+      supplierInvoiceDate: String(e.date || '').slice(0, 10),
+      reverseCharge: false,
+      itcEligible: true,
+      createdAt: `${String(e.date || '').slice(0, 10)}T00:00:00.000Z`,
+      totalAmount: Number(e.amount) || 0,
+      totalGstAmount: Number(e.gstAmount) || 0,
+      items: [],
+      paidAmount: Number(e.amount) || 0,
+    }));
+}
+
+/**
+ * One GSTIN's view of the books. An owner with branches in two states has a
+ * business (GSTIN) for each, and every return is filed per GSTIN: its bills,
+ * and the notes on them. Bills without a business belong to the main one.
+ * `gstin` picks the business; empty means the main (active) one.
+ */
+function booksForBusiness(appData, gstin) {
+  const data = appData || {};
+  const list = Array.isArray(data.businesses) ? data.businesses.filter(Boolean) : [];
+  const main = list.find((b) => b.id === data.activeBusinessId) || list[0] || {};
+  const want = String(gstin || '').trim().toUpperCase();
+  const business = (want && list.find((b) => String(b.gstin || '').toUpperCase() === want)) || main;
+  if (list.length < 2) return { business, data };
+  const owner = (x) => (x && x.businessId) || main.id;
+  const billBusiness = new Map((data.invoices || []).map((i) => [i.id, owner(i)]));
+  const noteBusiness = (n) => (n && n.businessId) || billBusiness.get(n && n.invoiceId) || main.id;
+  return {
+    business,
+    data: {
+      ...data,
+      activeBusinessId: business.id,
+      invoices: (data.invoices || []).filter((i) => owner(i) === business.id),
+      creditNotes: (data.creditNotes || []).filter((n) => noteBusiness(n) === business.id),
+      debitNotes: (data.debitNotes || []).filter((n) => noteBusiness(n) === business.id),
+    },
+  };
+}
+
 function sellerGstinFromAppData(appData) {
   const data = appData || {};
   const businesses = data.businesses || [];
@@ -636,6 +688,8 @@ module.exports = {
   notesAsInvoices,
   buildTallyXml,
   sellerGstinFromAppData,
+  expensesAsPurchases,
+  booksForBusiness,
   companyNameFromAppData,
   currentMonthYm,
   parseMonthParam,

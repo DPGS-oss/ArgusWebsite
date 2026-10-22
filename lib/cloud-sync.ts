@@ -25,9 +25,38 @@ export function getCloudUpdatedAt(): string | null {
   return localStorage.getItem(CLOUD_UPDATED_KEY);
 }
 
+/**
+ * The server allows about 30 loads and 30 saves a minute. When it says "too
+ * many, try again in N seconds", wait and try once more instead of leaving
+ * the changes unsaved until the next edit.
+ */
+async function fetchWithRetry(url: string, init: RequestInit): Promise<Response> {
+  const response = await fetch(url, init);
+  if (response.status !== 429) return response;
+  const body = await response.clone().json().catch(() => ({}));
+  const wait = Math.min(60, Math.max(1, Number(body?.retry_after_seconds) || 5));
+  await new Promise((ok) => setTimeout(ok, wait * 1000));
+  return fetch(url, init);
+}
+
+/**
+ * A year of books is several MB of JSON and every save sends all of it: gzip
+ * it (about ten times smaller) where the browser can, for the server's size
+ * limit and the owner's data plan. The server unpacks gzip bodies itself.
+ */
+async function packJson(json: string): Promise<{ body: BodyInit; headers: Record<string, string> }> {
+  if (json.length < 64 * 1024 || typeof CompressionStream === "undefined") return { body: json, headers: {} };
+  try {
+    const stream = new Blob([json]).stream().pipeThrough(new CompressionStream("gzip"));
+    return { body: await new Response(stream).arrayBuffer(), headers: { "Content-Encoding": "gzip" } };
+  } catch {
+    return { body: json, headers: {} };
+  }
+}
+
 export async function loadCloudData(token: string): Promise<AppData | null> {
   try {
-    const response = await fetch("/api/data/load", {
+    const response = await fetchWithRetry("/api/data/load", {
       method: "GET",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -59,20 +88,24 @@ export async function saveCloudData(
 ): Promise<boolean | "conflict"> {
   try {
     const device = getDeviceName();
-    const response = await fetch("/api/data/save", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        appData: data,
-        version: SYNC_VERSION,
-        device,
-        base_updated_at: baseUpdatedAt,
-        books_uid: booksUid || undefined,
-      }),
-    });
+    const packed = await packJson(JSON.stringify({
+      appData: data,
+      version: SYNC_VERSION,
+      device,
+      base_updated_at: baseUpdatedAt,
+      books_uid: booksUid || undefined,
+    }));
+    const send = (p: { body: BodyInit; headers: Record<string, string> }) =>
+      fetchWithRetry("/api/data/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...p.headers },
+        body: p.body,
+      });
+    let response = await send(packed);
+    // Somewhere on the way did not take a gzipped body: send it as it is.
+    if (packed.headers["Content-Encoding"] && (response.status === 400 || response.status === 415)) {
+      response = await send({ body: JSON.stringify({ appData: data, version: SYNC_VERSION, device, base_updated_at: baseUpdatedAt, books_uid: booksUid || undefined }), headers: {} });
+    }
 
     if (response.status === 409) {
       const body = await response.clone().json().catch(() => ({}));
