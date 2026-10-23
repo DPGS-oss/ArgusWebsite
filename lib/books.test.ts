@@ -173,3 +173,18 @@ describe("profit with stock", () => {
     expect(profitAndLoss(d)).toEqual({ sales: 600, cogs: 400, expenses: 0, profit: 200 });
   });
 });
+
+describe("expenses in the books", () => {
+  it("rent with claimable GST posts balanced entries; salary too; profit counts rent without the GST claimed back", async () => {
+    const { postExpenseLedger, unbalancedPostings, profitAndLoss } = await import("./books");
+    const base = { businesses: [{ id: "b", gstin: "27AAPFU0939F1ZV" }], activeBusinessId: "b", invoices: [], purchases: [], creditNotes: [], debitNotes: [], khataEntries: [], stock: [] } as any;
+    const rent = { id: "r", category: "Rent", description: "May", amount: 29500, date: "2025-05-01", paymentMode: "Bank Transfer", vendor: "Landlord", vendorGstin: "27AAPFU0939F1ZV", gstAmount: 4500, isGstClaimable: true, createdAt: "", updatedAt: "" };
+    const salary = { ...rent, id: "s", category: "Salaries", amount: 15000, gstAmount: 0, isGstClaimable: false, vendorGstin: undefined, paymentMode: "Cash" };
+    let d = postExpenseLedger(base, rent as any);
+    d = postExpenseLedger(d, salary as any);
+    expect(unbalancedPostings(d.khataEntries)).toEqual([]);
+    expect(d.khataEntries.find((k: any) => k.sourceId === "r" && k.accountType === "bank")?.amount).toBe(29500);
+    expect(d.khataEntries.find((k: any) => k.sourceId === "r" && k.accountType === "gst")?.amount).toBe(4500);
+    expect(profitAndLoss({ ...d, expenses: [rent, salary] } as any).expenses).toBe(25000 + 15000);
+  });
+});

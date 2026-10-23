@@ -300,7 +300,7 @@ const webToPhoneCustomer = (p) => ({
   ship_to_state: str(p.shipToState),
 });
 
-function phoneToWebStock(s, prev = {}) {
+function phoneToWebStock(s, prev = {}, now = new Date().toISOString()) {
   const gstRate = num(s.gst_rate);
   return {
     ...prev,
@@ -319,6 +319,8 @@ function phoneToWebStock(s, prev = {}) {
     valuation: str(s.valuation) === 'fifo' ? 'fifo' : 'average',
     trackBatches: s.track_batches === true,
     bom: cleanBom(s.bom),
+    // Edited on the phone now: a browser's older copy must not overwrite it.
+    updatedAt: now,
   };
 }
 

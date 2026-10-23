@@ -239,3 +239,19 @@ describe("bill numbers with two GSTINs", () => {
     expect(dup([bill("a", "pune", "INV/26-27/W0001"), bill("b", "pune", "INV/26-27/W0001")])).toBe(true);
   });
 });
+
+describe("e-way bill warning", () => {
+  it("not for jewellery, services or exempt goods; yes for a ₹50,000 almirah order", async () => {
+    const { checkBooks } = await import("./compliance");
+    const bill = (hsn: string, gstRate: number, total: number) => ({
+      id: hsn, invoiceNumber: `INV/25-26/W${hsn}`, type: "tax_invoice", status: "paid", date: "2025-11-05", partyGstin: "", placeOfSupply: "27", isInterState: false,
+      totalTaxable: total, totalCgst: 0, totalSgst: 0, totalIgst: 0, totalTax: 0, grandTotal: total,
+      items: [{ description: "x", hsn, quantity: 1, gstRate, taxableAmount: total, cgst: 0, sgst: 0, igst: 0, total }],
+    });
+    const warned = (inv: any) => checkBooks({ businesses: [{ id: "b", gstin: "27AAPFU0939F1ZV" }], activeBusinessId: "b", invoices: [inv], purchases: [], creditNotes: [], debitNotes: [], expenses: [], settings: {} } as any, new Date("2025-11-10T10:00:00Z"), null).some((i) => i.title === "E-way bill number not saved");
+    expect(warned(bill("7113", 3, 216000))).toBe(false);
+    expect(warned(bill("998713", 18, 60000))).toBe(false);
+    expect(warned(bill("0702", 0, 60000))).toBe(false);
+    expect(warned(bill("9403", 18, 54000))).toBe(true);
+  });
+});

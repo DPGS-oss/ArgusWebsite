@@ -14,7 +14,7 @@ export type LedgerAccount = "party" | "cash" | "bank" | "sales" | "purchase" | "
 
 function methodAccount(method?: string): "cash" | "bank" {
   const m = (method || "cash").toLowerCase();
-  return ["bank", "upi", "neft", "rtgs", "card"].includes(m) ? "bank" : "cash";
+  return ["bank", "upi", "neft", "rtgs", "card", "bank transfer", "cheque"].includes(m) ? "bank" : "cash";
 }
 
 function line(partial: Omit<KhataEntry, "id" | "createdAt"> & { id?: string; createdAt?: string }): KhataEntry {
@@ -216,17 +216,32 @@ export function postPurchaseLedger(data: AppData, purchase: Purchase): AppData {
   return { ...data, khataEntries: next };
 }
 
+/** GST on an expense that a regular business claims back (needs the vendor's GSTIN). */
+export function recoverableExpenseGst(data: Pick<AppData, "businesses" | "activeBusinessId">, expense: Expense): number {
+  const business = data.businesses.find((b) => b.id === data.activeBusinessId) || data.businesses[0];
+  const claimable = !!business && isRegisteredGstin(business.gstin) && !business.composition;
+  if (!claimable || !expense.isGstClaimable || !isRegisteredGstin(expense.vendorGstin || "")) return 0;
+  return round2(Math.min(expense.gstAmount || 0, expense.amount || 0));
+}
+
+/**
+ * Posts an expense: the money goes out of cash or bank; the expense gets the
+ * amount less any GST claimed back, which goes to the GST account (like a
+ * purchase). Saving it again replaces its entries.
+ */
 export function postExpenseLedger(data: AppData, expense: Expense): AppData {
   const existing = (data.khataEntries || []).filter((e) => e.sourceId !== expense.id);
   const acct = methodAccount(expense.paymentMode);
+  const gst = recoverableExpenseGst(data, expense);
   return {
     ...data,
     khataEntries: [
       ...existing,
+      ...(gst > 0 ? [line({ customerId: "", customerName: "GST", amount: gst, description: `GST paid on ${expense.category || "expense"}`, isCredit: true, accountType: "gst", sourceType: "expense", sourceId: expense.id })] : []),
       line({
         customerId: "",
         customerName: expense.category || "Expense",
-        amount: expense.amount,
+        amount: round2(expense.amount - gst),
         description: expense.description || expense.category,
         isCredit: false,
         accountType: "expense",
@@ -316,7 +331,8 @@ export function profitAndLoss(data: AppData) {
       (claimable && p.itcEligible !== false && isRegisteredGstin(p.supplierGstin) ? toPaise(Math.min(p.totalGstAmount || 0, p.totalAmount)) : 0),
     0,
   );
-  const expensesPaise = (data.expenses || []).reduce((s, e) => s + toPaise(e.amount), 0);
+  // GST claimed back on an expense (rent from a registered landlord...) is not a cost.
+  const expensesPaise = (data.expenses || []).reduce((s, e) => s + toPaise(e.amount) - toPaise(recoverableExpenseGst(data, e)), 0);
   // With stock tracked: cost of goods sold = opening stock + purchases − closing stock.
   if ((data.stockMoves || []).length) {
     // Goods received through Stock in without a purchase bill are purchases too.

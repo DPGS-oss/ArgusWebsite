@@ -43,7 +43,7 @@ import {
   deductStockForInvoice, generateInvoiceNumber, setBillSeries, saveExpense, savePayrollEntry, saveKhataEntry, savePurchase, saveQuote,
   saveDeliveryChallan, saveTemplate, saveCreditNote, saveDebitNote, setActiveBusiness, saveSettings, generateId,
 } from "@/lib/storage";
-import { postInvoiceLedger, persistLedger, applyPaymentToInvoice, postNoteLedger, postPurchaseLedger, profitAndLoss } from "@/lib/books";
+import { postInvoiceLedger, persistLedger, applyPaymentToInvoice, postNoteLedger, postPurchaseLedger, postExpenseLedger, profitAndLoss, unbalancedPostings } from "@/lib/books";
 import { noteFromBill } from "@/lib/notes";
 import { withHistory } from "@/lib/invoice-history";
 import { setAuditActor } from "@/lib/audit";
@@ -364,18 +364,18 @@ function webRestock(s: Shop, it: Item, iso: string, n: number) {
 }
 
 function webMonthStart(s: Shop, iso: string) {
+  const now = new Date().toISOString();
+  // Expenses screen: save, then post to the books (money out, expense, GST claimed back)
+  const spend = (e: Expense) => { saveExpense(e); persistLedger(postExpenseLedger(loadData(), e)); };
   // rent (GST on commercial rent from a registered landlord can be claimed)
   const gst = r2(s.rent * 0.18);
-  saveExpense({ id: generateId(), category: "Rent", description: `Shop rent ${monthOf(iso)}`, amount: r2(s.rent + gst), date: iso, paymentMode: "Bank", vendor: "Landlord", vendorGstin: s.landlordGstin, gstAmount: gst, isGstClaimable: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() } as Expense);
-  saveExpense({ id: generateId(), category: "Electricity", description: "MSEB bill", amount: 2400 + Math.floor(rnd() * 1800), date: iso, paymentMode: "UPI", vendor: "Electricity board", gstAmount: 0, isGstClaimable: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() } as Expense);
-  // salary for the shop assistant (Payroll: add, then "Mark paid" adds the expense and the cash/bank entry)
-  const now = new Date().toISOString();
+  spend({ id: generateId(), category: "Rent", description: `Shop rent ${monthOf(iso)}`, amount: r2(s.rent + gst), date: iso, paymentMode: "Bank Transfer", vendor: "Landlord", vendorGstin: s.landlordGstin, gstAmount: gst, isGstClaimable: true, createdAt: now, updatedAt: now } as Expense);
+  spend({ id: generateId(), category: "Electricity", description: "MSEB bill", amount: 2400 + Math.floor(rnd() * 1800), date: iso, paymentMode: "UPI", vendor: "Electricity board", gstAmount: 0, isGstClaimable: false, createdAt: now, updatedAt: now } as Expense);
+  // salary for the shop assistant (Payroll: add, then "Mark paid" saves the expense and posts it)
   const entry: PayrollEntry = { id: generateId(), employeeName: "Ramesh", role: "Assistant", amount: 15000, payDate: iso, periodLabel: prevMonth(monthOf(iso)), status: "pending", paidOn: "", method: "", note: "", createdAt: now, updatedAt: now };
   savePayrollEntry(entry);
   savePayrollEntry({ ...entry, status: "paid", paidOn: iso, method: "Bank", updatedAt: now });
-  saveExpense({ id: generateId(), category: "Salaries", description: `Salary Ramesh · ${entry.periodLabel}`, amount: 15000, date: iso, paymentMode: "Bank", vendor: "Ramesh", gstAmount: 0, isGstClaimable: false, createdAt: now, updatedAt: now } as Expense);
-  const books = loadData();
-  persistLedger({ ...books, khataEntries: [...(books.khataEntries || []), { id: generateId(), customerId: "", customerName: "Bank", amount: 15000, description: "Salary Ramesh", createdAt: now, isCredit: false, accountType: "bank", paymentMethod: "Bank", sourceType: "payroll", sourceId: entry.id } as KhataEntry] });
+  spend({ id: generateId(), category: "Salaries", description: `Salary Ramesh · ${entry.periodLabel}`, amount: 15000, date: iso, paymentMode: "Bank", vendor: "Ramesh", gstAmount: 0, isGstClaimable: false, createdAt: now, updatedAt: now } as Expense);
 }
 
 /** Customers pay: late, sometimes in parts (Payments screen). */
@@ -951,6 +951,14 @@ it("a year of business: shops on the website and the phone, staff, three CAs", a
       const itc = g3.eligible || 0;
       const purchaseGst = data.purchases.filter((p) => (p.supplierInvoiceDate || p.createdAt).slice(0, 7) === "2025-05").reduce((t, p) => t + p.totalGstAmount, 0);
       if (s.app === "web") check(`${s.name}: GSTR-3B input credit includes the GST on rent marked claimable`, itc >= r2(purchaseGst + rentGst) - 1, `ITC ₹${r2(itc)}; purchases ₹${r2(purchaseGst)} + rent ₹${rentGst}`);
+    }
+    if (s.app === "web") {
+      const unb = unbalancedPostings(data.khataEntries || []);
+      check(`${s.name}: every bill, payment, purchase, expense and salary posts balanced entries`, unb.length === 0, unb.slice(0, 3).map((u) => `${u.sourceType} ${u.difference}`).join(", "));
+      const stale = s.items.filter((it) => !it.service).filter((it) => { const st = data.stock.find((x) => x.id === `s${s.n}-${it.key}`); return st && Number(st.gstRate) !== s.expect.rateNow[it.key]; });
+      check(`${s.name}: item GST rates are what the owner last set (no other browser undid them)`, stale.length === 0, stale.map((it) => it.name).join(", "));
+      const oldRate = data.invoices.filter((i) => i.date >= "2025-09-29" && i.status !== "cancelled" && i.items.some((l) => [12, 28].includes(l.gstRate)));
+      check(`${s.name}: no bill after the rate cut uses 12% or 28% (staff included)`, oldRate.length === 0, `${oldRate.length} bills, e.g. ${oldRate[0]?.invoiceNumber}`);
     }
     // the edit log keeps a year of changes
     check(`${s.name}: edit log kept the year's changes`, (data.auditLog || []).length > 50 || s.app === "phone", `${(data.auditLog || []).length} entries`);

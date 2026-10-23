@@ -635,7 +635,8 @@ export function importAllData(jsonStr: string): boolean {
   }
 }
 
-export function saveBusiness(business: BusinessProfile): void {
+export function saveBusiness(input: BusinessProfile): void {
+  const business = { ...input, updatedAt: new Date().toISOString() };
   const data = loadData();
   const idx = data.businesses.findIndex((b) => b.id === business.id);
   const changes = describeFields(data.businesses[idx], business, {
@@ -670,7 +671,8 @@ export function adoptOrphanDocs(data: AppData): AppData {
   return { ...data, invoices, creditNotes, debitNotes };
 }
 
-export function saveParty(party: Party): void {
+export function saveParty(input: Party): void {
+  const party = { ...input, updatedAt: new Date().toISOString() };
   const data = loadData();
   const idx = data.parties.findIndex((p) => p.id === party.id);
   const changes = describeFields(data.parties[idx], party, { name: "Name", gstin: "GSTIN", phone: "Phone", address: "Address", state: "State" });
@@ -757,7 +759,8 @@ export function cancelInvoice(id: string): void {
   saveData(next);
 }
 
-export function saveStockItem(item: StockItem): void {
+export function saveStockItem(input: StockItem): void {
+  const item = { ...input, updatedAt: new Date().toISOString() };
   let data = ensureOpeningMoves(loadData());
   const idx = data.stock.findIndex((s) => s.id === item.id);
   const before = data.stock[idx];
@@ -793,7 +796,9 @@ export function saveStockMoves(moves: Omit<StockMove, "id" | "createdAt">[], aud
 
 export function bulkSaveStockItems(items: StockItem[]): void {
   const data = loadData();
-  for (const item of items) {
+  const now = new Date().toISOString();
+  for (const input of items) {
+    const item = { ...input, updatedAt: now };
     const idx = data.stock.findIndex((s) => s.id === item.id);
     if (idx >= 0) {
       data.stock[idx] = item;
@@ -933,6 +938,8 @@ export function deleteExpense(id: string): void {
   const exp = data.expenses.find((e) => e.id === id);
   if (exp) appendAudit(data, auditEntry({ action: "deleted", entity: "expense", entityId: id, ref: exp.category || "Expense", detail: `Expense deleted (${inr(exp.amount)})` }));
   data.expenses = data.expenses.filter((e) => e.id !== id);
+  // ...and its entries in the books (money out, expense, GST).
+  data.khataEntries = (data.khataEntries || []).filter((k) => !(k.sourceType === "expense" && k.sourceId === id));
   markDeleted(data, "expenses", id);
   saveData(data);
 }

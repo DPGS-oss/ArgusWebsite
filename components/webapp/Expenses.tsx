@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { Plus, Trash2, Receipt } from "lucide-react";
 import type { AppData, Expense } from "@/lib/types";
-import { saveExpense, deleteExpense, generateId } from "@/lib/storage";
+import { saveExpense, deleteExpense, generateId, loadData } from "@/lib/storage";
+import { persistLedger, postExpenseLedger } from "@/lib/books";
 import { todayIST } from "@/lib/dates";
 
 type Props = {
@@ -46,6 +47,8 @@ export function Expenses({ data, onSaved }: Props) {
       updatedAt: now,
     };
     saveExpense(exp);
+    // Money out of cash or bank, the expense (and GST claimed back) in the books.
+    persistLedger(postExpenseLedger(loadData(), exp));
     onSaved();
     setShowForm(false);
     setDescription("");

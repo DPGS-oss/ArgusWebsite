@@ -16,3 +16,4 @@ tsconfig.tsbuildinfo
 
 # month simulation results (local emulator runs)
 scripts/sim/last-run*.json
+scripts/sim/last-run-issues.json

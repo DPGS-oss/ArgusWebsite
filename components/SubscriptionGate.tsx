@@ -6,9 +6,10 @@ import { useAuth, hasValidSubscription } from "@/lib/auth-provider";
 import { startRazorpayCheckout, validatePromoCode, type PromoOffer } from "@/lib/razorpay";
 import { isBusinessPlanName, startBusinessTrial } from "@/lib/subscription";
 import { BrandLogo } from "./BrandLogo";
+import { initStorage, loadData } from "@/lib/storage";
 
 export function SubscriptionGate() {
-  const { user, token, logout, refreshProfile } = useAuth();
+  const { user, token, logout, refreshProfile, firebaseUser } = useAuth();
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [referralCode, setReferralCode] = useState("");
@@ -40,6 +41,36 @@ export function SubscriptionGate() {
       window.location.reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not join");
+      setLoading(null);
+    }
+  }
+
+  // A lapsed plan never locks owners out of their own books: they can always
+  // take a copy (the cloud's, else the one kept in this browser).
+  async function handleDownloadBooks() {
+    setLoading("download");
+    setError("");
+    try {
+      let books: unknown = null;
+      if (token) {
+        const res = await fetch("/api/data/load?export=1", { headers: { Authorization: `Bearer ${token}` } });
+        if (res.ok) books = (await res.json().catch(() => ({}))).data || null;
+      }
+      if (!books && firebaseUser) {
+        const local = await initStorage(firebaseUser.uid);
+        if ((local.invoices || []).length || (local.businesses || []).length) books = loadData();
+      }
+      if (!books) throw new Error("No books found for this account.");
+      const blob = new Blob([JSON.stringify(books, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `argus-books-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not download the books");
+    } finally {
       setLoading(null);
     }
   }
@@ -151,6 +182,17 @@ export function SubscriptionGate() {
             </p>
             <button onClick={handleJoin} disabled={loading === "join"} className="btn-primary mt-4 px-6 py-2.5 text-sm">
               {loading === "join" ? "Joining…" : "Join their books"}
+            </button>
+          </div>
+        )}
+
+        {hadBusinessButExpired && (
+          <div className="mb-6 w-full max-w-md rounded-card border border-bone bg-white p-5 text-center">
+            <p className="text-sm text-ink">
+              Your books are safe. Renew to keep billing and syncing, or download a copy of everything now.
+            </p>
+            <button onClick={handleDownloadBooks} disabled={loading === "download"} className="btn-secondary mt-3 px-5 py-2 text-sm">
+              {loading === "download" ? "Preparing…" : "Download my books"}
             </button>
           </div>
         )}

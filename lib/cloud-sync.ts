@@ -266,7 +266,10 @@ function mergeById<T extends { id: string; updatedAt?: string }>(
     } else {
       const existingTime = existing.updatedAt || "";
       const cloudTime = item.updatedAt || "";
-      if (cloudTime > existingTime) {
+      // The newer edit wins; with no edit time on either (older records),
+      // the cloud's copy, which every device shares: a stale copy in one
+      // browser must not overwrite a change made elsewhere.
+      if (cloudTime >= existingTime) {
         map.set(item.id, item);
       }
     }

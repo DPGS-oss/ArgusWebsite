@@ -5,7 +5,7 @@ import { Plus } from "lucide-react";
 import { formatCurrency } from "@/lib/gst";
 import type { AppData, Expense, PayrollEntry } from "@/lib/types";
 import { deletePayrollEntry, generateId, saveExpense, savePayrollEntry } from "@/lib/storage";
-import { persistLedger } from "@/lib/books";
+import { persistLedger, postExpenseLedger } from "@/lib/books";
 import { loadData } from "@/lib/storage";
 import { todayIST } from "@/lib/dates";
 
@@ -68,26 +68,8 @@ export function Payroll({ data, onSaved }: Props) {
       updatedAt: now,
     };
     saveExpense(expense);
-    const books = loadData();
-    persistLedger({
-      ...books,
-      khataEntries: [
-        ...(books.khataEntries || []),
-        {
-          id: generateId(),
-          customerId: "",
-          customerName: method === "Cash" ? "Cash" : "Bank",
-          amount: entry.amount,
-          description: `Salary ${entry.employeeName}`,
-          createdAt: now,
-          isCredit: false,
-          accountType: method === "Cash" ? "cash" : "bank",
-          paymentMethod: method,
-          sourceType: "payroll",
-          sourceId: entry.id,
-        },
-      ],
-    });
+    // Both sides: salary expense, and the money out of cash or bank.
+    persistLedger(postExpenseLedger(loadData(), expense));
     onSaved();
   }
 
