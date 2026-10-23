@@ -169,7 +169,9 @@ export function packedAnswerHeaders(): Record<string, string> {
 }
 /** An answer's JSON, unpacking it if the server packed it. */
 export async function readJson(response: Response): Promise<any> {
-  if (response.headers.get("X-Argus-Packed") === "gzip" && canUnpack()) {
+  // Packed: marked by X-Argus-Packed, or (if a proxy dropped that header) sent as bytes.
+  const packed = response.headers.get("X-Argus-Packed") === "gzip" || (response.headers.get("Content-Type") || "").includes("octet-stream");
+  if (packed && canUnpack()) {
     const stream = response.body!.pipeThrough(new DecompressionStream("gzip"));
     return JSON.parse(await new Response(stream).text());
   }
