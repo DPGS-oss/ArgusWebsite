@@ -204,7 +204,14 @@ export function checkBooks(data: AppData, today: Date = new Date(), book: RateBo
             : `${number}: create the e-invoice on the government portal and save its number (IRN) here.`,
       });
     }
-    if (!isNote(inv) && inv.grandTotal >= 50000 && !inv.ewayBillNo) {
+    // E-way bill: on the goods that need one. Jewellery and precious metals
+    // (chapter 71) and exempt goods need none (Rule 138(14)), nor do services.
+    const ewayValue = (inv.items || []).reduce((t, l) => {
+      const hsn = (l.hsn || "").replace(/\s/g, "");
+      if (hsn.startsWith("71") || hsn.startsWith("99") || !((l.gstRate || 0) > 0)) return t;
+      return t + (l.total || 0);
+    }, 0);
+    if (!isNote(inv) && inv.grandTotal >= 50000 && ewayValue >= 50000 && !inv.ewayBillNo) {
       issues.push({
         severity: "warn",
         title: "E-way bill number not saved",

@@ -31,6 +31,8 @@ export interface BusinessProfile {
   logo?: string;
   /** Composition scheme (CGST s.10): bills of supply only, no GST charged. */
   composition?: boolean;
+  /** Last edit, so another device's older copy cannot overwrite it on sync. */
+  updatedAt?: string;
 }
 
 export interface Party {
@@ -52,6 +54,8 @@ export interface Party {
   shipToAddress?: string;
   shipToState?: string;
   shipToStateCode?: string;
+  /** Last edit, so another device's older copy cannot overwrite it on sync. */
+  updatedAt?: string;
 }
 
 export interface InvoiceItem {
@@ -170,6 +174,8 @@ export interface StockItem {
   valuation?: "average" | "fifo";
   /** Bill of materials: components to make one unit. */
   bom?: { itemId: string; qty: number }[];
+  /** Last edit, so another device's older copy cannot overwrite it on sync. */
+  updatedAt?: string;
 }
 
 export interface AppData {

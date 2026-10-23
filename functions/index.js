@@ -1682,7 +1682,10 @@ exports.apiDataLoad = onRequest({ region: 'us-central1', maxInstances: 10, memor
   const uid = decoded.uid;
   // Someone on the owner's team works on the owner's books, under the owner's plan.
   const { ctx: books, planUser: user } = await teamAccess.booksAccess(getDb(), getUser, uid);
-  if (!hasActiveBusinessSubscription(user)) {
+  // A lapsed plan stops syncing, never the owner's access to their own books:
+  // ?export=1 returns a copy to download (Privacy Policy: export your data).
+  const exportOwn = String((req.query && req.query.export) || '') === '1' && books.role === 'owner';
+  if (!hasActiveBusinessSubscription(user) && !exportOwn) {
     return res.status(402).json({
       error: 'Business subscription required for cloud sync',
       requires_subscription: true,

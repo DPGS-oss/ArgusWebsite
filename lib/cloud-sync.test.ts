@@ -31,3 +31,21 @@ describe("bills from the phone made before a business existed", () => {
     expect(merged.invoices[0].businessId).toBe("b1");
   });
 });
+
+describe("two browsers, one item", () => {
+  it("an older copy in another browser does not undo a change made elsewhere", async () => {
+    const { mergeData } = await import("./cloud-sync");
+    const { getDefaultData } = await import("./storage");
+    const item = { id: "kurta", name: "Designer kurta", hsn: "6211", unit: "NOS", openingStock: 10, currentStock: 10, minStock: 2, rate: 3124, gstRate: 12 };
+    // the staff's browser still holds the item as it was in April (no edit time)
+    const local = { ...getDefaultData(), stock: [item] } as any;
+    // the owner moved it to 18% on 22 September
+    const cloud = { ...getDefaultData(), stock: [{ ...item, gstRate: 18, updatedAt: "2025-09-22T05:30:00.000Z" }] } as any;
+    expect(mergeData(local, cloud).stock[0].gstRate).toBe(18);
+    // neither copy has an edit time (books from before this fix): the shared cloud copy wins
+    expect(mergeData(local, { ...cloud, stock: [{ ...item, gstRate: 18 }] }).stock[0].gstRate).toBe(18);
+    // a newer edit made in this browser and not yet synced still wins
+    const edited = { ...local, stock: [{ ...item, gstRate: 5, updatedAt: "2025-10-01T05:30:00.000Z" }] };
+    expect(mergeData(edited, cloud).stock[0].gstRate).toBe(5);
+  });
+});
