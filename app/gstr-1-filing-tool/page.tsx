@@ -58,7 +58,7 @@ export default function Gstr1FilingToolPage() {
             {
               step: "3",
               title: "File with confidence",
-              text: "Export or share an encrypted CA invite so your accountant reviews the same numbers you see.",
+              text: "Export, or invite your CA to a read-only portal, so your accountant reviews the same numbers you see.",
             },
           ].map((item) => (
             <li key={item.step} className="flex gap-4">

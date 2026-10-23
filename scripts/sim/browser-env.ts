@@ -76,10 +76,27 @@ g.indexedDB = indexedDBShim;
 g.document = { addEventListener() {}, removeEventListener() {}, visibilityState: "visible" };
 /** Answers other than 2xx that the web app got, for the report. */
 export const webErrors: string[] = [];
+/** Bytes the web app sent and received, by path. */
+export const webBytes: Record<string, { calls: number; sent: number; got: number }> = {};
 g.fetch = async (input: any, init?: any) => {
   const rel = typeof input === "string" && input.startsWith("/api/");
   try {
     const res = await realFetch(rel ? route(input) : input, init);
+    if (rel) {
+      const k = input.split("?")[0];
+      const b = (webBytes[k] ||= { calls: 0, sent: 0, got: 0 });
+      const body = init?.body;
+      b.calls++;
+      b.sent += typeof body === "string" ? body.length : body && (body as ArrayBuffer).byteLength ? (body as ArrayBuffer).byteLength : 0;
+      b.got += (await res.clone().arrayBuffer()).byteLength;
+      if (k === "/api/data/save" && body) {
+        const zl = await import("node:zlib");
+        const text = typeof body === "string" ? body : zl.gunzipSync(Buffer.from(body as ArrayBuffer)).toString("utf8");
+        const kind = text.startsWith('{"patch":true') ? "patch" : "full";
+        const d = (webBytes[`save:${kind}`] ||= { calls: 0, sent: 0, got: 0 });
+        d.calls++; d.sent += text.length;
+      }
+    }
     if (rel && !res.ok && webErrors.length < 200) webErrors.push(`${input} ${res.status} ${(await res.clone().text()).slice(0, 200)}`);
     return res;
   } catch (e) {

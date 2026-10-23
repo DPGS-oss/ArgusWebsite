@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth-provider";
 import { BrandLogo } from "./BrandLogo";
 
 /** Bump when Privacy/Terms materially change so users re-consent. */
-export const WEB_LEGAL_VERSION = "2026-10-15";
+export const WEB_LEGAL_VERSION = "2026-10-23";
 
 function storageKey(uid: string) {
   return `argus_web_legal_${uid}`;
@@ -22,7 +23,24 @@ export function hasAcceptedWebLegal(uid: string): boolean {
 }
 
 export function markWebLegalAccepted(uid: string) {
-  localStorage.setItem(storageKey(uid), WEB_LEGAL_VERSION);
+  try {
+    localStorage.setItem(storageKey(uid), WEB_LEGAL_VERSION);
+  } catch {
+    // private mode: the server's record still holds it
+  }
+}
+
+/** Records the consent on the server (version, what was ticked, when): DPDP Act s.6(10). */
+export async function recordConsent(token: string, surface: "web" | "ca_portal", items: string[]) {
+  try {
+    await fetch("/api/user/profile", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ legal_consent: { version: WEB_LEGAL_VERSION, surface, items } }),
+    });
+  } catch {
+    // retried on the next visit (the gate shows again until the server has it)
+  }
 }
 
 /**
@@ -30,7 +48,10 @@ export function markWebLegalAccepted(uid: string) {
  * Blocks use of the signed-in experience until Terms + Privacy + authority are accepted.
  */
 export function LegalConsentGate() {
-  const { user, firebaseUser, authReady } = useAuth();
+  const { user, firebaseUser, authReady, token } = useAuth();
+  // Chartered accountants opening the CA portal agree to the CA terms, not the shop owner's.
+  const ca = (usePathname() || "").startsWith("/ca");
+  const [confidential, setConfidential] = useState(false);
   const [open, setOpen] = useState(false);
   const [terms, setTerms] = useState(false);
   const [privacy, setPrivacy] = useState(false);
@@ -42,15 +63,21 @@ export function LegalConsentGate() {
       setOpen(false);
       return;
     }
-    setOpen(!hasAcceptedWebLegal(firebaseUser.uid));
+    // Accepted already (this browser, or any device: the server's record).
+    setOpen(!hasAcceptedWebLegal(firebaseUser.uid) && user.legal_consent_version !== WEB_LEGAL_VERSION);
   }, [authReady, user, firebaseUser?.uid]);
 
   if (!open || !firebaseUser?.uid) return null;
 
-  const canContinue = terms && privacy && authority && age;
+  const canContinue = terms && privacy && authority && age && (!ca || confidential);
 
   function accept() {
     markWebLegalAccepted(firebaseUser!.uid);
+    if (token) {
+      void recordConsent(token, ca ? "ca_portal" : "web", ca
+        ? ["age_18", "terms", "privacy", "ca_professional", "ca_confidentiality"]
+        : ["age_18", "terms", "refund", "privacy", "authority"]);
+    }
     setOpen(false);
   }
 
@@ -77,6 +104,23 @@ export function LegalConsentGate() {
           </Link>
         </div>
 
+        {ca ? (
+          <ul className="mt-4 space-y-3 text-sm text-slate">
+            <li>
+              The CA portal is free and read-only. You see a client&apos;s books only after the client
+              invites you, and only until they remove you.
+            </li>
+            <li>
+              You use a client&apos;s books only to give that client your professional services (returns,
+              accounts, advice), keep them confidential, and do not share them except as the client
+              allows or the law requires. You are responsible for the returns you prepare or file.
+            </li>
+            <li>
+              We process your account details and your access to clients&apos; books to run the portal.
+              See Privacy for your rights, retention and the Grievance Officer.
+            </li>
+          </ul>
+        ) : (
         <ul className="mt-4 space-y-3 text-sm text-slate">
           <li>
             You must be 18+ and authorised for this business. You are responsible for invoices, GST
@@ -96,6 +140,7 @@ export function LegalConsentGate() {
             major overhauls are separate.
           </li>
         </ul>
+        )}
 
         <div className="mt-5 space-y-2">
           <label className="flex items-start gap-2 text-sm text-ink">
@@ -114,7 +159,7 @@ export function LegalConsentGate() {
               checked={terms}
               onChange={(e) => setTerms(e.target.checked)}
             />
-            I agree to the Terms of Service and Refund Policy.
+            {ca ? "I agree to the Terms of Service." : "I agree to the Terms of Service and Refund Policy."}
           </label>
           <label className="flex items-start gap-2 text-sm text-ink">
             <input
@@ -132,8 +177,14 @@ export function LegalConsentGate() {
               checked={authority}
               onChange={(e) => setAuthority(e.target.checked)}
             />
-            I am authorised to use Argus for this business or client.
+            {ca ? "Each client whose books I open has authorised me as their accountant." : "I am authorised to use Argus for this business or client."}
           </label>
+          {ca ? (
+            <label className="flex items-start gap-2 text-sm text-ink">
+              <input type="checkbox" className="mt-1" checked={confidential} onChange={(e) => setConfidential(e.target.checked)} />
+              I will keep clients&apos; books confidential and use them only for my work for that client.
+            </label>
+          ) : null}
         </div>
 
         <button

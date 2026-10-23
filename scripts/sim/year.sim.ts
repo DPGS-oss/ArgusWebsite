@@ -30,9 +30,10 @@
  *   npx vitest run -c scripts/sim/vitest.config.ts scripts/sim/year.sim.ts
  *   (SIM_SHOPS=20 SIM_CAS=3 SIM_UNTIL=2026-04-07 by default)
  */
-import { useBrowser, webErrors } from "./browser-env";
+import { useBrowser, webErrors, webBytes } from "./browser-env";
 import { expect, it, vi } from "vitest";
 import fs from "node:fs";
+import zlib from "node:zlib";
 import { buildInvoiceDocument, calculateItem, generateGSTRReport } from "@/lib/gst";
 import { linePaise, toPaise } from "@/lib/money";
 import { gstr3b, checkBooks } from "@/lib/compliance";
@@ -64,6 +65,8 @@ const UNTIL = process.env.SIM_UNTIL || "2026-04-07";
 const RATE_CUT = "2025-09-22";
 /** Phone app 1.4.11+ sends expenses and hand-typed khata; older builds keep them on the phone. */
 const PHONE_SENDS_LEDGER = process.env.SIM_OLD_PHONE !== "1";
+/** Phone app 1.4.12+ syncs only what changed (SIM_FULL_PHONE=1: the older full sync). */
+const LEAN_PHONE = process.env.SIM_FULL_PHONE !== "1";
 const BOOK = JSON.parse(fs.readFileSync("public/data/gst-rates.json", "utf8"));
 
 // ---------------------------------------------------------------- helpers
@@ -125,7 +128,7 @@ async function account(email: string, name: string, plan: boolean): Promise<Who>
 }
 
 const rateLimited: Record<string, number> = {};
-const timings: Record<string, { n: number; ms: number; max: number; bytes: number }> = {};
+const timings: Record<string, { n: number; ms: number; max: number; bytes: number; sent: number; got: number }> = {};
 async function api(who: Who, fn: string, path: string, body?: unknown, method?: string): Promise<{ status: number; body: any }> {
   await fresh(who);
   for (let attempt = 0; attempt < 8; attempt++) {
@@ -138,20 +141,24 @@ async function api(who: Who, fn: string, path: string, body?: unknown, method?: 
   return apiOnce(who, fn, path, body, method);
 }
 async function apiOnce(who: Who, fn: string, path: string, body?: unknown, method?: string) {
-  const payload = body === undefined ? undefined : JSON.stringify(body);
+  const json = body === undefined ? undefined : JSON.stringify(body);
+  // as the apps send it: gzipped when large, and asking for packed answers
+  const packed = json && json.length > 1024 ? zlib.gzipSync(json) : undefined;
   const t0 = performance.now();
   const res = await fetch(`${FN}/${fn}${path}`, {
     method: method || (body === undefined ? "GET" : "POST"),
-    headers: { Authorization: `Bearer ${who.token}`, "Content-Type": "application/json" },
-    body: payload,
+    headers: { Authorization: `Bearer ${who.token}`, "Content-Type": "application/json", "X-Argus-Accept": "gzip", ...(packed ? { "Content-Encoding": "gzip" } : {}) },
+    body: packed || json,
   });
-  const text = await res.text();
-  const t = (timings[fn] ||= { n: 0, ms: 0, max: 0, bytes: 0 });
+  const raw = Buffer.from(await res.arrayBuffer());
+  const text = res.headers.get("x-argus-packed") === "gzip" ? zlib.gunzipSync(raw).toString("utf8") : raw.toString("utf8");
+  const t = (timings[fn] ||= { n: 0, ms: 0, max: 0, bytes: 0, sent: 0, got: 0 });
   const ms = performance.now() - t0;
-  t.n++; t.ms += ms; t.max = Math.max(t.max, ms); t.bytes = Math.max(t.bytes, (payload || "").length + text.length);
-  let json: any = null;
-  try { json = JSON.parse(text); } catch { json = text; }
-  return { status: res.status, body: json };
+  t.n++; t.ms += ms; t.max = Math.max(t.max, ms); t.bytes = Math.max(t.bytes, (json || "").length + text.length);
+  t.sent += packed ? packed.length : (json || "").length; t.got += raw.length;
+  let out: any = null;
+  try { out = JSON.parse(text); } catch { out = text; }
+  return { status: res.status, body: out };
 }
 
 // ---------------------------------------------------------------- shops
@@ -172,7 +179,7 @@ type Shop = {
   branchId?: string; branchGstin?: string; forgetsRateCut?: boolean;
 };
 type Receipt = { invoiceNumber: string; status: string; balanceDue: number; grandTotal: number; url: string; text: string };
-type PhoneBooks = { staffMoves: any[]; invoices: any[]; customers: any[]; inventory: any[]; creditNotes: any[]; debitNotes: any[]; purchases: any[]; stockMoves: any[]; auditSince: string; seq: Record<string, number>; staffSeq: Record<string, number>; cnSeq: number; dnSeq: number; khata: any[]; expenses: any[] };
+type PhoneBooks = { base: Record<string, Record<string, string>>; since: string; staffMoves: any[]; invoices: any[]; customers: any[]; inventory: any[]; creditNotes: any[]; debitNotes: any[]; purchases: any[]; stockMoves: any[]; auditSince: string; seq: Record<string, number>; staffSeq: Record<string, number>; cnSeq: number; dnSeq: number; khata: any[]; expenses: any[] };
 
 const KINDS: Omit<Shop, "n" | "kind" | "gstin" | "ca" | "buyers" | "supplierGstin" | "landlordGstin" | "expect">[] = [
   { name: "Mehta Pharmacy", state: "27", app: "phone", perDay: [3, 6], staffAccess: "billing", rent: 18000,
@@ -427,7 +434,7 @@ function webEditPhone(s: Shop) {
 const phoneDay = (iso: string) => `${iso}T10:00:00.000`;
 function phoneSetup(s: Shop) {
   const now = phoneDay("2025-04-01");
-  s.ph = { staffMoves: [], invoices: [], customers: [], inventory: [], creditNotes: [], debitNotes: [], purchases: [], stockMoves: [], auditSince: "", seq: {}, staffSeq: {}, cnSeq: 0, dnSeq: 0, khata: [], expenses: [] };
+  s.ph = { base: {}, since: "", staffMoves: [], invoices: [], customers: [], inventory: [], creditNotes: [], debitNotes: [], purchases: [], stockMoves: [], auditSince: "", seq: {}, staffSeq: {}, cnSeq: 0, dnSeq: 0, khata: [], expenses: [] };
   for (const by of s.buyers) s.ph.customers.push({ id: by.id, name: by.name, gstin: by.gstin, phone: by.phone, email: "", billing_address: "Market Yard", city: "", state: by.state, pincode: "" });
   for (const it of s.items) {
     s.ph.inventory.push({ id: `s${s.n}-${it.key}`, name: it.name, barcode: "", hsn_code: it.hsn, gst_rate: rateOn(s, it, "2025-04-01"), category: "", mrp: it.price, batch_number: "", expiry_date: "", cost_price: it.cost, sell_price: it.price, stock_on_hand: it.open, reorder_level: it.min, updated_at: now, valuation: "average", track_batches: false, bom: [] });
@@ -522,19 +529,43 @@ function phoneNote(s: Shop, iso: string, kind: "cn" | "dn") {
   }
 }
 
+const recFp = (r: any) => JSON.stringify(r);
 async function phoneSync(s: Shop, who: Who, iso: string, books: { invoices: any[] }, staff = false) {
   const ph = s.ph!;
+  // the phone app (1.4.12+): after a first full sync, only what changed since, and `since`
+  const lean = !staff && LEAN_PHONE && !!ph.since;
+  const sentHashes: Record<string, Record<string, string>> = {};
+  const changed = (kind: string, all: any[]) => {
+    const known = ph.base[kind] || {};
+    const now: Record<string, string> = {};
+    const out = all.filter((r) => { const h = recFp(r); now[String(r.id)] = h; return !lean || known[String(r.id)] !== h; });
+    sentHashes[kind] = now;
+    return out;
+  };
   const r = await api(who, "apiDataPhoneSync", "/api/data/phone-sync", staff
     ? { booksUid: s.owner!.uid, invoices: books.invoices, customers: [], inventory: [], creditNotes: [], debitNotes: [], purchases: [], stockMoves: ph.staffMoves, godowns: [], auditLog: [], auditSince: "", deleted: {} }
     : {
-      booksUid: s.owner!.uid, invoices: ph.invoices, customers: ph.customers, inventory: ph.inventory, creditNotes: ph.creditNotes, debitNotes: ph.debitNotes,
-      purchases: ph.purchases, stockMoves: ph.stockMoves, godowns: [], auditLog: [], auditSince: ph.auditSince, deleted: {},
-      ...(PHONE_SENDS_LEDGER ? { expenses: ph.expenses, khataEntries: ph.khata } : {}),
+      booksUid: s.owner!.uid, ...(lean ? { since: ph.since } : {}),
+      invoices: changed("invoices", ph.invoices), customers: changed("customers", ph.customers), inventory: changed("inventory", ph.inventory),
+      creditNotes: changed("creditNotes", ph.creditNotes), debitNotes: changed("debitNotes", ph.debitNotes),
+      purchases: changed("purchases", ph.purchases), stockMoves: changed("stockMoves", ph.stockMoves), godowns: [], auditLog: [], auditSince: ph.auditSince, deleted: {},
+      ...(PHONE_SENDS_LEDGER ? { expenses: changed("expenses", ph.expenses), khataEntries: changed("khataEntries", ph.khata) } : {}),
       business: { name: s.name, gstin: s.gstin, state: "", address: "12 Main Road" },
     });
   if (r.status !== 200) { if (!lapsed.has(s.owner!.uid)) failNote(`${s.name} ${staff ? "staff" : "owner"} ${iso}: phone sync ${r.status} ${JSON.stringify(r.body).slice(0, 100)}`); return r; }
   if (!staff) {
     ph.auditSince = r.body.auditSince || ph.auditSince;
+    // what the cloud holds now: what was sent plus what came back
+    const base: Record<string, Record<string, string>> = { ...sentHashes };
+    const keyOf: Record<string, any[]> = { invoices: ph.invoices, customers: ph.customers, inventory: ph.inventory, creditNotes: ph.creditNotes, debitNotes: ph.debitNotes, purchases: ph.purchases, expenses: ph.expenses, khataEntries: ph.khata };
+    for (const kind of Object.keys(keyOf)) for (const x of r.body[kind] || []) {
+      const list = keyOf[kind]; const i = list.findIndex((y) => y.id === x.id);
+      if (kind !== "invoices") { if (i >= 0) list[i] = x; else list.push(x); }
+      (base[kind] ||= {})[String(x.id)] = recFp(x);
+    }
+    for (const m of r.body.stockMoves || []) (base.stockMoves ||= {})[String(m.id)] = recFp(m);
+    ph.base = base;
+    if (r.body.updated_at) ph.since = r.body.updated_at;
     // what the server sends back (bills made by staff, stock moves from others) is upserted
     for (const x of r.body.invoices || []) { const i = ph.invoices.findIndex((y) => y.id === x.id); if (i >= 0) ph.invoices[i] = x; else ph.invoices.push(x); }
     const ids = new Set(ph.stockMoves.map((m) => m.id));
@@ -1012,9 +1043,10 @@ it("a year of business: shops on the website and the phone, staff, three CAs", a
   const phoneSample = shops.filter((x) => x.app === "phone").flatMap((s) => s.ph!.invoices.filter((_, k) => k % 97 === 0).slice(0, 8).map((b) => ({ shop: s.name, gstin: s.gstin, upi: `shop${s.n}@upi`, bill: b })));
   fs.writeFileSync("../argus/test/fixtures/year_receipts.json", JSON.stringify(phoneSample, null, 1));
 
-  const perf = Object.fromEntries(Object.entries(timings).map(([k, v]) => [k, { calls: v.n, avgMs: Math.round(v.ms / v.n), maxMs: Math.round(v.max), largestKB: Math.round(v.bytes / 1024) }]));
+  const perf = Object.fromEntries(Object.entries(timings).map(([k, v]) => [k, { calls: v.n, avgMs: Math.round(v.ms / v.n), maxMs: Math.round(v.max), largestKB: Math.round(v.bytes / 1024), sentMB: +(v.sent / 1048576).toFixed(1), gotMB: +(v.got / 1048576).toFixed(1) }]));
   report.notes.push(`rate limits hit (waited and retried): ${JSON.stringify(rateLimited)}`);
   report.notes.push(`server timings: ${JSON.stringify(perf)}`);
+  report.notes.push(`web app bytes: ${JSON.stringify(Object.fromEntries(Object.entries(webBytes).map(([k, v]) => [k, { calls: v.calls, sentMB: +(v.sent / 1048576).toFixed(2), gotMB: +(v.got / 1048576).toFixed(2) }])))}`);
   report.notes.push(`run took ${Math.round((performance.now() - t0) / 60000)} min`);
   fs.writeFileSync("scripts/sim/last-run-year.json", JSON.stringify({ report, counts, perf }, null, 2));
   console.log(`\nPASS ${report.pass.length}  FAIL ${report.fail.length}\n` + report.fail.map((x) => "FAIL  " + x).join("\n"));

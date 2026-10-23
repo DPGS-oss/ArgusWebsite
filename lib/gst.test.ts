@@ -1030,3 +1030,29 @@ describe("on-screen GSTR-1 and 3B split 0% lines out", () => {
     expect(g3.totalTaxableValue).toBe(100);
   });
 });
+
+describe("CMP-08 for a composition dealer", () => {
+  it("quarter turnover less exempt goods and credit notes, tax at 1% split in half, due on the 18th", async () => {
+    const { cmp08, quarterRange } = await import("./gst-returns");
+    expect(quarterRange("25-26", 3)).toEqual({ from: "2025-10-01", to: "2025-12-31", due: "2026-01-18" });
+    expect(quarterRange("25-26", 4).due).toBe("2026-04-18");
+    const bill = (id: string, date: string, items: any[]) => ({ id, invoiceNumber: id, type: "bill_of_supply", status: "paid", date, items });
+    const data = {
+      invoices: [
+        bill("a", "2025-10-05", [{ hsn: "3924", taxableAmount: 10000, total: 10000 }, { hsn: "0702", taxableAmount: 2000, total: 2000 }]),
+        bill("b", "2025-12-30", [{ hsn: "9603", taxableAmount: 5000, total: 5000 }]),
+        bill("c", "2026-01-02", [{ hsn: "9603", taxableAmount: 999, total: 999 }]),
+        { ...bill("d", "2025-11-01", [{ hsn: "3924", taxableAmount: 7000, total: 7000 }]), status: "cancelled" },
+      ],
+      creditNotes: [{ id: "cn", status: "active", date: "2025-11-10", totalAmount: 1000, totalGstAmount: 0 }],
+      debitNotes: [], purchases: [{ id: "p", reverseCharge: true, supplierInvoiceDate: "2025-11-01", totalCgst: 90, totalSgst: 90, totalIgst: 0 }],
+    } as any;
+    const r = cmp08(data, "25-26", 3, 1, (h) => h.startsWith("07"));
+    expect(r.turnover).toBe(16000);
+    expect(r.exempt).toBe(2000);
+    expect(r.taxable).toBe(14000);
+    expect(r.cgst + r.sgst).toBe(140);
+    expect(r.rcmCgst).toBe(90);
+    expect(r.bills).toBe(2);
+  });
+});

@@ -3,8 +3,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import dynamic from "next/dynamic";
 import { Menu, X, Cloud, CloudOff, RefreshCw } from "lucide-react";
-import type { AppData, BusinessProfile, Invoice, View } from "@/lib/types";
-import { loadData, saveInvoice, deleteInvoice, cancelInvoice, pickFolder, deductStockForInvoice, saveData, generateId, initStorage, isFileSystemSupported, isUsingFileSystem, getFolderName } from "@/lib/storage";
+import type { AppData, BusinessProfile, Invoice, Quote, View } from "@/lib/types";
+import { loadData, saveInvoice, deleteInvoice, cancelInvoice, pickFolder, deductStockForInvoice, saveData, generateId, initStorage, isFileSystemSupported, isUsingFileSystem, getFolderName, saveQuote, generateInvoiceNumber } from "@/lib/storage";
 import { syncFromCloud, syncToCloud, getLastSyncTime, setBooksUid, type SyncStatus } from "@/lib/cloud-sync";
 import { setBillSeries } from "@/lib/storage";
 import { canOpenView } from "@/lib/team";
@@ -72,6 +72,10 @@ export default function AppPage() {
   const [data, setData] = useState<AppData | null>(null);
   const [view, setView] = useState<View>("dashboard");
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
+  // The bill form also writes quotes, and starts a bill from an accepted quote.
+  const [formMode, setFormMode] = useState<"invoice" | "quote">("invoice");
+  const [prefill, setPrefill] = useState<Invoice | null>(null);
+  const [billFromQuote, setBillFromQuote] = useState<Quote | null>(null);
   const [previewInvoice, setPreviewInvoice] = useState<Invoice | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("idle");
@@ -267,6 +271,9 @@ export default function AppPage() {
   }
 
   function handleNewInvoice() {
+    setFormMode("invoice");
+    setPrefill(null);
+    setBillFromQuote(null);
     setEditingInvoice(null);
     setPreviewInvoice(null);
     setView("invoice-form");
@@ -274,6 +281,9 @@ export default function AppPage() {
   }
 
   function handleEditInvoice(invoice: Invoice) {
+    setFormMode("invoice");
+    setPrefill(null);
+    setBillFromQuote(null);
     setEditingInvoice(invoice);
     setPreviewInvoice(null);
     setView("invoice-form");
@@ -285,7 +295,60 @@ export default function AppPage() {
     setView("invoice-preview");
   }
 
+  function handleNewQuote() {
+    setFormMode("quote");
+    setPrefill(null);
+    setBillFromQuote(null);
+    setEditingInvoice(null);
+    setView("invoice-form");
+  }
+
+  /** A quote from the bill form: its party, items and GST, valid until the due date. */
+  function handleSaveQuote(form: Invoice) {
+    const latest = loadData();
+    const now = new Date().toISOString();
+    const quote: Quote = {
+      id: generateId(),
+      quoteNumber: generateInvoiceNumber((latest.quotes || []).map((q) => ({ invoiceNumber: q.quoteNumber })), "QT", form.date),
+      customerName: form.partyName,
+      customerId: form.partyId || undefined,
+      partyGstin: form.partyGstin || undefined,
+      partyPhone: form.partyPhone || undefined,
+      items: form.items,
+      subtotal: form.totalTaxable,
+      totalGstAmount: form.totalTax,
+      totalAmount: form.grandTotal,
+      status: "sent",
+      validUntil: form.dueDate,
+      notes: form.notes,
+      createdAt: now,
+      updatedAt: now,
+    };
+    saveQuote(quote);
+    refresh();
+    setFormMode("invoice");
+    setView("quotes");
+  }
+
+  /** "Make bill": a new bill with the quote's customer and items; tax at today's rates. */
+  function handleMakeBill(q: Quote) {
+    const today = todayIST();
+    setPrefill({
+      id: "", invoiceNumber: "", type: "tax_invoice", status: "unpaid", businessId: data?.activeBusinessId || "",
+      partyId: q.customerId || "", partyName: q.customerName || "", partyGstin: q.partyGstin || "", partyPhone: q.partyPhone || "",
+      date: today, dueDate: today, items: (q.items || []).map((l) => ({ ...l, id: generateId() })),
+      subtotal: 0, totalDiscount: 0, totalTaxable: 0, totalCgst: 0, totalSgst: 0, totalIgst: 0, totalTax: 0, roundOff: 0, grandTotal: 0,
+      paidAmount: 0, balanceDue: 0, paymentMode: "", notes: q.notes || "", terms: "", placeOfSupply: "", isInterState: false,
+      isTotalMode: false, createdAt: "", updatedAt: "",
+    } as Invoice);
+    setBillFromQuote(q);
+    setFormMode("invoice");
+    setEditingInvoice(null);
+    setView("invoice-form");
+  }
+
   function handleSaveInvoice(invoice: Invoice) {
+    if (formMode === "quote") return handleSaveQuote(invoice);
     const existing = data?.invoices.find((i) => i.id === invoice.id);
     saveInvoice(invoice);
     if (!existing) {
@@ -293,6 +356,12 @@ export default function AppPage() {
     }
     const after = loadData();
     persistLedger(postInvoiceLedger(after, invoice));
+    // A bill made from a quote: the quote is now billed.
+    if (!existing && billFromQuote) {
+      saveQuote({ ...billFromQuote, status: "invoiced", invoiceId: invoice.id, updatedAt: new Date().toISOString() });
+      setBillFromQuote(null);
+      setPrefill(null);
+    }
     refresh();
     setEditingInvoice(null);
     setPreviewInvoice(invoice);
@@ -357,6 +426,8 @@ export default function AppPage() {
             data={d}
             business={activeBusiness}
             editingInvoice={editingInvoice}
+            prefill={prefill}
+            mode={formMode}
             onSave={handleSaveInvoice}
             onBack={() => navigate("invoices")}
           />
@@ -436,7 +507,7 @@ export default function AppPage() {
         return <Expenses data={d} onSaved={refresh} />;
 
       case "quotes":
-        return <Quotes data={d} onSaved={refresh} />;
+        return <Quotes data={d} onSaved={refresh} onNewQuote={handleNewQuote} onMakeBill={handleMakeBill} />;
 
       case "purchases":
         return <Purchases data={d} onSaved={refresh} />;
@@ -575,7 +646,7 @@ export default function AppPage() {
               : syncStatus === "error"
               ? "Sync failed"
               : lastSync
-              ? `Last synced: ${new Date(lastSync).toLocaleTimeString()}`
+              ? `Last synced: ${syncedLabel(lastSync)}`
               : "Not synced yet"}
           </span>
           <button
@@ -670,4 +741,11 @@ export default function AppPage() {
       </div>
     </div>
   );
+}
+
+/** "10:42 am" today, "21 Oct, 10:42 am" on another day: an old time alone would look recent. */
+function syncedLabel(iso: string): string {
+  const d = new Date(iso);
+  const time = d.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" });
+  return d.toDateString() === new Date().toDateString() ? time : `${d.toLocaleDateString("en-IN", { day: "numeric", month: "short" })}, ${time}`;
 }

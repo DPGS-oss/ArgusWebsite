@@ -44,6 +44,8 @@ export type AppUser = {
   referredBy?: string;
   trial_used?: boolean;
   trial_started_at?: string;
+  /** The Terms/Privacy version this person last accepted (server's consent record). */
+  legal_consent_version?: string;
 };
 
 type AuthContextValue = {

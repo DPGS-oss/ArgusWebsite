@@ -41,6 +41,10 @@ type InvoiceFormProps = {
   data: AppData;
   business: BusinessProfile | null;
   editingInvoice: Invoice | null;
+  /** A new bill (or quote) started from this one's party and items, e.g. an accepted quote. */
+  prefill?: Invoice | null;
+  /** "quote": the same form makes a quotation (no stock, no books, no bill number). */
+  mode?: "invoice" | "quote";
   onSave: (invoice: Invoice) => void;
   onBack: () => void;
 };
@@ -79,60 +83,63 @@ function emptyItem(businessStateCode: string, partyStateCode: string, defaultGst
   };
 }
 
-export function InvoiceForm({ data, business: businessProp, editingInvoice, onSave, onBack }: InvoiceFormProps) {
+export function InvoiceForm({ data, business: businessProp, editingInvoice, prefill, mode = "invoice", onSave, onBack }: InvoiceFormProps) {
   const business = businessProp;
   const today = todayIST();
   const dueDate = addDays(today, 15);
   const openedInvoice = editingInvoice ? openHistoricalInvoice(editingInvoice) : null;
+  // Starting values: the bill being edited, or a quote's party and items for a new
+  // bill (whose tax is worked out afresh at today's rates).
+  const seed = openedInvoice || prefill || null;
 
   const parties = data.parties;
   const newInvoiceGstRate = defaultGstRateForNew(data.settings.defaultGstRate);
 
-  const [invoiceType, setInvoiceType] = useState<InvoiceType>(openedInvoice?.type || "tax_invoice");
-  const [status, setStatus] = useState<InvoiceStatus>(openedInvoice?.status || "draft");
-  const [partyId, setPartyId] = useState(openedInvoice?.partyId || "");
-  const [date, setDate] = useState(openedInvoice?.date || today);
-  const [dueDateVal, setDueDateVal] = useState(openedInvoice?.dueDate || dueDate);
+  const [invoiceType, setInvoiceType] = useState<InvoiceType>(seed?.type || "tax_invoice");
+  const [status, setStatus] = useState<InvoiceStatus>(seed?.status || "draft");
+  const [partyId, setPartyId] = useState(seed?.partyId || "");
+  const [date, setDate] = useState(seed?.date || today);
+  const [dueDateVal, setDueDateVal] = useState(seed?.dueDate || dueDate);
   const [items, setItems] = useState<InvoiceItem[]>(() => {
-    const goods = (openedInvoice?.items || []).filter((i) => !i.isDelivery);
+    const goods = (seed?.items || []).filter((i) => !i.isDelivery);
     return goods.length ? goods : [emptyItem(business?.stateCode || "", "", newInvoiceGstRate)];
   });
   // Delivery is stored as its own taxed line(s); on edit, fold them back into the field.
   const [deliveryAmount, setDeliveryAmount] = useState(() =>
     round2(
-      (openedInvoice?.items || []).filter((i) => i.isDelivery).reduce((s, i) => s + (i.total || 0), 0) +
-        (openedInvoice?.deliveryReimbursement || 0)
+      (seed?.items || []).filter((i) => i.isDelivery).reduce((s, i) => s + (i.total || 0), 0) +
+        (seed?.deliveryReimbursement || 0)
     )
   );
-  const [deliveryIsReimbursement, setDeliveryIsReimbursement] = useState(!!openedInvoice?.deliveryReimbursement);
-  const [paymentMode, setPaymentMode] = useState(openedInvoice?.paymentMode || "");
-  const [notes, setNotes] = useState(openedInvoice?.notes || data.settings.defaultNotes);
-  const [terms, setTerms] = useState(openedInvoice?.terms || data.settings.defaultTerms);
-  const [paidAmount, setPaidAmount] = useState(openedInvoice?.paidAmount || 0);
+  const [deliveryIsReimbursement, setDeliveryIsReimbursement] = useState(!!seed?.deliveryReimbursement);
+  const [paymentMode, setPaymentMode] = useState(seed?.paymentMode || "");
+  const [notes, setNotes] = useState(seed?.notes || data.settings.defaultNotes);
+  const [terms, setTerms] = useState(seed?.terms || data.settings.defaultTerms);
+  const [paidAmount, setPaidAmount] = useState(seed?.paidAmount || 0);
   const [hsnSearch, setHsnSearch] = useState<string | null>(null);
   const [rateChoice, setRateChoice] = useState<{ idx: number; code: string; options: RateOptions } | null>(null);
   const [hsnItemIdx, setHsnItemIdx] = useState<number | null>(null);
   const [aiSuggestions, setAiSuggestions] = useState<{ idx: number; suggestions: { code: string; description: string; gstRate: GSTRate; varies?: boolean }[] } | null>(null);
-  const [isTotalMode, setIsTotalMode] = useState(openedInvoice?.isTotalMode ?? true);
+  const [isTotalMode, setIsTotalMode] = useState(seed?.isTotalMode ?? true);
   const [totalAmount, setTotalAmount] = useState(
-    openedInvoice?.isTotalMode ? openedInvoice.enteredTotal ?? openedInvoice.grandTotal : 0
+    seed?.isTotalMode ? seed.enteredTotal ?? seed.grandTotal : 0
   );
-  const [totalGstRate, setTotalGstRate] = useState<GSTRate>(openedInvoice?.isTotalMode ? (openedInvoice.items[0]?.gstRate || newInvoiceGstRate) : newInvoiceGstRate);
-  const [totalDescription, setTotalDescription] = useState(openedInvoice?.isTotalMode ? (openedInvoice.items[0]?.description || "") : "");
-  const [totalDiscount, setTotalDiscount] = useState(openedInvoice?.isTotalMode ? (openedInvoice.items[0]?.discount || 0) : 0);
-  const [totalStockItemId, setTotalStockItemId] = useState<string | undefined>(openedInvoice?.isTotalMode ? openedInvoice.items[0]?.stockItemId : undefined);
-  const [inlinePartyName, setInlinePartyName] = useState(openedInvoice && !openedInvoice.partyId ? openedInvoice.partyName : "");
-  const [inlinePartyPhone, setInlinePartyPhone] = useState(openedInvoice?.partyPhone || "");
+  const [totalGstRate, setTotalGstRate] = useState<GSTRate>(seed?.isTotalMode ? (seed.items[0]?.gstRate || newInvoiceGstRate) : newInvoiceGstRate);
+  const [totalDescription, setTotalDescription] = useState(seed?.isTotalMode ? (seed.items[0]?.description || "") : "");
+  const [totalDiscount, setTotalDiscount] = useState(seed?.isTotalMode ? (seed.items[0]?.discount || 0) : 0);
+  const [totalStockItemId, setTotalStockItemId] = useState<string | undefined>(seed?.isTotalMode ? seed.items[0]?.stockItemId : undefined);
+  const [inlinePartyName, setInlinePartyName] = useState(seed && !seed.partyId ? seed.partyName : "");
+  const [inlinePartyPhone, setInlinePartyPhone] = useState(seed?.partyPhone || "");
   const [showStockPicker, setShowStockPicker] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
   const [repeatBill, setRepeatBill] = useState(Boolean(editingInvoice?.recurring));
   const [repeatFrequency, setRepeatFrequency] = useState(editingInvoice?.recurring?.frequency || "monthly");
-  const [shipToGstin, setShipToGstin] = useState(openedInvoice?.shipToGstin || "");
-  const [shipToAddress, setShipToAddress] = useState(openedInvoice?.shipToAddress || "");
+  const [shipToGstin, setShipToGstin] = useState(seed?.shipToGstin || "");
+  const [shipToAddress, setShipToAddress] = useState(seed?.shipToAddress || "");
   const [shipToStateCode, setShipToStateCode] = useState(
     stateCodeFromPlaceOfSupply(openedInvoice?.placeOfSupply) || ""
   );
-  const [reverseCharge, setReverseCharge] = useState(!!openedInvoice?.reverseCharge);
+  const [reverseCharge, setReverseCharge] = useState(!!seed?.reverseCharge);
   const [gstinError, setGstinError] = useState("");
 
   const selectedParty = parties.find((p) => p.id === partyId);
@@ -622,7 +629,7 @@ export function InvoiceForm({ data, business: businessProp, editingInvoice, onSa
             <ArrowLeft className="h-5 w-5" />
           </button>
           <h1 className="text-2xl text-starlight">
-            {editingInvoice ? `Edit ${editingInvoice.invoiceNumber}` : "New Invoice"}
+            {editingInvoice ? `Edit ${editingInvoice.invoiceNumber}` : mode === "quote" ? "New quote" : "New Invoice"}
           </h1>
         </div>
         <button onClick={() => handleSave()} className="btn-primary">

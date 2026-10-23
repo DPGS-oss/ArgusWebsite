@@ -35,7 +35,8 @@ export function Compliance({ data, onSaved }: Props) {
   const errors = issues.filter((e) => e.severity === "error").length;
 
   function setTurnover(on: boolean) {
-    saveData({ ...data, settings: { ...data.settings, turnoverAbove5Cr: on } });
+    // Above ₹10 crore implies above ₹5 crore; below ₹5 crore, neither.
+    saveData({ ...data, settings: { ...data.settings, turnoverAbove5Cr: on, ...(on ? {} : { turnoverAbove10Cr: false }) } });
     onSaved();
   }
 
@@ -79,8 +80,21 @@ export function Compliance({ data, onSaved }: Props) {
             checked={!!data.settings.turnoverAbove5Cr}
             onChange={(e) => setTurnover(e.target.checked)}
           />
-          My yearly sales are above ₹5 crore
+          My yearly sales are above ₹5 crore (e-invoices needed)
         </label>
+        {data.settings.turnoverAbove5Cr ? (
+          <label className="flex items-center gap-2 text-sm text-ink">
+            <input
+              type="checkbox"
+              checked={!!data.settings.turnoverAbove10Cr}
+              onChange={(e) => {
+                saveData({ ...data, settings: { ...data.settings, turnoverAbove10Cr: e.target.checked } });
+                onSaved();
+              }}
+            />
+            ₹10 crore or more (e-invoice within 30 days of the bill)
+          </label>
+        ) : null}
       </div>
 
       <div className="mb-6 grid gap-3 sm:grid-cols-2">

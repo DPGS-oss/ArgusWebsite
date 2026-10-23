@@ -104,7 +104,7 @@ exports.apiReports = onRequest({ region: 'us-central1', maxInstances: 10, memory
         // the whole book in one transaction, so nothing else is lost or overwritten.
         await getDb().runTransaction(async (tx) => {
           const prev = await booksStore.readBooksTx(tx, ref);
-          const now = new Date().toISOString();
+          const now = booksStore.nextStamp(prev);
           const current = (prev.exists ? resolveAppData(prev.doc) : null) || {};
           const appData = {
             ...current,

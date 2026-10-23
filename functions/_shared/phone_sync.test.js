@@ -334,3 +334,30 @@ test('a branch with its own GSTIN: each return takes only its bills and their no
   assert.deepEqual(booksForBusiness(data, '').data.invoices.map((i) => i.id), ['a', 'c']);
   assert.equal(expensesAsPurchases([{ id: 'r', isGstClaimable: true, gstAmount: 4500, amount: 29500, vendorGstin: '27AAPFU0939F1ZV', date: '2025-05-01' }, { id: 'x', isGstClaimable: true, gstAmount: 10, amount: 100 }]).length, 1);
 });
+
+test('a phone that says when it last synced gets only what changed since; an old app still gets everything', () => {
+  const { stampRecords } = require('./books_store');
+  const web = {
+    businesses: [{ id: 'b', name: 'Shop', gstin: '27AAPFU0939F1ZV' }], activeBusinessId: 'b',
+    stock: [{ id: 's1', name: 'Soap', hsn: '3401', gstRate: 5, rate: 40, currentStock: 10, _s: 't1' }],
+    stockMoves: [{ id: 'm1', itemId: 's1', date: '2025-05-01', kind: 'opening', qty: 10, godown: 'Main', _s: 't1' }],
+    expenses: [
+      { id: 'e-old', category: 'Rent', amount: 100, date: '2025-04-01', _s: 't1' },
+      { id: 'e-new', category: 'Electricity', amount: 50, date: '2025-05-02', _s: 't3' },
+    ],
+  };
+  // old app (no since): everything it does not have comes back
+  const full = mergePhoneSync(web, { expenses: [], stockMoves: [] }, 't4');
+  assert.deepEqual(full.toPhone.expenses.map((e) => e.id).sort(), ['e-new', 'e-old']);
+  assert.deepEqual(full.toPhone.stockMoves.map((m) => m.id), ['m1']);
+  // new app, last synced at t2: only what changed after t2
+  const lean = mergePhoneSync(web, { since: 't2', expenses: [], stockMoves: [] }, 't4');
+  assert.deepEqual(lean.toPhone.expenses.map((e) => e.id), ['e-new']);
+  assert.deepEqual(lean.toPhone.stockMoves, []);
+  assert.deepEqual(lean.toPhone.inventory, []);
+  // what the phone sends now is stamped with this sync and not echoed next time
+  const after = stampRecords(web, mergePhoneSync(web, { since: 't4', expenses: [{ id: 'e-ph', category: 'Rent', amount: 10, date: '2025-05-03' }] }, 't5').appData, 't5');
+  assert.equal(after.expenses.find((e) => e.id === 'e-ph')._s, 't5');
+  const next = mergePhoneSync(after, { since: 't5', expenses: [] }, 't6');
+  assert.deepEqual(next.toPhone.expenses, []);
+});

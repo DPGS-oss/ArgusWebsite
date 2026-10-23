@@ -9,6 +9,11 @@ service cloud.firestore {
     // Entitlement / billing / role fields — Admin SDK (Cloud Functions) only.
     function protectedUserKeys() {
       return [
+        // Consent records are written by the server only (DPDP Act s.6(10)).
+        'legal_consent_version',
+        'legal_consent_at',
+        'legal_consent_surface',
+        'legal_consent_withdrawn_at',
         'subscription',
         'trial_used',
         'trial_started_at',
@@ -57,6 +62,12 @@ service cloud.firestore {
       }
 
       match /files/{fileId} {
+        allow read: if isOwner(userId);
+        allow write: if false;
+      }
+
+      // Each acceptance or withdrawal of the Terms and Privacy Policy (server-written).
+      match /consents/{consentId} {
         allow read: if isOwner(userId);
         allow write: if false;
       }

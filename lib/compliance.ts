@@ -45,6 +45,7 @@ export function checkBooks(data: AppData, today: Date = new Date(), book: RateBo
   const issues: Issue[] = [];
   const seller = data.businesses.find((b) => b.id === data.activeBusinessId)?.gstin || "";
   const above5 = !!data.settings.turnoverAbove5Cr;
+  const above10 = above5 && !!data.settings.turnoverAbove10Cr;
   const manyGstins = (data.businesses || []).length > 1;
 
   if (seller && !isValidGstin(seller)) {
@@ -194,14 +195,15 @@ export function checkBooks(data: AppData, today: Date = new Date(), book: RateBo
 
     if (above5 && b2b && !inv.irn && inv.grandTotal > 0) {
       const age = ageInDays(inv.date, today);
+      // The 30-day limit applies from ₹10 crore yearly sales; from ₹5 crore the e-invoice is still required.
+      const overdue = above10 && age > 30;
       issues.push({
-        severity: age > 30 ? "error" : "warn",
-        title: age > 30 ? "E-invoice is overdue" : "E-invoice number not saved",
-        law: "E-invoicing, 30-day reporting limit (AATO ≥ ₹10 cr)",
-        detail:
-          age > 30
-            ? `${number} is ${age} days old. If your yearly sales are ₹10 crore or more, the e-invoice portal won't accept it after 30 days.`
-            : `${number}: create the e-invoice on the government portal and save its number (IRN) here.`,
+        severity: overdue ? "error" : "warn",
+        title: overdue ? "E-invoice is overdue" : "E-invoice number not saved",
+        law: overdue ? "E-invoicing, 30-day reporting limit (AATO ≥ ₹10 cr)" : "E-invoicing (AATO above ₹5 cr), Rule 48(4)",
+        detail: overdue
+          ? `${number} is ${age} days old. With yearly sales of ₹10 crore or more, the e-invoice portal won't accept it after 30 days.`
+          : `${number}: create the e-invoice on the government portal and save its number (IRN) here. Without it the bill is not a valid tax invoice.`,
       });
     }
     // E-way bill: on the goods that need one. Jewellery and precious metals
