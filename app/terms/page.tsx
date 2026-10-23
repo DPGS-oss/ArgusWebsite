@@ -5,7 +5,7 @@ import { GRIEVANCE_OFFICER, LEGAL_ENTITY } from "@/lib/legal";
 export default function TermsPage() {
   return (
     <LegalLayout title="Terms of Service">
-      <p className="text-sm text-slate">Last updated: 15 October 2026</p>
+      <p className="text-sm text-slate">Last updated: 23 October 2026</p>
 
       <p>
         These Terms of Service (&quot;Terms&quot;) govern use of Argus (the website at
@@ -133,6 +133,13 @@ export default function TermsPage() {
         them when they should no longer have it. Issued bills cannot be deleted by anyone; they are
         cancelled or corrected with a credit or debit note, and every change is kept in the edit
         log.
+      </p>
+      <p>
+        <strong>If you use the CA portal as an accountant</strong>, the portal is free and read-only.
+        You may open a client&apos;s books only while that client shares them with you, and use them
+        only to give that client your professional services. You keep them confidential and do not
+        share them except as the client allows or the law requires. You are responsible for the
+        returns and advice you give; Argus does not check or file them.
       </p>
 
       <h2 className="mt-8 text-xl font-semibold text-ink">8. Your data and your customers&apos; data</h2>

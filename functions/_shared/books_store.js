@@ -45,6 +45,61 @@ class BooksTooLargeError extends Error {
 }
 
 const booksRef = (db, uid) => db.collection('users').doc(uid).collection('app_data').doc('main');
+
+// Pieces are stored brotli-packed (about a quarter smaller than gzip at a
+// similar cost); older pieces stay gzip and are read by their codec.
+const BROTLI = { params: { [zlib.constants.BROTLI_PARAM_QUALITY]: 5 } };
+const pack = (json) => zlib.brotliCompressSync(Buffer.from(json, 'utf8'), BROTLI);
+const unpack = (buf, codec) => (codec === 'br' ? zlib.brotliDecompressSync(buf) : zlib.gunzipSync(buf)).toString('utf8');
+
+/**
+ * Change stamps. Every record (anything in a list with an id) carries `_s`,
+ * the time it last changed in the cloud, so devices can ask for "what changed
+ * since I last looked" instead of the whole book. A record whose content is
+ * the same as before keeps its stamp; `_s` and `_sync` do not count as content.
+ */
+function contentOf(r) {
+  const { _s, _sync, ...rest } = r;
+  return JSON.stringify(rest);
+}
+
+function stampRecords(before, after, stamp) {
+  const prev = isPlainObject(before) ? before : {};
+  for (const [key, list] of Object.entries(after)) {
+    if (!Array.isArray(list) || !list.some((r) => isPlainObject(r) && r.id != null)) continue;
+    const old = new Map();
+    for (const r of Array.isArray(prev[key]) ? prev[key] : []) if (isPlainObject(r) && r.id != null) old.set(String(r.id), r);
+    after[key] = list.map((r) => {
+      if (!isPlainObject(r) || r.id == null) return r;
+      const was = old.get(String(r.id));
+      if (was && contentOf(was) === contentOf(r)) {
+        return was._s === r._s ? r : { ...r, _s: was._s };
+      }
+      return { ...r, _s: stamp };
+    });
+  }
+  return after;
+}
+
+/** A stamp after the stored one, so every write's changes sort after the last write's. */
+function nextStamp(prev, now = new Date().toISOString()) {
+  const last = prev && prev.exists && prev.doc ? String(prev.doc.updated_at || '') : '';
+  if (!last || now > last || !Number.isFinite(Date.parse(last))) return now;
+  return new Date(Date.parse(last) + 1).toISOString();
+}
+
+/** Records in `appData` changed after `since` (for "what changed" answers). */
+function changedSince(appData, since) {
+  const out = {};
+  for (const [key, v] of Object.entries(appData || {})) {
+    if (Array.isArray(v) && v.some((r) => isPlainObject(r) && r.id != null)) {
+      out[key] = v.filter((r) => isPlainObject(r) && String(r._s || '') > since);
+    } else {
+      out[key] = v;
+    }
+  }
+  return out;
+}
 const chunkId = (key, part) => `${key}~${part}`;
 const chunkRef = (ref, key, part) => ref.collection('chunks').doc(chunkId(key, part));
 const isPlainObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -69,7 +124,7 @@ function mergeLikeFirestore(stored, incoming) {
  * Split appData into the part kept in the main document and gzipped pieces.
  * Pure: returns { inline, manifest, pieces: { key: [Buffer] } }.
  */
-function splitAppData(appData) {
+function splitAppData(appData, old = {}) {
   const data = isPlainObject(appData) ? appData : {};
   const sizes = [];
   for (const [k, v] of Object.entries(data)) {
@@ -91,15 +146,23 @@ function splitAppData(appData) {
       continue;
     }
     inlineBytes -= s.bytes;
-    const gz = zlib.gzipSync(Buffer.from(s.json, 'utf8'));
+    const hash = hashOf(s.json);
+    const was = old && old[s.k];
+    if (was && was.hash === hash) {
+      // Unchanged since the last write: its pieces are already stored.
+      manifest.keys[s.k] = was;
+      continue;
+    }
+    const packed = pack(s.json);
     const parts = [];
-    for (let i = 0; i < gz.length; i += CHUNK_BYTES) parts.push(gz.subarray(i, i + CHUNK_BYTES));
+    for (let i = 0; i < packed.length; i += CHUNK_BYTES) parts.push(packed.subarray(i, i + CHUNK_BYTES));
     pieces[s.k] = parts;
     manifest.keys[s.k] = {
       parts: parts.length,
-      hash: hashOf(s.json),
-      bytes: gz.length,
+      hash,
+      bytes: packed.length,
       count: Array.isArray(s.v) ? s.v.length : null,
+      codec: 'br',
     };
   }
   if (inlineBytes > INLINE_TOTAL_BYTES * 2) {
@@ -122,7 +185,7 @@ function joinAppData(docData, chunkDocs) {
       if (!c || c.hash !== m.hash) throw new Error(`Books storage: piece ${i} of "${key}" is missing or out of date`);
       bufs.push(Buffer.from(c.data));
     }
-    const json = zlib.gunzipSync(Buffer.concat(bufs)).toString('utf8');
+    const json = unpack(Buffer.concat(bufs), m.codec);
     if (hashOf(json) !== m.hash) throw new Error(`Books storage: "${key}" does not match its hash`);
     out[key] = JSON.parse(json);
   }
@@ -166,16 +229,17 @@ function storedAppData(prev) {
  */
 function writeBooksTx(tx, ref, prev, appData, meta = {}, { merge = true } = {}) {
   const before = storedAppData(prev);
-  const full = merge && before ? mergeLikeFirestore(before, appData) : appData;
-  const { inline, manifest, pieces } = splitAppData(full);
+  const merged = merge && before ? mergeLikeFirestore(before, appData) : appData;
+  // Stamp what changed with this write's time (updated_at), so devices can
+  // fetch only that. A format move (no updated_at) changes nothing.
+  const stamp = meta.updated_at;
+  const full = stamp ? stampRecords(before, { ...(isPlainObject(merged) ? merged : {}) }, stamp) : merged;
   const old = (prev && prev.manifest && prev.manifest.keys) || {};
+  const { inline, manifest, pieces } = splitAppData(full, old);
 
   // Every byte counts toward the request limit, so check before queueing writes.
   let writeBytes = 0;
-  const changed = Object.keys(manifest.keys).filter((key) => {
-    const was = old[key];
-    return !(was && was.hash === manifest.keys[key].hash && was.parts === manifest.keys[key].parts);
-  });
+  const changed = Object.keys(manifest.keys).filter((key) => !!pieces[key]);
   for (const key of changed) writeBytes += manifest.keys[key].bytes;
   if (writeBytes > MAX_WRITE_BYTES) throw new BooksTooLargeError('The books are too large to save in one go.');
 
@@ -238,6 +302,9 @@ function countableAppData(docData) {
 }
 
 module.exports = {
+  nextStamp,
+  changedSince,
+  stampRecords,
   FORMAT,
   INLINE_KEY_BYTES,
   INLINE_TOTAL_BYTES,

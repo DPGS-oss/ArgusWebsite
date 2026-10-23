@@ -55,7 +55,7 @@ export default function GstBillingSoftwarePage() {
             },
             {
               title: "Share with your CA",
-              text: "Invite your accountant to a free encrypted read-only portal. You keep control of billing.",
+              text: "Invite your accountant to a free read-only portal with your latest books. You keep control of billing.",
             },
           ].map((item) => (
             <div key={item.title} className="rounded-card border border-bone bg-mist p-6">

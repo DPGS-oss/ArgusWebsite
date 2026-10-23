@@ -6,6 +6,7 @@ import { AuthModal } from "@/components/AuthModal";
 import { BrandLogo } from "@/components/BrandLogo";
 import { expensesAsPurchases, generateGSTRReport, generateGstnJson, formatCurrency, notesAsInvoices } from "@/lib/gst";
 import { t } from "@/lib/i18n";
+import { packedAnswerHeaders, readJson } from "@/lib/cloud-sync";
 import { isRegisteredGstin } from "@/lib/gstin";
 import type { CreditNote, DebitNote, Expense, GSTRReport, GSTRReportType, Invoice, Purchase } from "@/lib/types";
 import {
@@ -257,10 +258,10 @@ export default function CaPortalPage() {
     if (hashKey) storeCaShareKey(ownerId, hashKey);
 
     fetch(`/api/ca/clients/${encodeURIComponent(ownerId)}/books?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { Authorization: `Bearer ${token}`, ...packedAnswerHeaders() },
     })
       .then(async (r) => {
-        const d = await r.json();
+        const d = await readJson(r);
         if (!r.ok) throw new Error(d.error || "Could not load books");
         if (d.e2ee && d.ciphertext && d.iv) {
           const key = loadCaShareKey(ownerId) || hashKey;

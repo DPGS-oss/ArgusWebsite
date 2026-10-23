@@ -629,7 +629,7 @@ const sameMove = (a, b) => r3(a.qty) === r3(b.qty) && str(a.godown || 'Main') ==
  * `sent` is the phone's movements (undefined from older app versions).
  * Returns the movements the phone must add or replace (by id).
  */
-function mergeStockMoves(data, sent, sentGodowns, now) {
+function mergeStockMoves(data, sent, sentGodowns, now, since = '') {
   const recordsMoves = Array.isArray(sent);
   const moves = Array.isArray(data.stockMoves) ? data.stockMoves.filter((m) => m && str(m.id)) : [];
   const byId = new Map(moves.map((m) => [str(m.id), m]));
@@ -675,7 +675,8 @@ function mergeStockMoves(data, sent, sentGodowns, now) {
     .map((g) => str(g).slice(0, 60))
     .filter((g) => g && g !== 'Main');
   data.godowns = [...new Set(names)].slice(0, 100);
-  return kept.filter((m) => !sentIds.has(str(m.id)) || differs.has(str(m.id)));
+  // Movements the phone lacks: with `since`, only those added after it.
+  return kept.filter((m) => differs.has(str(m.id)) || (!sentIds.has(str(m.id)) && (!since || String(m._s || '') > since)));
 }
 
 const ISSUED_DOCS = new Set(['invoices', 'creditNotes', 'debitNotes']);
@@ -686,6 +687,7 @@ const isDraft = (w) => str(w.status).toLowerCase() === 'draft';
  * out which records the phone must upsert.
  */
 function mergePhoneSync(appData, phone, now = new Date().toISOString()) {
+  const since = str(phone && phone.since);
   const data = { ...emptyAppData(), ...(appData || {}) };
   const deleted = {};
   for (const [key, ids] of Object.entries(data.deleted || {})) deleted[key] = { ...(ids || {}) };
@@ -740,8 +742,11 @@ function mergePhoneSync(appData, phone, now = new Date().toISOString()) {
       if (!w || !str(w.id) || (k.include && !k.include(w))) continue;
       const id = str(w.id);
       const phoneHasCurrent = sent.has(id) && w._sync && w._sync.w === k.webFp(w);
-      if (!sent.has(id)) toPhone.push(k.toPhone(w, now));
-      if (!phoneHasCurrent) {
+      // A phone that says when it last synced gets only records changed since
+      // (and sends only its own changes); older apps get everything as before.
+      const push = !sent.has(id) && (!since || String(w._s || '') > since);
+      if (push) toPhone.push(k.toPhone(w, now));
+      if (!phoneHasCurrent && (push || sent.has(id))) {
         // After the phone applies our copy, both views agree again.
         const phoneView = k.toPhone(w, now);
         web[i] = { ...w, _sync: { p: k.phoneFp(phoneView), w: k.webFp(w) } };
@@ -781,7 +786,7 @@ function mergePhoneSync(appData, phone, now = new Date().toISOString()) {
   out.auditSince = now;
   // Older app versions send no movements and get none back, but their stock
   // changes are still matched in the website's movements.
-  const newMoves = mergeStockMoves(data, phone.stockMoves, phone.godowns, now);
+  const newMoves = mergeStockMoves(data, phone.stockMoves, phone.godowns, now, since);
   if (Array.isArray(phone.stockMoves)) {
     out.stockMoves = newMoves;
     out.godowns = data.godowns;

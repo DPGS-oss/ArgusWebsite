@@ -5,7 +5,7 @@ import { LegalLayout } from "@/components/LegalLayout";
 export default function PrivacyPage() {
   return (
     <LegalLayout title="Privacy Policy">
-      <p className="text-sm text-slate">Last updated: 15 October 2026</p>
+      <p className="text-sm text-slate">Last updated: 23 October 2026</p>
 
       <p>
         <strong>Argus</strong> (website{" "}
@@ -142,6 +142,10 @@ export default function PrivacyPage() {
           Indian tax, accounting, or legal compliance
         </li>
         <li>Security / rate-limit logs: shorter operational windows</li>
+        <li>
+          Records of your consent (which version of these terms you accepted or withdrew, and when):
+          kept while your account exists and up to <strong>8 years</strong> after, to show what was agreed
+        </li>
         <li>
           Edit log (who changed what in the books): kept as long as the books, and cannot be edited
           or cleared by users, as audit-trail rules require

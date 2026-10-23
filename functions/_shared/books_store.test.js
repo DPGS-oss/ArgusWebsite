@@ -131,6 +131,13 @@ function bigShop(bills = 4000) {
   };
 }
 
+// Records carry the time they last changed in the cloud (_s); compare without it.
+const unstamp = (data) => Object.fromEntries(Object.entries(data).map(([k, v]) => [k, Array.isArray(v) ? v.map((r) => {
+  if (!r || typeof r !== 'object') return r;
+  const { _s, ...rest } = r;
+  return rest;
+}) : v]));
+
 // ------------------------------------------------------------------ tests
 
 test('a shop with thousands of bills does not fit in one document but saves split', async () => {
@@ -151,7 +158,8 @@ test('a shop with thousands of bills does not fit in one document but saves spli
   assert.equal(main.updated_at, 't1');
 
   const { doc } = await load(db);
-  assert.deepEqual(doc.appData, books);
+  assert.ok(doc.appData.invoices.every((r) => r._s === 't1'), 'every record stamped with the save');
+  assert.deepEqual(unstamp(doc.appData), books);
   assert.equal(doc.updated_at, 't1');
   assert.deepEqual(resolveAppData(doc).invoices.length, 4000);
 });
@@ -163,7 +171,7 @@ test('data that does not compress is cut into several chunk documents', async ()
   const m = db.docs.get(MAIN).storage.keys.auditLog;
   assert.ok(m.parts >= 2, `parts ${m.parts}`);
   assert.equal(m.count, 3000);
-  assert.deepEqual((await load(db)).doc.appData, books);
+  assert.deepEqual(unstamp((await load(db)).doc.appData), books);
 
   // Shrinks to one piece: the extra pieces are deleted.
   const smaller = { settings: {}, auditLog: books.auditLog.slice(0, 200) };
@@ -199,7 +207,8 @@ test('saves merge into what is stored, as set(..., { merge: true }) did', async 
   // An older browser that does not know about stockMoves or khata.
   await save(db, { invoices: [{ id: 'only' }], settings: { theme: 'dark' } }, { updated_at: 't2' });
   const { doc } = await load(db);
-  assert.deepEqual(doc.appData.invoices, [{ id: 'only' }], 'arrays are replaced');
+  // Each record carries the time it last changed in the cloud (_s).
+  assert.deepEqual(doc.appData.invoices, [{ id: 'only', _s: 't2' }], 'arrays are replaced');
   assert.equal(doc.appData.stockMoves.length, 1500, 'parts not sent are kept');
   assert.equal(doc.appData.khataEntries.length, 2000);
   assert.deepEqual(doc.appData.settings, { invoicePrefix: 'INV', theme: 'dark' }, 'maps merge key by key');
@@ -320,4 +329,30 @@ test('keys that cannot be document ids stay in the main document', () => {
   const { inline, manifest } = store.splitAppData({ 'odd/key': big, invoices: big });
   assert.ok(inline['odd/key']);
   assert.ok(manifest.keys.invoices);
+});
+
+test('change stamps: a record keeps its stamp until its content changes; changedSince picks the new ones', () => {
+  const before = { invoices: [{ id: 'a', total: 1, _s: 't1' }, { id: 'b', total: 2, _s: 't1' }], settings: { x: 1 } };
+  // the browser sends a back unchanged (with an old or no stamp), b edited, c new
+  const after = store.stampRecords(before, { invoices: [{ id: 'a', total: 1 }, { id: 'b', total: 3, _s: 't1' }, { id: 'c', total: 4 }], settings: { x: 2 } }, 't2');
+  assert.deepEqual(after.invoices.map((r) => r._s), ['t1', 't2', 't2']);
+  const delta = store.changedSince(after, 't1');
+  assert.deepEqual(delta.invoices.map((r) => r.id), ['b', 'c']);
+  assert.deepEqual(delta.settings, { x: 2 }, 'settings and other small parts come whole');
+  assert.equal(store.nextStamp({ exists: true, doc: { updated_at: '2026-10-23T10:00:00.000Z' } }, '2026-10-23T09:59:59.000Z'), '2026-10-23T10:00:00.001Z', 'stamps never go back in time');
+});
+
+test('pieces are stored brotli-packed; older gzip pieces still read', async () => {
+  const zlib = require('zlib');
+  const big = { invoices: Array.from({ length: 3000 }, (_, i) => ({ id: `i${i}`, n: `INV/25-26/${i}`, total: i })) };
+  const { manifest, pieces } = store.splitAppData(big);
+  assert.equal(manifest.keys.invoices.codec, 'br');
+  const json = zlib.brotliDecompressSync(Buffer.concat(pieces.invoices)).toString('utf8');
+  assert.equal(JSON.parse(json).length, 3000);
+  // a piece written before (gzip, no codec)
+  const raw = JSON.stringify(big.invoices);
+  const gz = zlib.gzipSync(Buffer.from(raw));
+  const doc = { appData: {}, storage: { format: store.FORMAT, keys: { invoices: { parts: 1, hash: manifest.keys.invoices.hash, bytes: gz.length } } } };
+  const back = store.joinAppData(doc, [{ key: 'invoices', part: 0, parts: 1, hash: manifest.keys.invoices.hash, data: gz }]);
+  assert.equal(back.invoices.length, 3000);
 });

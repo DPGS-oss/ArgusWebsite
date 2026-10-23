@@ -20,6 +20,7 @@ const {
 } = require('./_shared/ca-exports');
 const { buildEinvoiceJson, buildEinvoiceBatch } = require('./_shared/einvoice');
 const { readBooks } = require('./_shared/books_store');
+const { sendJson } = require('./_shared/send-json');
 
 const SCOPES = [
   'read:invoices',
@@ -55,7 +56,7 @@ function setCaCors(req, res) {
     res.set('Access-Control-Allow-Origin', origin);
     res.set('Vary', 'Origin');
   }
-  res.set('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+  res.set('Access-Control-Allow-Headers', 'Authorization, Content-Type, X-Argus-Accept');
   res.set('Access-Control-Allow-Methods', 'GET,POST,DELETE,OPTIONS');
   res.set('Access-Control-Expose-Headers', 'Content-Disposition');
 }
@@ -348,7 +349,7 @@ async function handleBooks(req, res, decoded, ownerId) {
   const within = (d) => d >= from && d <= to;
   const pick = (scope, rows, dateOf) => (scopes.has(scope) ? (Array.isArray(rows) ? rows : []).filter((r) => r && within(dateOf(r))) : []);
   const biz = businessForInvoice(appData, null);
-  return res.status(200).json({
+  return sendJson(req, res, 200, {
     owner_id: ownerId,
     live: true,
     updated_at: updated_at || null,

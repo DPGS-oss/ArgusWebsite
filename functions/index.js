@@ -2,6 +2,7 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { onRequest } = require('firebase-functions/v2/https');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const crypto = require('crypto');
+const zlib = require('zlib');
 const { verifyToken, getUser, createUser, updateUser, getDb, getAuth } = require('./_shared/firebase-admin');
 const { getPlan, getAllPlans, getExpiryIsoForPlan } = require('./_shared/plans');
 const { buildSubscriptionRecord } = require('./_shared/subscription-billing');
@@ -397,6 +398,27 @@ exports.apiUserProfile = onRequest({ region: 'us-central1', maxInstances: 10, se
 
     const body = req.body || {};
     const updateData = { updated_at: new Date().toISOString() };
+    // Consent record (DPDP Act s.6(10): the business must be able to show
+    // what was agreed, to which version, and when). Kept append-only; the
+    // profile holds the latest for quick checks.
+    if (body.legal_consent && typeof body.legal_consent === 'object') {
+      const c = body.legal_consent;
+      const ITEMS = ['age_18', 'terms', 'refund', 'privacy', 'authority', 'ca_confidentiality', 'ca_professional'];
+      const version = String(c.version || '').slice(0, 20);
+      const surface = ['web', 'ca_portal', 'android'].includes(c.surface) ? c.surface : 'web';
+      const items = (Array.isArray(c.items) ? c.items : []).map(String).filter((x) => ITEMS.includes(x));
+      const withdrawn = c.withdrawn === true;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(version)) return res.status(400).json({ error: 'Consent needs the policy version' });
+      const at = new Date().toISOString();
+      await getDb().collection('users').doc(uid).collection('consents').add({ version, surface, items, withdrawn, at });
+      if (withdrawn) {
+        updateData.legal_consent_withdrawn_at = at;
+      } else {
+        updateData.legal_consent_version = version;
+        updateData.legal_consent_at = at;
+        updateData.legal_consent_surface = surface;
+      }
+    }
     if (body.business_name !== undefined) updateData.business_name = body.business_name;
     if (body.gstin !== undefined) updateData.gstin = body.gstin;
     if (body.phone !== undefined) updateData.phone = body.phone;
@@ -1704,8 +1726,12 @@ exports.apiDataLoad = onRequest({ region: 'us-central1', maxInstances: 10, memor
     const booksInfo = { booksUid: books.booksUid, role: books.role, access: books.access, series: books.series };
     if (exists) {
       const { resolveAppData } = require('./_shared/app_data');
-      return res.status(200).json({
-        data: teamAccess.viewFor(resolveAppData(data), books.access),
+      // ?since=<updated_at of the last load>: only records changed after it.
+      const since = typeof req.query.since === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(req.query.since) ? req.query.since : '';
+      const full = teamAccess.viewFor(resolveAppData(data), books.access);
+      return sendJson(req, res, 200, {
+        data: since ? booksStore.changedSince(full, since) : full,
+        delta: !!since,
         updated_at: data.updated_at || null,
         version: data.version || 1,
         books: booksInfo,
@@ -1720,6 +1746,10 @@ exports.apiDataLoad = onRequest({ region: 'us-central1', maxInstances: 10, memor
 
 // ==================== /api/data/save ====================
 /** Server copy of the edit log wins for every entry it has; new entries are added. */
+const { sendJson } = require('./_shared/send-json');
+
+const { applyPatch } = require('./_shared/patch');
+
 // A year of a busy shop's books is about 4MB of JSON; the apps gzip it on the
 // way in (Cloud Run takes at most 32MB per request, packed).
 const MAX_BOOKS_JSON_BYTES = 24_000_000;
@@ -1756,12 +1786,13 @@ exports.apiDataSave = onRequest({ region: 'us-central1', maxInstances: 10, memor
 
   const body = req.body || {};
 
-  if (!body.appData) {
+  const isPatch = body.patch === true;
+  if (!body.appData && !isPatch) {
     return res.status(400).json({ error: 'Missing appData field' });
   }
 
   // The apps send the books gzipped (about ten times smaller); this is the size unpacked.
-  const payloadSize = Buffer.byteLength(JSON.stringify(body.appData), 'utf8');
+  const payloadSize = Buffer.byteLength(JSON.stringify(isPatch ? body : body.appData), 'utf8');
   if (payloadSize > MAX_BOOKS_JSON_BYTES) {
     return res.status(413).json({ error: 'Your books are too large to save in one go (max 24MB). Contact support.' });
   }
@@ -1780,30 +1811,34 @@ exports.apiDataSave = onRequest({ region: 'us-central1', maxInstances: 10, memor
   }
 
   const db = getDb();
-  const now = new Date().toISOString();
   const ref = booksStore.booksRef(db, books.booksUid);
+  let now = '';
 
   try {
-    // Optimistic concurrency: if the phone synced since this browser last
-    // loaded, refuse the overwrite so the browser merges first.
     const conflict = await db.runTransaction(async (tx) => {
       const prev = await booksStore.readBooksTx(tx, ref);
+      now = booksStore.nextStamp(prev);
       const current = prev.exists ? prev.doc.updated_at || null : null;
-      if (body.base_updated_at !== undefined && current && body.base_updated_at !== current) {
+      // A whole-book save from a browser that has not seen the phone's latest
+      // is refused, so the browser merges first. A save of only what changed
+      // is applied record by record and leaves other devices' changes alone.
+      if (!isPatch && body.base_updated_at !== undefined && current && body.base_updated_at !== current) {
         return current;
       }
       // The edit log only grows: entries already in the cloud are kept as they
       // are, whatever the browser sends.
       const storedData = prev.exists && prev.doc.appData ? prev.doc.appData : null;
       const stored = storedData && Array.isArray(storedData.auditLog) ? storedData.auditLog : [];
+      const sent = isPatch ? applyPatch(storedData, body) : body.appData;
       // Billing-only users cannot change purchases, expenses, payroll or settings.
-      const incoming = books.role === 'member' ? teamAccess.mergeMemberSave(storedData, body.appData, books.access) : body.appData;
-      const appData = { ...incoming, auditLog: keepAuditLog(stored, body.appData.auditLog) };
+      const incoming = books.role === 'member' ? teamAccess.mergeMemberSave(storedData, sent, books.access) : sent;
+      const newLog = isPatch ? body.auditLog : body.appData.auditLog;
+      const appData = { ...incoming, auditLog: keepAuditLog(stored, newLog) };
       booksStore.writeBooksTx(tx, ref, prev, appData, {
         updated_at: now,
         version: body.version || 1,
         device: body.device || 'unknown',
-      });
+      }, { merge: !isPatch });
       return null;
     });
     if (conflict) {
@@ -1871,6 +1906,8 @@ exports.apiDataPhoneSync = onRequest({ region: 'us-central1', maxInstances: 10, 
     khataEntries: Array.isArray(body.khataEntries) ? body.khataEntries : [],
     auditLog: Array.isArray(body.auditLog) ? body.auditLog : [],
     auditSince: typeof body.auditSince === 'string' ? body.auditSince : '',
+    // App 1.4.12+: sends only what changed and asks for what changed since its last sync.
+    since: typeof body.since === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(body.since) ? body.since : '',
     deleted: body.deleted && typeof body.deleted === 'object' ? body.deleted : {},
   };
   if (body.business && typeof body.business === 'object' && !(books.role === 'member' && books.access === 'billing')) phone.business = body.business;
@@ -1900,7 +1937,7 @@ exports.apiDataPhoneSync = onRequest({ region: 'us-central1', maxInstances: 10, 
   try {
     const result = await db.runTransaction(async (tx) => {
       const prev = await booksStore.readBooksTx(tx, ref);
-      const now = new Date().toISOString();
+      const now = booksStore.nextStamp(prev);
       const current = prev.exists ? resolveAppData(prev.doc) : null;
       const { appData, toPhone } = mergePhoneSync(current, phone, now);
       booksStore.writeBooksTx(tx, ref, prev, appData, { updated_at: now, version: 1, device: 'flutter-android' });
@@ -1910,7 +1947,7 @@ exports.apiDataPhoneSync = onRequest({ region: 'us-central1', maxInstances: 10, 
       ? { ...result.toPhone, purchases: [], auditLog: teamAccess.auditForBilling(result.toPhone.auditLog) }
       : result.toPhone;
     const booksInfo = { booksUid: books.booksUid, role: books.role, access: books.access, series: books.series };
-    return res.status(200).json({ success: true, updated_at: result.now, ...toPhone, books: booksInfo });
+    return sendJson(req, res, 200, { success: true, updated_at: result.now, ...toPhone, books: booksInfo });
   } catch (error) {
     if (error instanceof booksStore.BooksTooLargeError) return res.status(413).json({ error: error.message });
     console.error('Phone sync error:', error);

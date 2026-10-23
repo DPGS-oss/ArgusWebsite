@@ -5,12 +5,13 @@ import { Upload, Download } from "lucide-react";
 import { formatCurrency } from "@/lib/gst";
 import type { AppData } from "@/lib/types";
 import { loadData, saveData } from "@/lib/storage";
-import { buildGstr9, downloadCsv, exemptReport, gstr9Rows, itcTotals, match2b, parse2b, type Heads, type Match2b, type MatchStatus } from "@/lib/gst-returns";
+import { buildGstr9, cmp08, COMPOSITION_RATES, downloadCsv, exemptReport, gstr9Rows, itcTotals, match2b, parse2b, type Heads, type Match2b, type MatchStatus } from "@/lib/gst-returns";
+import { getRateBook, rateOptions } from "@/lib/gst-rates";
 import { exceptionReport } from "@/lib/exceptions";
 import { financialYear, monthRange, todayIST } from "@/lib/dates";
 
 type Props = { data: AppData; onSaved: () => void };
-type Tab = "2b" | "gstr9" | "exempt" | "exceptions";
+type Tab = "2b" | "gstr9" | "exempt" | "exceptions" | "cmp08";
 
 const TABS: [Tab, string][] = [
   ["2b", "Match purchases with GSTR-2B"],
@@ -32,13 +33,19 @@ const inr = (n: number) => formatCurrency(n || 0);
 const taxOf = (h: Heads) => (h.igst || 0) + (h.cgst || 0) + (h.sgst || 0) + (h.cess || 0);
 
 export function GstReturns({ data, onSaved }: Props) {
-  const [tab, setTab] = useState<Tab>("2b");
+  const business = data.businesses.find((b) => b.id === data.activeBusinessId) || data.businesses[0];
+  const composition = !!business?.composition;
+  // A composition dealer files CMP-08 every quarter and GSTR-4 yearly, not GSTR-9.
+  const tabs: [Tab, string][] = composition
+    ? [["cmp08", "CMP-08 quarterly"], ...TABS.filter(([id]) => id !== "gstr9")]
+    : TABS;
+  const [tab, setTab] = useState<Tab>(composition ? "cmp08" : "2b");
   return (
     <div>
       <h1 className="mb-2 text-2xl font-bold text-ink">GST returns</h1>
       <p className="mb-4 text-sm text-slate">Check your purchases against what suppliers reported, prepare the annual return, and see what needs attention.</p>
       <div className="mb-6 flex flex-wrap gap-2">
-        {TABS.map(([id, label]) => (
+        {tabs.map(([id, label]) => (
           <button key={id} onClick={() => setTab(id)} className={tab === id ? "btn-primary px-4 py-2 text-sm" : "btn-outline px-4 py-2 text-sm"}>
             {label}
           </button>
@@ -48,6 +55,7 @@ export function GstReturns({ data, onSaved }: Props) {
       {tab === "gstr9" && <Gstr9Tab data={data} />}
       {tab === "exempt" && <ExemptTab data={data} />}
       {tab === "exceptions" && <ExceptionsTab data={data} />}
+      {tab === "cmp08" && <Cmp08Tab data={data} onSaved={onSaved} />}
     </div>
   );
 }
@@ -242,6 +250,80 @@ function ExemptTab({ data }: { data: AppData }) {
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+/** Goods the rate book gives only 0% (fresh vegetables, loose grain...): exempt, no composition tax. */
+function exemptByRateBook(hsn: string): boolean {
+  const book = getRateBook();
+  const code = (hsn || "").replace(/\D/g, "");
+  if (!book || code.length < 2) return false;
+  const o = rateOptions(book, code);
+  return o.main.length > 0 && o.main.every((x) => x.rate === 0);
+}
+
+function Cmp08Tab({ data, onSaved }: Props) {
+  const fyNow = financialYear(todayIST());
+  const [fy, setFy] = useState(fyNow);
+  const rate = data.settings.compositionRate || 1;
+  const quarters = useMemo(() => ([1, 2, 3, 4] as const).map((q) => cmp08(data, fy, q, rate, exemptByRateBook)), [data, fy, rate]);
+  const year = quarters.reduce((t, q) => ({ turnover: t.turnover + q.turnover, tax: t.tax + q.cgst + q.sgst }), { turnover: 0, tax: 0 });
+  function setRate(r: number) {
+    const latest = loadData();
+    saveData({ ...latest, settings: { ...latest.settings, compositionRate: r } });
+    onSaved();
+  }
+  const y0 = Number(`20${fyNow.slice(0, 2)}`);
+  const years = [0, 1, 2].map((k) => { const y = y0 - k; return `${String(y % 100).padStart(2, "0")}-${String((y + 1) % 100).padStart(2, "0")}`; });
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-slate">
+        CMP-08 is due on the 18th after each quarter. Enter these figures on the GST portal and pay the tax shown. The yearly
+        return is GSTR-4, due 30 June (Notification 12/2024-CT).
+      </p>
+      <div className="flex flex-wrap items-center gap-3">
+        <label className="flex items-center gap-2 text-sm text-ink">
+          Year
+          <select className="input-field !w-auto" value={fy} onChange={(e) => setFy(e.target.value)}>
+            {years.map((y) => <option key={y} value={y}>20{y}</option>)}
+          </select>
+        </label>
+        <label className="flex items-center gap-2 text-sm text-ink">
+          Your rate
+          <select className="input-field !w-auto" value={rate} onChange={(e) => setRate(Number(e.target.value))}>
+            {COMPOSITION_RATES.map((r) => <option key={r.rate} value={r.rate}>{r.label}</option>)}
+          </select>
+        </label>
+        <button
+          className="btn-outline inline-flex items-center gap-2 px-4 py-2 text-sm"
+          onClick={() => downloadCsv(`cmp08-20${fy}.csv`, [["Quarter", "From", "To", "Due", "Bills", "Turnover", "Exempt", "Taxable", "Rate %", "CGST", "SGST", "RCM CGST", "RCM SGST", "RCM IGST"], ...quarters.map((q) => [q.quarter, q.from, q.to, q.due, q.bills, q.turnover, q.exempt, q.taxable, q.rate, q.cgst, q.sgst, q.rcmCgst, q.rcmSgst, q.rcmIgst])])}
+        >
+          <Download className="h-4 w-4" /> Download
+        </button>
+      </div>
+      <div className="overflow-x-auto rounded-card border border-bone bg-white">
+        <table className="w-full text-sm">
+          <thead className="bg-mist text-left text-slate">
+            <tr><th className="p-2">Quarter</th><th className="p-2">Due</th><th className="p-2 text-right">Turnover</th><th className="p-2 text-right">Exempt goods</th><th className="p-2 text-right">CGST</th><th className="p-2 text-right">SGST</th><th className="p-2 text-right">Reverse charge</th></tr>
+          </thead>
+          <tbody>
+            {quarters.map((q) => (
+              <tr key={q.quarter} className="border-t border-bone">
+                <td className="p-2">Q{q.quarter.slice(-1)} ({q.from.slice(5)} to {q.to.slice(5)})</td>
+                <td className="p-2">{q.due}</td>
+                <td className="p-2 text-right">{inr(q.turnover)}</td>
+                <td className="p-2 text-right">{inr(q.exempt)}</td>
+                <td className="p-2 text-right">{inr(q.cgst)}</td>
+                <td className="p-2 text-right">{inr(q.sgst)}</td>
+                <td className="p-2 text-right">{inr(q.rcmCgst + q.rcmSgst + q.rcmIgst)}</td>
+              </tr>
+            ))}
+            <tr className="border-t border-bone font-semibold"><td className="p-2" colSpan={2}>Year (for GSTR-4)</td><td className="p-2 text-right">{inr(year.turnover)}</td><td className="p-2" /><td className="p-2 text-right" colSpan={2}>{inr(year.tax)}</td><td className="p-2" /></tr>
+          </tbody>
+        </table>
+      </div>
+      <p className="text-xs text-ash">Exempt goods are those the GST rate list gives only 0% (for example fresh vegetables); composition tax is on taxable supplies. Check the figures with your CA before filing.</p>
     </div>
   );
 }

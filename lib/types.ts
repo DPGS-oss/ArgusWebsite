@@ -224,6 +224,10 @@ export interface AppSettings {
   roundOff: boolean;
   folderName: string;
   cloudSharing?: boolean;
+  /** Composition dealers: their CMP-08 rate (1, 5 or 6 percent). */
+  compositionRate?: number;
+  /** Yearly turnover (AATO) of ₹10 crore or more: e-invoices must be made within 30 days. */
+  turnoverAbove10Cr?: boolean;
   /** Previous-year turnover above ₹5 crore: 6-digit HSN and IRN reminder. */
   turnoverAbove5Cr?: boolean;
   /** When true, Ask Argus may include top party names in the cloud summary. */
@@ -337,8 +341,12 @@ export interface Quote {
   subtotal: number;
   totalGstAmount: number;
   totalAmount: number;
-  status: string; // draft | sent | accepted | rejected | expired
+  status: string; // draft | sent | accepted | rejected | expired | invoiced
   validUntil: string;
+  /** The bill made from this quote. */
+  invoiceId?: string;
+  partyGstin?: string;
+  partyPhone?: string;
   notes: string;
   createdAt: string;
   updatedAt: string;
