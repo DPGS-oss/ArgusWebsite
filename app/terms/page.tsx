@@ -91,6 +91,10 @@ export default function TermsPage() {
         exist forever. If we stop operating that generation, we will give you at least{" "}
         <strong>90 days&apos; notice</strong> and a way to export all your data.
       </p>
+      <p>
+        Lifetime is offered only to our first <strong>200 early adopters</strong>. Once they are
+        taken it is no longer sold; licences already bought are not affected.
+      </p>
       <p>Lifetime includes, while we operate that generation:</p>
       <ul className="list-disc space-y-2 pl-6">
         <li>

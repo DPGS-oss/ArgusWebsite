@@ -2,6 +2,9 @@
  * Admin API — email whitelist + rotating 14-day access key (emailed via Resend).
  * No public links; no self-service admin accounts.
  */
+const { LIFETIME_CAP, PLANS } = require('./_shared/plans');
+// The Terms/Privacy version people should have accepted (components/LegalConsentGate.tsx).
+const CURRENT_LEGAL_VERSION = '2026-10-23';
 const { onRequest } = require('firebase-functions/v2/https');
 const { verifyToken, getUser, updateUser, getDb } = require('./_shared/firebase-admin');
 const { checkRateLimit } = require('./_shared/rate-limit');
@@ -102,6 +105,10 @@ async function handleOverview(req, res) {
     usageByUserId,
     payments,
     linksCount: linksSnap.size,
+    activity: {
+      legalVersion: CURRENT_LEGAL_VERSION, lifetimeExpiry: LIFETIME_EXPIRY_ISO, lifetimeCap: LIFETIME_CAP,
+      prices: { monthly: (PLANS.business_monthly || {}).amount || 0, yearly: (PLANS.business_yearly || {}).amount || 0 },
+    },
   });
 
   return res.status(200).json({
@@ -111,6 +118,8 @@ async function handleOverview(req, res) {
       usage: reports.usage,
       payments: reports.payments,
       subscription_details: reports.subscription,
+      activity: reports.activity,
+      recent_signups: reports.recent_signups,
     },
     key_expires_at: admin.key_expires_at,
     generated_at: reports.generated_at,
@@ -138,6 +147,10 @@ async function handleReports(req, res) {
       usageByUserId,
       payments,
       linksCount: linksSnap.size,
+      activity: {
+      legalVersion: CURRENT_LEGAL_VERSION, lifetimeExpiry: LIFETIME_EXPIRY_ISO, lifetimeCap: LIFETIME_CAP,
+      prices: { monthly: (PLANS.business_monthly || {}).amount || 0, yearly: (PLANS.business_yearly || {}).amount || 0 },
+    },
     }),
     key_expires_at: admin.key_expires_at,
   });

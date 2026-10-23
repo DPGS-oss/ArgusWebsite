@@ -1,7 +1,7 @@
 "use client";
 
 import Script from "next/script";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Check, Sparkles } from "lucide-react";
 import { useAuth } from "@/lib/auth-provider";
 import { startRazorpayCheckout, validatePromoCode, type PromoOffer } from "@/lib/razorpay";
@@ -56,6 +56,7 @@ const plans = [
     suffix: " once",
     featured: false,
     features: [
+      "Limited to our first 200 early adopters",
       "Same Business suite for the current product generation",
       "Buy once on this website only (max 25 years or earlier sunset)",
       "Unlocks Android + web (same login)",
@@ -76,6 +77,14 @@ export function Pricing() {
   const [billingInterval, setBillingInterval] = useState<BillingInterval>("monthly");
   const [trialLoading, setTrialLoading] = useState(false);
   const [trialMessage, setTrialMessage] = useState("");
+  // Lifetime is limited to the first 200 early adopters; the site shows only whether it is still open.
+  const [lifetimeOpen, setLifetimeOpen] = useState(true);
+  useEffect(() => {
+    fetch("/api/auth/plans")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d && d.lifetime_available === false) setLifetimeOpen(false); })
+      .catch(() => {});
+  }, []);
 
   async function handleStartTrial() {
     if (!token || !user) {
@@ -310,8 +319,10 @@ export function Pricing() {
                 ) : null}
                 <button
                   className={plan.buttonClass}
+                  disabled={plan.key === "business_lifetime" && !lifetimeOpen}
                   onClick={() => handlePlanClick(plan.key)}
                 >
+                  {plan.key === "business_lifetime" && !lifetimeOpen ? "Sold out" : null}
                   {plan.key === "business" && promoOffer
                     ? promoOffer.billing_type === "subscription"
                       ? `Subscribe at ₹${promoOffer.amount_rupees}/mo`
@@ -320,7 +331,9 @@ export function Pricing() {
                       ? billingInterval === "yearly"
                         ? "Subscribe Yearly"
                         : plan.cta
-                      : plan.cta}
+                      : plan.key === "business_lifetime" && !lifetimeOpen
+                        ? null
+                        : plan.cta}
                 </button>
               </StaggerItem>
             ))}

@@ -17,7 +17,27 @@ export type AdminPaymentSummary = {
   by_source: Record<string, number>;
   by_plan: Record<string, number>;
   recent_30d: number;
+  failed_payments?: number;
+  amount_30d_paise?: number;
+  amount_this_month_paise?: number;
+  amount_by_plan_paise?: Record<string, number>;
+  by_month_paise?: Record<string, number>;
 };
+
+export type AdminActivity = {
+  active_1d: number;
+  active_7d: number;
+  active_30d: number;
+  signups_7d: number;
+  signups_30d: number;
+  lifetime_sold: number;
+  lifetime_cap: number;
+  consent_current: number;
+  analytics_opt_in: number;
+  monthly_revenue_estimate_paise: number;
+};
+
+export type AdminSignup = { user_id: string; email?: string; name?: string; created_at: string | null; plan: string | null };
 
 export type AdminSubscriptionDetails = {
   by_source: Record<string, number>;
@@ -41,6 +61,8 @@ export type AdminSummary = {
   usage?: AdminUsageSummary;
   payments?: AdminPaymentSummary;
   subscription_details?: AdminSubscriptionDetails;
+  activity?: AdminActivity;
+  recent_signups?: AdminSignup[];
 };
 
 export type AdminUserUsage = {

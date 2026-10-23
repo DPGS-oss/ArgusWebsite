@@ -64,8 +64,10 @@ export default function PrivacyPage() {
         <li>Improve reliability and security; respond to legal requests where required under Indian law</li>
       </ul>
       <p>
-        Invoice and books data are <strong>local-first</strong> on your device/browser. Cloud sync
-        and CA sharing are optional and require your action.
+        Invoice and books data are kept on your device/browser first. With the Business plan, cloud
+        sync is <strong>on by default</strong> so your phone, the website and your CA see the same
+        books; you can switch it off in Settings at any time (your books then stay only on that
+        device). Sharing with a CA happens only when you invite one.
       </p>
 
       <h2 className="mt-8 text-xl font-semibold text-ink">4. Processors and international transfers</h2>
@@ -92,6 +94,13 @@ export default function PrivacyPage() {
         </li>
         <li>
           <strong>Resend</strong> — transactional email (support, receipts, admin alerts)
+        </li>
+        <li>
+          <strong>PostHog</strong> — usage analytics, <strong>only if you opt in</strong> (&ldquo;Help
+          improve Argus&rdquo; on the consent screen or in Settings; off unless you turn it on). It receives
+          which screens and features you use, the app version and a pseudonymous id (a hash of your
+          account id) — never bill contents, names, phone numbers, amounts or GSTINs. May be
+          processed outside India. Turning it off stops it at once.
         </li>
         <li>
           <strong>OpenRouter</strong> and the AI model it routes to — only when you tap Ask Argus on

@@ -111,41 +111,88 @@ function extendUserSummary(users) {
   return summary;
 }
 
-function summarizePayments(paymentDocs) {
+function summarizePayments(paymentDocs, now = Date.now()) {
   const summary = {
     total_payments: 0,
     verified_payments: 0,
     renewed_payments: 0,
+    failed_payments: 0,
     total_amount_paise: 0,
+    amount_30d_paise: 0,
+    amount_this_month_paise: 0,
     by_source: {},
     by_plan: {},
+    amount_by_plan_paise: {},
+    by_month_paise: {},
     recent_30d: 0,
   };
 
-  const now = Date.now();
   const d30 = now - 30 * 24 * 60 * 60 * 1000;
+  const thisMonth = new Date(now + 5.5 * 3600 * 1000).toISOString().slice(0, 7);
 
   for (const pay of paymentDocs) {
     summary.total_payments += 1;
-    if (pay.status === 'verified' || pay.status === 'renewed') {
-      summary.verified_payments += 1;
-    }
+    const paid = pay.status === 'verified' || pay.status === 'renewed';
+    if (paid) summary.verified_payments += 1;
     if (pay.status === 'renewed') summary.renewed_payments += 1;
+    if (pay.status === 'failed') summary.failed_payments += 1;
 
-    const amount = Number(pay.amount_paise) || 0;
-    if (amount > 0) summary.total_amount_paise += amount;
-
+    // Team-seat payments were saved as `amount` / `at` before; read both.
+    const amount = Number(pay.amount_paise ?? pay.amount) || 0;
+    const when = String(pay.created_at || pay.at || '');
+    const createdMs = when ? Date.parse(when) : 0;
     const source = pay.source || 'unknown';
     summary.by_source[source] = (summary.by_source[source] || 0) + 1;
-
-    const plan = normalizePlanKey(pay.plan || pay.subscription?.plan_key) || 'unknown';
+    const plan = pay.sku || (pay.kind === 'team_seats' ? 'team_seats' : normalizePlanKey(pay.plan || pay.subscription?.plan_key)) || 'unknown';
     summary.by_plan[plan] = (summary.by_plan[plan] || 0) + 1;
-
-    const createdMs = pay.created_at ? Date.parse(pay.created_at) : 0;
     if (createdMs >= d30) summary.recent_30d += 1;
+    if (!paid || amount <= 0) continue;
+
+    summary.total_amount_paise += amount;
+    summary.amount_by_plan_paise[plan] = (summary.amount_by_plan_paise[plan] || 0) + amount;
+    if (createdMs >= d30) summary.amount_30d_paise += amount;
+    const month = createdMs ? new Date(createdMs + 5.5 * 3600 * 1000).toISOString().slice(0, 7) : 'unknown';
+    summary.by_month_paise[month] = (summary.by_month_paise[month] || 0) + amount;
+    if (month === thisMonth) summary.amount_this_month_paise += amount;
   }
 
   return summary;
+}
+
+/**
+ * Who is using Argus: active by last sync (today, 7 and 30 days), new
+ * accounts, Lifetime sold against the cap, consent and analytics opt-ins,
+ * and a monthly-revenue estimate from active renewing plans.
+ */
+function summarizeActivity(users, usageByUserId, opts = {}) {
+  const { now = Date.now(), legalVersion = '', lifetimeExpiry = '', lifetimeCap = 200, prices = {} } = opts;
+  const day = 24 * 60 * 60 * 1000;
+  const out = {
+    active_1d: 0, active_7d: 0, active_30d: 0, signups_7d: 0, signups_30d: 0,
+    lifetime_sold: 0, lifetime_cap: lifetimeCap, consent_current: 0, analytics_opt_in: 0,
+    monthly_revenue_estimate_paise: 0,
+  };
+  for (const u of users) {
+    const usage = (usageByUserId && usageByUserId[u.id]) || {};
+    const last = Date.parse(usage.last_sync_at || u.updated_at || '') || 0;
+    if (now - last <= day) out.active_1d += 1;
+    if (now - last <= 7 * day) out.active_7d += 1;
+    if (now - last <= 30 * day) out.active_30d += 1;
+    const created = Date.parse(u.created_at || '') || 0;
+    if (now - created <= 7 * day) out.signups_7d += 1;
+    if (now - created <= 30 * day) out.signups_30d += 1;
+    const sub = u.subscription || {};
+    if (lifetimeExpiry && sub.expiry_date === lifetimeExpiry) out.lifetime_sold += 1;
+    if (legalVersion && u.legal_consent_version === legalVersion) out.consent_current += 1;
+    if (u.legal_consent_analytics === true) out.analytics_opt_in += 1;
+    const active = sub.active !== false && Date.parse(sub.expiry_date || '') > now && sub.expiry_date !== lifetimeExpiry;
+    if (active && sub.auto_renew !== false) {
+      const key = String(sub.plan_key || sub.plan || '');
+      if (/year/.test(key) && prices.yearly) out.monthly_revenue_estimate_paise += Math.round(prices.yearly / 12);
+      else if (prices.monthly) out.monthly_revenue_estimate_paise += prices.monthly;
+    }
+  }
+  return out;
 }
 
 function topUsersByUsage(userRows, limit = 10) {
@@ -165,7 +212,7 @@ function topUsersByUsage(userRows, limit = 10) {
     }));
 }
 
-function buildAdminReports({ users, usageByUserId, payments, linksCount }) {
+function buildAdminReports({ users, usageByUserId, payments, linksCount, activity = {} }) {
   const userRows = users.map((user) => ({
     ...user,
     usage: usageByUserId[user.id] || null,
@@ -176,6 +223,11 @@ function buildAdminReports({ users, usageByUserId, payments, linksCount }) {
     usage: summarizePlatformUsage(Object.values(usageByUserId)),
     payments: summarizePayments(payments),
     active_ca_links: linksCount,
+    activity: summarizeActivity(users, usageByUserId, activity),
+    recent_signups: [...users]
+      .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
+      .slice(0, 20)
+      .map((u) => ({ user_id: u.id, email: u.email, name: u.name, created_at: u.created_at || null, plan: u.subscription?.plan_key || null })),
     top_users_by_invoices: topUsersByUsage(userRows),
     generated_at: new Date().toISOString(),
   };
@@ -227,6 +279,7 @@ module.exports = {
   summarizePlatformUsage,
   extendUserSummary,
   summarizePayments,
+  summarizeActivity,
   topUsersByUsage,
   buildAdminReports,
   fetchUsageForUsers,
