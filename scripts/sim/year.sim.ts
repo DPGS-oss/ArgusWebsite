@@ -314,7 +314,9 @@ function webSell(s: Shop, iso: string, o: { buyer?: Buyer | null; lines?: { it: 
   const lines: InvoiceItem[] = [];
   for (const w of wanted) {
     const st = w.it.service ? null : data.stock.find((x) => x.id === `s${s.n}-${w.it.key}`);
-    if (st && st.currentStock < w.qty) continue; // the counter has run out: not billed
+    // the form warns when the bill (all its lines of an item) would take stock below zero: the owner sells less
+    const taken = lines.filter((l) => l.stockItemId === st?.id).reduce((t, l) => t + l.quantity, 0);
+    if (st && st.currentStock - taken < w.qty) continue;
     lines.push(webBillLine(s, w.it, w.qty, iso, inter));
   }
   if (!lines.length) return null;

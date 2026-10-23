@@ -454,7 +454,8 @@ it("a month of business: 10 shops, 2 staff, 2 CAs", async () => {
       if (t4n) check(`${s.name}: GSTR-9 Table 4N tax equals the month's tax`, Math.abs(toPaise((t4n.cgst ?? t4n.camt ?? 0) + (t4n.sgst ?? t4n.samt ?? 0) + (t4n.igst ?? t4n.iamt ?? 0)) - (exp.camt + exp.samt + exp.iamt)) <= 2,
         `${r2((t4n.cgst ?? t4n.camt ?? 0) + (t4n.sgst ?? t4n.samt ?? 0) + (t4n.igst ?? t4n.iamt ?? 0))} vs ${p2r(exp.camt + exp.samt + exp.iamt)}`);
       else report.notes.push(`${s.name}: GSTR-9 shape ${Object.keys(g9.body.report || {}).join(",")}`);
-    } else check(`${s.name}: GSTR-9 opens`, false, String(g9.status));
+    } else if (s.composition) check(`${s.name}: GSTR-9 tells a composition dealer to file GSTR-4`, g9.status === 409 && /GSTR-4/.test(g9.body?.error || ""), String(g9.status));
+    else check(`${s.name}: GSTR-9 opens`, false, String(g9.status));
 
     // ---------------------------------------------------------------- the CA's side
     const ca = caOf(s);

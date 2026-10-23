@@ -475,6 +475,19 @@ export function InvoiceForm({ data, business: businessProp, editingInvoice, pref
       }
     }
 
+    // Like the phone: warn before a new bill takes an item below zero, counting
+    // every line of the item on this bill (stock is only taken out by new bills).
+    if (!editingInvoice && mode === "invoice") {
+      const wanted = new Map<string, number>();
+      const lines = isTotalMode ? (totalStockItemId ? [{ stockItemId: totalStockItemId, quantity: 1 }] : []) : items;
+      for (const l of lines) if (l.stockItemId && l.quantity > 0) wanted.set(l.stockItemId, (wanted.get(l.stockItemId) || 0) + l.quantity);
+      const short = [...wanted].map(([id, qty]) => ({ st: data.stock.find((x) => x.id === id), qty })).filter((x) => x.st && x.qty > (x.st.currentStock || 0));
+      if (short.length) {
+        const list = short.map((x) => `${x.st!.name}: ${x.st!.currentStock} in stock, this bill takes ${x.qty}`).join(String.fromCharCode(10));
+        if (!confirm(["This sale will take stock below zero:", "", list, "", "Save the bill anyway?"].join(String.fromCharCode(10)))) return;
+      }
+    }
+
     const invoiceNumber = editingInvoice?.invoiceNumber || generateInvoiceNumber(data.invoices, data.settings.invoicePrefix, date);
 
     let invoiceItems: InvoiceItem[];
