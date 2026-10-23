@@ -21,6 +21,13 @@ export function SubscriptionGate() {
   const trialUsed = !!(user?.trial_used || user?.trial_started_at);
   // Someone invited to a shop's books uses the shop's plan: let them join from here.
   const [invite, setInvite] = useState<{ ownerName: string; access: string } | null>(null);
+  const [lifetimeOpen, setLifetimeOpen] = useState(true);
+  useEffect(() => {
+    fetch("/api/auth/plans")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d && d.lifetime_available === false) setLifetimeOpen(false); })
+      .catch(() => {});
+  }, []);
   useEffect(() => {
     if (!token) return;
     fetch("/api/team", { headers: { Authorization: `Bearer ${token}` } })
@@ -328,14 +335,15 @@ export function SubscriptionGate() {
           <h3 className="mb-2 text-lg font-semibold text-ink">Lifetime</h3>
           <div className="mb-2 text-3xl font-bold text-ink">₹18,000</div>
           <p className="mb-4 text-sm text-slate">
-            One-time purchase on this website — unlocks Android + web forever.
+            One-time purchase on this website for our first 200 early adopters. Unlocks Android and web
+            for the current Business generation (see Terms).
           </p>
           <button
             className="btn-outline w-full"
-            disabled={loading === "business_lifetime"}
+            disabled={loading === "business_lifetime" || !lifetimeOpen}
             onClick={() => handleSubscribe("business_lifetime")}
           >
-            {loading === "business_lifetime" ? "Processing..." : "Buy Lifetime"}
+            {!lifetimeOpen ? "Sold out" : loading === "business_lifetime" ? "Processing..." : "Buy Lifetime"}
           </button>
         </div>
 

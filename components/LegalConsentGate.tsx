@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth-provider";
 import { BrandLogo } from "./BrandLogo";
+import { setAnalyticsAllowed } from "@/lib/analytics";
 
 /** Bump when Privacy/Terms materially change so users re-consent. */
 export const WEB_LEGAL_VERSION = "2026-10-23";
@@ -52,6 +53,8 @@ export function LegalConsentGate() {
   // Chartered accountants opening the CA portal agree to the CA terms, not the shop owner's.
   const ca = (usePathname() || "").startsWith("/ca");
   const [confidential, setConfidential] = useState(false);
+  // Optional, off unless ticked: usage analytics (DPDP: consent for this purpose alone).
+  const [analytics, setAnalytics] = useState(false);
   const [open, setOpen] = useState(false);
   const [terms, setTerms] = useState(false);
   const [privacy, setPrivacy] = useState(false);
@@ -73,10 +76,12 @@ export function LegalConsentGate() {
 
   function accept() {
     markWebLegalAccepted(firebaseUser!.uid);
+    setAnalyticsAllowed(analytics);
     if (token) {
-      void recordConsent(token, ca ? "ca_portal" : "web", ca
+      const items = ca
         ? ["age_18", "terms", "privacy", "ca_professional", "ca_confidentiality"]
-        : ["age_18", "terms", "refund", "privacy", "authority"]);
+        : ["age_18", "terms", "refund", "privacy", "authority"];
+      void recordConsent(token, ca ? "ca_portal" : "web", analytics ? [...items, "analytics"] : items);
     }
     setOpen(false);
   }
@@ -128,7 +133,7 @@ export function LegalConsentGate() {
             advice, and not GSP filing / e-invoice IRN / e-way generation.
           </li>
           <li>
-            We process account, business, and books data to run Argus. Optional cloud sync, people
+            We process account, business, and books data to run Argus. Cloud sync (on by default with Business, off any time in Settings), people
             you add to your books, and CA shares send data to processors (including Google Cloud in
             the US); people you add see your books with the access you choose. See Privacy for
             rights, retention, and the Grievance Officer.
@@ -186,6 +191,14 @@ export function LegalConsentGate() {
             </label>
           ) : null}
         </div>
+
+        <label className="mt-4 flex items-start gap-2 rounded-card bg-mist p-3 text-sm text-ink">
+          <input type="checkbox" className="mt-1" checked={analytics} onChange={(e) => setAnalytics(e.target.checked)} />
+          <span>
+            <strong>Optional:</strong> help improve Argus by sharing which screens and features I use. No bill
+            contents, names, amounts or GSTINs. You can turn this off in Settings.
+          </span>
+        </label>
 
         <button
           type="button"

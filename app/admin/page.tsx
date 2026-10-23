@@ -33,6 +33,21 @@ import {
 
 type Tab = "dashboard" | "users" | "reports";
 
+const inr = (paise: number | undefined) => `₹${Math.round((paise || 0) / 100).toLocaleString("en-IN")}`;
+
+/** PostHog project (usage analytics, for people who opted in), when configured. */
+const POSTHOG_APP = process.env.NEXT_PUBLIC_POSTHOG_APP_URL || "";
+
+function downloadCsv(name: string, rows: (string | number | null | undefined)[][]) {
+  const text = rows.map((r) => r.map((v) => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
+  const url = URL.createObjectURL(new Blob([text], { type: "text/csv" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function AdminPage() {
   const { user, token, authReady, setShowAuthModal, logout } = useAuth();
   const [adminKey, setAdminKey] = useState("");
@@ -265,6 +280,82 @@ export default function AdminPage() {
               <StatCard label="Signups (7d)" value={String(summary.recent_signups_7d)} />
               <StatCard label="Signups (30d)" value={String(summary.recent_signups_30d)} />
             </section>
+
+            {summary.activity ? (
+              <section className="rounded-card border border-bone bg-white p-4">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <h2 className="text-lg font-semibold text-ink">Activity</h2>
+                  {POSTHOG_APP ? (
+                    <a href={POSTHOG_APP} target="_blank" rel="noreferrer" className="text-sm text-brand-violet underline">
+                      Open PostHog (usage of people who opted in)
+                    </a>
+                  ) : null}
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <StatCard label="Active today" value={String(summary.activity.active_1d)} accent />
+                  <StatCard label="Active (7 days)" value={String(summary.activity.active_7d)} />
+                  <StatCard label="Active (30 days)" value={String(summary.activity.active_30d)} />
+                  <StatCard label="New accounts (7 days)" value={String(summary.activity.signups_7d)} />
+                  <StatCard label="Lifetime sold" value={`${summary.activity.lifetime_sold} of ${summary.activity.lifetime_cap}`} />
+                  <StatCard label="Lifetime left" value={String(Math.max(0, summary.activity.lifetime_cap - summary.activity.lifetime_sold))} />
+                  <StatCard label="Accepted current terms" value={String(summary.activity.consent_current)} />
+                  <StatCard label="Analytics opt-ins" value={String(summary.activity.analytics_opt_in)} />
+                </div>
+              </section>
+            ) : null}
+
+            {summary.payments ? (
+              <section className="rounded-card border border-bone bg-white p-4">
+                <h2 className="mb-3 text-lg font-semibold text-ink">Revenue</h2>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <StatCard label="This month" value={inr(summary.payments.amount_this_month_paise)} accent />
+                  <StatCard label="Last 30 days" value={inr(summary.payments.amount_30d_paise)} />
+                  <StatCard label="Monthly recurring (estimate)" value={inr(summary.activity?.monthly_revenue_estimate_paise)} />
+                  <StatCard label="Failed payments" value={String(summary.payments.failed_payments || 0)} />
+                </div>
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <h3 className="mb-2 text-sm font-semibold text-ink">By month</h3>
+                    <ul className="space-y-1 text-sm text-slate">
+                      {Object.entries(summary.payments.by_month_paise || {}).sort((a, b) => b[0].localeCompare(a[0])).slice(0, 12).map(([m, p]) => (
+                        <li key={m} className="flex justify-between"><span>{m}</span><span>{inr(p)}</span></li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div>
+                    <h3 className="mb-2 text-sm font-semibold text-ink">By plan</h3>
+                    <ul className="space-y-1 text-sm text-slate">
+                      {Object.entries(summary.payments.amount_by_plan_paise || {}).sort((a, b) => b[1] - a[1]).map(([k, p]) => (
+                        <li key={k} className="flex justify-between"><span>{k}</span><span>{inr(p)}</span></li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </section>
+            ) : null}
+
+            {summary.recent_signups?.length ? (
+              <section className="rounded-card border border-bone bg-white p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <h2 className="text-lg font-semibold text-ink">Newest accounts</h2>
+                  <button
+                    type="button"
+                    className="text-sm text-brand-violet underline"
+                    onClick={() => downloadCsv("argus-new-accounts.csv", [["Email", "Name", "Created", "Plan"], ...(summary.recent_signups || []).map((u) => [u.email, u.name, u.created_at, u.plan])])}
+                  >
+                    Download CSV
+                  </button>
+                </div>
+                <ul className="divide-y divide-bone text-sm">
+                  {summary.recent_signups.map((u) => (
+                    <li key={u.user_id} className="flex flex-wrap justify-between gap-2 py-2">
+                      <span className="text-ink">{u.email || u.user_id}</span>
+                      <span className="text-slate">{u.plan || "free"} · {u.created_at ? new Date(u.created_at).toLocaleDateString("en-IN") : "—"}</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
 
             {summary.usage ? (
               <section className="rounded-card border border-bone bg-white p-4">

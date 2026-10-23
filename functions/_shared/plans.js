@@ -5,6 +5,8 @@
  *  CA portal, and Tally XML stay on Business. Do not add a ₹299 SKU.
  */
 const LIFETIME_EXPIRY_ISO = '2099-12-31T00:00:00.000Z';
+// Lifetime is for early adopters only: the first 200 buyers (the website says so, without a live count).
+const LIFETIME_CAP = 200;
 
 const FREE_ENTITLEMENTS = {
   android_billing: true,
@@ -112,6 +114,7 @@ function getExpiryIsoForPlan(planConfig, overrideMonths) {
 module.exports = {
   PLANS,
   LIFETIME_EXPIRY_ISO,
+  LIFETIME_CAP,
   FREE_ENTITLEMENTS,
   BUSINESS_ENTITLEMENTS,
   getPlan,

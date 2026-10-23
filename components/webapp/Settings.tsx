@@ -6,6 +6,8 @@ import type { AppData, AppSettings, GSTRate } from "@/lib/types";
 import { saveSettings, exportAllData, importAllData, pickFolder, isUsingFileSystem, getFolderName, isFileSystemSupported, disconnectFolder, loadData, generateInvoiceNumber } from "@/lib/storage";
 import { useAuth, hasValidSubscription } from "@/lib/auth-provider";
 import { syncFromCloud, syncToCloud, getLastSyncTime } from "@/lib/cloud-sync";
+import { CLOUD_PROMISE } from "@/lib/legal";
+import { analyticsAllowed, analyticsConfigured, setAnalyticsAllowed } from "@/lib/analytics";
 import { gstRatePickerOptions, gstRateLabel } from "@/lib/gst";
 import { CaAccessList } from "./CaAccessList";
 
@@ -292,10 +294,30 @@ export function Settings({ data, onSaved }: SettingsProps) {
       {canSync && (
         <div className="rounded-card border border-bone bg-white p-6">
           <h2 className="mb-1 text-lg text-ink">Cloud Sync</h2>
-          <p className="mb-4 text-sm text-slate">
-            Sync your invoices, businesses, and inventory across all your devices.
-            Data is securely stored in Firebase and tied to your account.
+          <p className="mb-3 text-sm text-slate">
+            On by default: your books are backed up and kept the same on the website, your phone and your CA&apos;s view.
           </p>
+          <ul className="mb-4 list-disc space-y-1 pl-5 text-sm text-slate">
+            {CLOUD_PROMISE.map((line) => <li key={line}>{line}</li>)}
+          </ul>
+          <label className="mb-4 flex items-center gap-2 text-sm text-ink">
+            <input
+              type="checkbox"
+              checked={settings.cloudSharing !== false}
+              onChange={(e) => {
+                const next = { ...settings, cloudSharing: e.target.checked };
+                setSettings(next);
+                saveSettings(next);
+                onSaved();
+              }}
+            />
+            Sync with my Argus account (recommended)
+          </label>
+          {settings.cloudSharing === false ? (
+            <p className="mb-4 rounded-card bg-amber-50 p-3 text-sm text-amber-900">
+              Sync is off: your books are only in this browser. If the browser data is cleared, they are gone. Export a backup regularly.
+            </p>
+          ) : null}
           <div className="mb-4 flex items-center gap-2 rounded-card bg-mist p-3 text-sm text-slate">
             <Cloud className="h-4 w-4 text-emerald-500" />
             {lastSync
@@ -322,6 +344,16 @@ export function Settings({ data, onSaved }: SettingsProps) {
           </div>
         </div>
       )}
+
+      {analyticsConfigured() ? (
+        <div className="rounded-card border border-bone bg-white p-6">
+          <h2 className="mb-1 text-lg text-ink">Help improve Argus</h2>
+          <label className="flex items-start gap-2 text-sm text-ink">
+            <input type="checkbox" className="mt-1" defaultChecked={analyticsAllowed()} onChange={(e) => setAnalyticsAllowed(e.target.checked)} />
+            Share which screens and features I use (no bill contents, names, amounts or GSTINs). Optional; off unless you turn it on.
+          </label>
+        </div>
+      ) : null}
 
       <div className="rounded-card border border-bone bg-white p-6">
         <h2 className="mb-4 text-lg text-ink">Local storage & backup</h2>

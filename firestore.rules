@@ -14,6 +14,7 @@ service cloud.firestore {
         'legal_consent_at',
         'legal_consent_surface',
         'legal_consent_withdrawn_at',
+        'legal_consent_analytics',
         'subscription',
         'trial_used',
         'trial_started_at',

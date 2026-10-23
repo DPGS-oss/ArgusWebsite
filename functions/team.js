@@ -219,7 +219,8 @@ async function handle(req, uid, decoded) {
       if (seen.exists) return t;
       t.extraSeats = team.paidExtraSeats(t) + Math.max(0, Math.floor(Number(notes.add) || 0));
       t.seatsPaidUntil = notes.until;
-      tx.set(payRef, { user_id: uid, kind: 'team_seats', order_id: orderId, amount: order.amount, add: notes.add, until: notes.until, status: 'verified', at: new Date().toISOString() });
+      const at = new Date().toISOString();
+      tx.set(payRef, { user_id: uid, kind: 'team_seats', sku: 'team_seats', source: 'razorpay', order_id: orderId, amount: order.amount, amount_paise: Number(order.amount) || 0, add: notes.add, until: notes.until, status: 'verified', at, created_at: at });
       return t;
     });
     return { team: team.teamSummary(next) };

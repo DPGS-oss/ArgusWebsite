@@ -144,9 +144,27 @@ exports.apiConfig = onRequest({ region: 'us-central1', maxInstances: 10, secrets
 });
 
 // ==================== /api/auth/plans ====================
-exports.apiAuthPlans = onRequest({ region: 'us-central1', maxInstances: 10 }, (req, res) => {
+/** Lifetime holders (granted or bought): their plan ends on the fixed far-future date. */
+let lifetimeCache = { at: 0, sold: 0 };
+async function lifetimeSold(fresh = false) {
+  if (!fresh && Date.now() - lifetimeCache.at < 5 * 60 * 1000) return lifetimeCache.sold;
+  const { LIFETIME_EXPIRY_ISO } = require('./_shared/plans');
+  const snap = await getDb().collection('users').where('subscription.expiry_date', '==', LIFETIME_EXPIRY_ISO).count().get();
+  lifetimeCache = { at: Date.now(), sold: snap.data().count };
+  return lifetimeCache.sold;
+}
+
+exports.apiAuthPlans = onRequest({ region: 'us-central1', maxInstances: 10 }, async (req, res) => {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
-  return res.status(200).json({ plans: getAllPlans() });
+  const { LIFETIME_CAP } = require('./_shared/plans');
+  // Whether Lifetime can still be bought; never the count itself.
+  let lifetimeAvailable = true;
+  try {
+    lifetimeAvailable = (await lifetimeSold()) < LIFETIME_CAP;
+  } catch (e) {
+    console.warn('lifetime count failed', e.message);
+  }
+  return res.status(200).json({ plans: getAllPlans(), lifetime_available: lifetimeAvailable });
 });
 
 // ==================== /api/auth/sync ====================
@@ -403,7 +421,7 @@ exports.apiUserProfile = onRequest({ region: 'us-central1', maxInstances: 10, se
     // profile holds the latest for quick checks.
     if (body.legal_consent && typeof body.legal_consent === 'object') {
       const c = body.legal_consent;
-      const ITEMS = ['age_18', 'terms', 'refund', 'privacy', 'authority', 'ca_confidentiality', 'ca_professional'];
+      const ITEMS = ['age_18', 'terms', 'refund', 'privacy', 'authority', 'ca_confidentiality', 'ca_professional', 'analytics'];
       const version = String(c.version || '').slice(0, 20);
       const surface = ['web', 'ca_portal', 'android'].includes(c.surface) ? c.surface : 'web';
       const items = (Array.isArray(c.items) ? c.items : []).map(String).filter((x) => ITEMS.includes(x));
@@ -417,6 +435,7 @@ exports.apiUserProfile = onRequest({ region: 'us-central1', maxInstances: 10, se
         updateData.legal_consent_version = version;
         updateData.legal_consent_at = at;
         updateData.legal_consent_surface = surface;
+        updateData.legal_consent_analytics = items.includes('analytics');
       }
     }
     if (body.business_name !== undefined) updateData.business_name = body.business_name;
@@ -886,6 +905,13 @@ exports.apiPaymentCreateOrder = onRequest({ region: 'us-central1', maxInstances:
     });
   }
 
+  if (planConfig.lifetime) {
+    const { LIFETIME_CAP } = require('./_shared/plans');
+    if ((await lifetimeSold(true)) >= LIFETIME_CAP) {
+      return res.status(409).json({ error: 'Lifetime was for our first 200 early adopters and is sold out. The yearly plan gives the same features.', lifetime_sold_out: true });
+    }
+  }
+
   let amount = Math.round(planConfig.amount);
   let durationMonths = planConfig.lifetime ? null : planConfig.duration_months;
   let offerLabel = planConfig.label;
@@ -1293,6 +1319,17 @@ exports.apiRazorpayWebhook = onRequest({ region: 'us-central1', maxInstances: 10
       }
     }
 
+    // Failed payments, so the admin panel can show them (nothing changes for the user).
+    if (eventName === 'payment.failed') {
+      const p = payload.payment?.entity;
+      if (p && p.id) {
+        await getDb().collection('payments').doc(p.id).set({
+          user_id: p.notes?.uid || null, status: 'failed', source: 'razorpay', amount_paise: Number(p.amount) || 0,
+          reason: String(p.error_description || p.error_reason || '').slice(0, 200), created_at: new Date().toISOString(),
+        }, { merge: true });
+      }
+    }
+
     if (eventName === 'subscription.cancelled' || eventName === 'subscription.halted') {
       const subEntity = payload.subscription?.entity;
       const uid = subEntity?.notes?.uid;
@@ -1570,6 +1607,9 @@ exports.apiPaymentVerify = onRequest({ region: 'us-central1', maxInstances: 10, 
       status: 'verified',
       source,
       plan: planConfig.plan_key,
+      // What was bought (Lifetime and Business share plan_key), for the admin panel.
+      sku: planConfig.lifetime ? 'business_lifetime' : String(plan || planConfig.plan_key),
+      lifetime: planConfig.lifetime === true,
       amount_paise: Number(payment.amount),
       razorpay_order_id,
       promo_code: promoCode || null,

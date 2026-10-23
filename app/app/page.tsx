@@ -23,6 +23,8 @@ import {
 import { KeyboardShortcuts } from "@/components/webapp/KeyboardShortcuts";
 import { getExpiryIso } from "@/lib/subscription";
 import { todayIST } from "@/lib/dates";
+import { CLOUD_PROMISE } from "@/lib/legal";
+import { identifyAnalytics, track } from "@/lib/analytics";
 import { loadRateBook } from "@/lib/gst-rates";
 
 // Screens load on first open; only the shell (sidebar, dashboard, invoice list) ships up front.
@@ -142,6 +144,13 @@ export default function AppPage() {
       cancelled = true;
     };
   }, [token, user, storageUid]);
+
+  // Usage analytics (only if this person opted in): a pseudonymous id, then "app opened".
+  useEffect(() => {
+    const uid = firebaseUser?.uid;
+    if (!uid) return;
+    void identifyAnalytics(uid).then(() => track("app_opened", { plan: user?.subscription?.plan_key || "none", team: user?.books?.role || "owner" }));
+  }, [firebaseUser?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const uid = firebaseUser?.uid;
@@ -264,6 +273,7 @@ export default function AppPage() {
 
   function navigate(view: View) {
     if (!canOpenView(view, user)) return;
+    track("view_opened", { view });
     setView(view);
     setEditingInvoice(null);
     setPreviewInvoice(null);
@@ -325,6 +335,7 @@ export default function AppPage() {
       updatedAt: now,
     };
     saveQuote(quote);
+    track("quote_saved", { lines: quote.items.length });
     refresh();
     setFormMode("invoice");
     setView("quotes");
@@ -350,6 +361,7 @@ export default function AppPage() {
   function handleSaveInvoice(invoice: Invoice) {
     if (formMode === "quote") return handleSaveQuote(invoice);
     const existing = data?.invoices.find((i) => i.id === invoice.id);
+    track(existing ? "bill_edited" : "bill_saved", { type: invoice.type, from_quote: !!billFromQuote, lines: invoice.items.length });
     saveInvoice(invoice);
     if (!existing) {
       deductStockForInvoice(invoice);
@@ -562,20 +574,17 @@ export default function AppPage() {
         <KeyboardShortcuts onNewInvoice={handleNewInvoice} />
       ) : null}
 
+      {/* Cloud sync is on by default; a one-time note says so, with the promise. */}
       {data && data.settings.cloudSharing === undefined && !showTutorial && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="max-w-md rounded-2xl bg-white p-6">
-            <h2 className="text-xl font-bold text-ink">Share books with the phone app?</h2>
-            <p className="mt-2 text-sm text-slate">
-              Turn this on if you use both this website and the installed Argus app. Invoices, inventory, UPI QR, and saved PDFs sync through your login.
-            </p>
-            <div className="mt-4 flex flex-col gap-2">
-              <button className="btn-primary" onClick={() => setSharing(true)}>
-                Yes — sync phone and website
-              </button>
-              <button className="btn-secondary" onClick={() => setSharing(false)}>
-                Not now — keep data in this browser
-              </button>
+        <div className="fixed inset-x-0 bottom-0 z-50 p-4 sm:left-auto sm:right-4 sm:max-w-md">
+          <div className="rounded-2xl border border-bone bg-white p-5 shadow-subtle">
+            <h2 className="text-base font-bold text-ink">Your books are backed up and synced</h2>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate">
+              {CLOUD_PROMISE.map((line) => <li key={line}>{line}</li>)}
+            </ul>
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <button className="btn-primary !py-2 text-sm" onClick={() => setSharing(true)}>Got it</button>
+              <button className="text-sm text-slate underline" onClick={() => setSharing(false)}>Keep my books in this browser only</button>
             </div>
           </div>
         </div>
